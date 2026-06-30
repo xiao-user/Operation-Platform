@@ -28,6 +28,13 @@ interface ValidationContext {
   pages: ReadonlyMap<string, ValidationPageReference>;
 }
 
+export class MenuValidationError extends Error {
+  constructor(readonly codes: MenuValidationCode[]) {
+    super("菜单配置校验失败");
+    this.name = "MenuValidationError";
+  }
+}
+
 function hasCycle(candidate: MenuConfigRecord, records: readonly MenuConfigRecord[]) {
   const byId = new Map(records.map((record) => [record.id, record]));
   byId.set(candidate.id, candidate);

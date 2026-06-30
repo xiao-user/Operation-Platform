@@ -17,6 +17,8 @@ export interface MenuConfigRecord {
   visible: boolean;
 }
 
+export type MenuRecordInput = Omit<MenuConfigRecord, "id" | "tenantId">;
+
 export interface MenuTreeNode extends MenuConfigRecord {
   children: MenuTreeNode[];
 }

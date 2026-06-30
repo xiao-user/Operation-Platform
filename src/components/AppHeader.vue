@@ -114,6 +114,7 @@
           </div>
           <template #dropdown>
             <el-dropdown-menu>
+              <el-dropdown-item v-if="isAdmin" command="menu-config">菜单配置</el-dropdown-item>
               <el-dropdown-item command="profile">个人信息</el-dropdown-item>
               <el-dropdown-item command="password">修改密码</el-dropdown-item>
               <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
@@ -141,7 +142,7 @@ const navigationStore = useNavigationStore();
 const userStore = useUserStore();
 
 const { activeModuleId, moduleNodes } = storeToRefs(navigationStore);
-const { role: currentRole, userInfo, currentTenant, tenantList } = storeToRefs(userStore);
+const { role: currentRole, userInfo, currentTenant, tenantList, isAdmin } = storeToRefs(userStore);
 
 // 租户类型标签与颜色映射
 const TENANT_TYPE_LABEL: Record<TenantType, string> = {
@@ -188,6 +189,10 @@ function handleRoleCommand(role: UserRole) {
 }
 
 function handleUserCommand(command: string) {
+  if (command === "menu-config") {
+    router.push("/system/menu-config");
+    return;
+  }
   if (command === "logout") {
     // TODO: 退出登录
   }
