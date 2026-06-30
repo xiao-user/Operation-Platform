@@ -1,0 +1,414 @@
+/* ==========================================
+   Design Tokens - from Figma
+   ========================================== */
+:root {
+  /* Brand */
+  --color-primary: #2d55eb;
+  --color-primary-light: #eaeefe;
+  --color-primary-hover: #4a6ef0;
+  --color-primary-dark-text: #1842d3;
+  --color-primary-line: #558bf0;
+  --color-primary-line-light: #c9e0ff;
+
+  /* Status */
+  --color-success: #0ed57d;
+  --color-success-light: #e6ffef;
+  --color-success-dark-text: #04b068;
+  --color-warning: #ff9c00;
+  --color-warning-light: #fff9e6;
+  --color-warning-dark-text: #d97e00;
+  --color-error: #f52f3e;
+  --color-error-light: #fff1f0;
+  --color-error-dark-text: #cf1d32;
+
+  /* Neutral Colors */
+  --color-white: #ffffff;
+  --color-bg: #f6f7f9;
+  --color-bg-page: #fafbff;
+  --color-bg-subtle: #fafafa;
+  --color-bg-muted: #f7f8fb;
+  --color-bg-soft: #f0f1f5;
+  --color-border: #ebecf0;
+  --color-border-strong: #e1e2e6;
+  --color-border-deep: #d5d6d9;
+
+  /* Text Colors */
+  --color-title: #252526;
+  --color-body: #575859;
+  --color-secondary: #898a8c;
+  --color-placeholder: #bbbcbf;
+
+  /* Typography */
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --line-height-xs: 20px;
+  --line-height-md: 22px;
+  --line-height-lg: 24px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  /* Spacing */
+  --spacing-0: 0;
+  --spacing-2: 2px;
+  --spacing-4: 4px;
+  --spacing-6: 6px;
+  --spacing-8: 8px;
+  --spacing-10: 10px;
+  --spacing-12: 12px;
+  --spacing-14: 14px;
+  --spacing-16: 16px;
+  --spacing-20: 20px;
+  --spacing-24: 24px;
+  --spacing-32: 32px;
+  --spacing-64: 64px;
+
+  /* Radius */
+  --radius-none: 0;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-full: 999px;
+
+  /* Shadow */
+  --shadow-s:
+    0 0 2px 0 rgba(0, 0, 0, 0.04), 0 0 8px 0 rgba(0, 0, 0, 0.04), 0 2px 16px 0 rgba(0, 0, 0, 0.04);
+  --shadow-m:
+    0 0 4px 0 rgba(0, 0, 0, 0.04), 0 0 16px 0 rgba(0, 0, 0, 0.04), 0 4px 24px 0 rgba(0, 0, 0, 0.04);
+  --shadow-l:
+    0 0 8px 0 rgba(0, 0, 0, 0.04), 0 0 24px 0 rgba(0, 0, 0, 0.04), 0 16px 32px 0 rgba(0, 0, 0, 0.04);
+
+  /* Layout */
+  --header-height: 56px;
+  --sidebar-width: 200px;
+  --content-padding: var(--spacing-16);
+
+  /* Tag Colors - Matches Element Plus defaults */
+  --color-tag-blue-bg: var(--color-primary-light);
+  --color-tag-blue-text: var(--color-primary);
+  --color-tag-green-bg: var(--color-success-light);
+  --color-tag-green-text: var(--color-success-dark-text);
+  --color-tag-red-bg: var(--color-error-light);
+  --color-tag-red-text: var(--color-error-dark-text);
+  --color-tag-orange-bg: var(--color-warning-light);
+  --color-tag-orange-text: var(--color-warning-dark-text);
+  --color-tag-gray-bg: var(--color-bg-soft);
+  --color-tag-gray-text: var(--color-secondary);
+}
+
+:root,
+html {
+  --el-color-white: var(--color-white);
+  --el-color-primary: var(--color-primary);
+  --el-color-primary-dark-2: var(--color-primary-dark-text);
+  --el-color-primary-light-3: var(--color-primary-line);
+  --el-color-primary-light-5: var(--color-primary-line);
+  --el-color-primary-light-7: var(--color-primary-line-light);
+  --el-color-primary-light-8: var(--color-primary-light);
+  --el-color-primary-light-9: var(--color-primary-light);
+
+  --el-color-success: var(--color-success);
+  --el-color-success-dark-2: var(--color-success-dark-text);
+  --el-color-success-light-3: var(--color-success);
+  --el-color-success-light-5: var(--color-success);
+  --el-color-success-light-7: var(--color-success-light);
+  --el-color-success-light-8: var(--color-success-light);
+  --el-color-success-light-9: var(--color-success-light);
+  --el-color-warning: var(--color-warning);
+  --el-color-warning-dark-2: var(--color-warning-dark-text);
+  --el-color-warning-light-3: var(--color-warning);
+  --el-color-warning-light-5: var(--color-warning);
+  --el-color-warning-light-7: var(--color-warning-light);
+  --el-color-warning-light-8: var(--color-warning-light);
+  --el-color-warning-light-9: var(--color-warning-light);
+  --el-color-danger: var(--color-error);
+  --el-color-danger-dark-2: var(--color-error-dark-text);
+  --el-color-danger-light-3: var(--color-error);
+  --el-color-danger-light-5: var(--color-error);
+  --el-color-danger-light-7: var(--color-error-light);
+  --el-color-danger-light-8: var(--color-error-light);
+  --el-color-danger-light-9: var(--color-error-light);
+  --el-color-error: var(--color-error);
+  --el-color-error-dark-2: var(--color-error-dark-text);
+  --el-color-error-light-3: var(--color-error);
+  --el-color-error-light-5: var(--color-error);
+  --el-color-error-light-7: var(--color-error-light);
+  --el-color-error-light-8: var(--color-error-light);
+  --el-color-error-light-9: var(--color-error-light);
+  --el-color-info: var(--color-secondary);
+  --el-color-info-light-3: var(--color-secondary);
+  --el-color-info-light-5: var(--color-secondary);
+  --el-color-info-light-7: var(--color-bg-soft);
+  --el-color-info-light-8: var(--color-bg-soft);
+  --el-color-info-light-9: var(--color-bg-soft);
+
+  --el-bg-color: var(--color-white);
+  --el-bg-color-page: var(--color-bg);
+  --el-bg-color-overlay: var(--color-white);
+  --el-fill-color: var(--color-bg-muted);
+  --el-fill-color-light: var(--color-bg-subtle);
+  --el-fill-color-lighter: var(--color-bg-page);
+  --el-fill-color-extra-light: var(--color-white);
+  --el-fill-color-blank: var(--color-white);
+
+  --el-text-color-primary: var(--color-title);
+  --el-text-color-regular: var(--color-body);
+  --el-text-color-secondary: var(--color-secondary);
+  --el-text-color-placeholder: var(--color-placeholder);
+  --el-text-color-disabled: var(--color-placeholder);
+
+  --el-border-color: var(--color-border);
+  --el-border-color-light: var(--color-border);
+  --el-border-color-lighter: var(--color-border-strong);
+  --el-border-color-extra-light: var(--color-bg-soft);
+  --el-border-color-dark: var(--color-border-strong);
+  --el-border-color-darker: var(--color-border-deep);
+
+  --el-border-radius-base: var(--radius-md);
+  --el-border-radius-small: var(--radius-sm);
+  --el-border-radius-round: var(--radius-full);
+  --el-border-radius-circle: 100%;
+
+  --el-box-shadow: var(--shadow-m);
+  --el-box-shadow-light: var(--shadow-s);
+  --el-box-shadow-lighter: var(--shadow-s);
+  --el-box-shadow-dark: var(--shadow-l);
+
+  --el-font-size-base: var(--font-size-md);
+  --el-font-size-small: var(--font-size-sm);
+  --el-font-size-extra-small: var(--font-size-xs);
+
+  --el-disabled-bg-color: var(--color-bg-muted);
+  --el-disabled-text-color: var(--color-placeholder);
+  --el-disabled-border-color: var(--color-border);
+}
+
+/* ==========================================
+   Global Reset
+   ========================================== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  font-family:
+    "PingFang SC",
+    "Microsoft YaHei",
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-title);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-md);
+}
+
+/* ==========================================
+   Element Plus Overrides
+   ========================================== */
+
+/* Primary Color Override */
+.el-button--primary {
+  --el-button-bg-color: var(--color-primary);
+  --el-button-border-color: var(--color-primary);
+  --el-button-hover-bg-color: var(--color-primary-hover);
+  --el-button-hover-border-color: var(--color-primary-hover);
+  --el-button-active-bg-color: var(--color-primary-dark-text);
+  --el-button-active-border-color: var(--color-primary-dark-text);
+}
+
+.el-input,
+.el-select,
+.el-textarea {
+  --el-input-text-color: var(--color-title);
+  --el-input-border-color: var(--color-border-strong);
+  --el-input-hover-border-color: var(--color-primary);
+  --el-input-focus-border-color: var(--color-primary);
+  --el-input-placeholder-color: var(--color-placeholder);
+  --el-input-bg-color: var(--color-white);
+}
+
+.el-select {
+  --el-select-input-focus-border-color: var(--color-primary);
+}
+
+.el-select-dropdown__item.is-selected {
+  color: var(--color-primary);
+}
+
+.el-select-dropdown__item:hover,
+.el-select-dropdown__item.hover {
+  background: var(--color-bg-muted);
+}
+
+.el-checkbox {
+  --el-checkbox-checked-text-color: var(--color-primary);
+  --el-checkbox-checked-bg-color: var(--color-primary);
+  --el-checkbox-checked-input-border-color: var(--color-primary);
+  --el-checkbox-input-border-color-hover: var(--color-primary);
+}
+
+.el-switch {
+  --el-switch-on-color: var(--color-primary);
+  --el-switch-off-color: var(--color-border-deep);
+}
+
+.el-tag {
+  --el-tag-border-radius: var(--radius-sm);
+}
+
+/* Dropdown trigger — 去掉 EP 默认的 focus outline 和 hover 底边 */
+.el-dropdown > *:focus-visible,
+.el-dropdown > *:focus {
+  outline: none;
+}
+
+.el-dropdown-menu__item:not(.is-disabled):focus,
+.el-dropdown-menu__item:not(.is-disabled):hover {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.el-popper.is-light,
+.el-popover.el-popper {
+  border-color: var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-m);
+}
+
+.el-menu--horizontal > .el-menu-item.is-active {
+  border-bottom-color: var(--color-primary) !important;
+  color: var(--color-primary) !important;
+}
+
+.el-tabs__item.is-active {
+  color: var(--color-primary);
+}
+
+.el-tabs__active-bar {
+  background-color: var(--color-primary);
+}
+
+/* Table Styles */
+.el-table .el-table__header-wrapper th,
+.el-table .el-table-fixed-column--right th,
+.el-table .el-table-fixed-column--left th {
+  background-color: var(--color-bg-subtle) !important;
+  color: var(--color-title);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.el-table .el-table__row td {
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* 斑马纹使用与表头相同的背景色 #FAFAFA */
+.el-table--striped .el-table__body tr.el-table__row--striped td,
+.el-table--striped .el-table__body tr.el-table__row--striped .el-table-fixed-column--right,
+.el-table--striped .el-table__body tr.el-table__row--striped .el-table-fixed-column--left {
+  background: var(--color-bg-subtle) !important;
+}
+
+/* Tree Styles */
+.el-tree-node__content {
+  height: 40px;
+  border-radius: var(--radius-md);
+}
+
+.el-tree-node__content:hover {
+  background-color: var(--color-primary-light);
+}
+
+.el-tree-node.is-current > .el-tree-node__content {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+/* Switch Override */
+.el-switch.is-checked .el-switch__core {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+/* Input Override */
+.el-input__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--color-primary) inset;
+}
+
+.el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px var(--color-primary) inset;
+}
+
+/* Select Override */
+.el-select .el-input.is-focus .el-input__wrapper {
+  box-shadow: 0 0 0 1px var(--color-primary) inset;
+}
+
+/* Checkbox Override */
+.el-checkbox__input.is-checked .el-checkbox__inner {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+/* Tag Styles */
+.el-tag--primary {
+  background-color: var(--color-tag-blue-bg);
+  color: var(--color-tag-blue-text);
+  border-color: transparent;
+}
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--spacing-6);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-xs);
+  font-weight: var(--font-weight-regular);
+}
+
+.status-tag.dual {
+  background-color: var(--color-tag-blue-bg);
+  color: var(--color-tag-blue-text);
+}
+
+.status-tag.single {
+  background-color: var(--color-tag-gray-bg);
+  color: var(--color-tag-gray-text);
+}
+
+.status-tag.online {
+  background-color: var(--color-tag-green-bg);
+  color: var(--color-tag-green-text);
+}
+
+.status-tag.offline {
+  background-color: var(--color-tag-red-bg);
+  color: var(--color-tag-red-text);
+}
+
+.status-tag.running {
+  background-color: var(--color-tag-orange-bg);
+  color: var(--color-tag-orange-text);
+}
+
+/* Table Action Links */
+.table-action-link {
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: var(--font-size-md);
+  line-height: 23px;
+}
+
+.table-action-link:hover {
+  color: var(--color-primary-hover);
+}
