@@ -186,6 +186,7 @@ function handleNotification() {
 
 function handleRoleCommand(role: UserRole) {
   userStore.setRole(role);
+  void navigationStore.ensureValidCurrentRoute(router);
 }
 
 function handleUserCommand(command: string) {

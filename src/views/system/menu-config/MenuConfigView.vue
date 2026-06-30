@@ -61,25 +61,25 @@
         :tree-props="{ children: 'children' }"
         class="menu-table"
       >
-        <el-table-column prop="name" label="菜单名称" min-width="240" />
-        <el-table-column label="类型" width="110">
+        <el-table-column prop="name" label="菜单名称" min-width="200" />
+        <el-table-column label="类型" width="100">
           <template #default="{ row }">
             <MenuTypeTag :type="row.type" />
           </template>
         </el-table-column>
-        <el-table-column label="关联目标" min-width="260" show-overflow-tooltip>
+        <el-table-column label="关联目标" min-width="210" show-overflow-tooltip>
           <template #default="{ row }">{{ targetLabel(row) }}</template>
         </el-table-column>
-        <el-table-column label="图标" width="110">
+        <el-table-column label="图标" width="90">
           <template #default="{ row }">{{ row.icon ?? "—" }}</template>
         </el-table-column>
-        <el-table-column prop="sort" label="排序" width="80" align="center" />
-        <el-table-column label="显示" width="90" align="center">
+        <el-table-column prop="sort" label="排序" width="70" align="center" />
+        <el-table-column label="显示" width="70" align="center">
           <template #default="{ row }">
             <el-switch :model-value="row.visible" @change="handleVisibleChange(row, $event)" />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="210" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="row.type === 'module' || row.type === 'directory'"
