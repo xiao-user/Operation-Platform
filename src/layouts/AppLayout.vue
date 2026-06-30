@@ -16,12 +16,22 @@
 <script setup lang="ts">
 import { watch } from "vue";
 import { useRoute } from "vue-router";
+import { storeToRefs } from "pinia";
 import AppHeader from "@/components/AppHeader.vue";
 import AppSidebar from "@/components/AppSidebar.vue";
 import { useNavigationStore } from "@/stores/navigation";
+import { useUserStore } from "@/stores/user";
 
 const route = useRoute();
 const navigationStore = useNavigationStore();
+const userStore = useUserStore();
+const { currentTenant } = storeToRefs(userStore);
+
+watch(
+  () => currentTenant.value.id,
+  () => navigationStore.loadTenant(currentTenant.value),
+  { immediate: true },
+);
 
 watch(
   () => route.fullPath,

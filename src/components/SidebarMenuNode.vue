@@ -11,7 +11,7 @@
         <el-icon v-if="resolvedIcon" class="menu-icon">
           <component :is="resolvedIcon" />
         </el-icon>
-        <span class="menu-label">{{ item.label }}</span>
+        <span class="menu-label">{{ item.name }}</span>
       </span>
 
       <el-icon v-if="hasChildren" class="menu-arrow" :class="{ expanded: isExpanded }">
@@ -22,7 +22,7 @@
     <div v-if="hasChildren && isExpanded" class="menu-children">
       <SidebarMenuNode
         v-for="child in item.children"
-        :key="child.key"
+        :key="child.id"
         :item="child"
         :depth="depth + 1"
         :active-key="activeKey"
@@ -53,10 +53,11 @@ import {
   Tickets,
   User,
 } from "@element-plus/icons-vue";
-import type { SideMenuItem, MenuIconKey } from "@/types/navigation";
+import type { MenuIconKey } from "@/types/navigation";
+import type { MenuTreeNode } from "@/features/menu-config/types";
 
 interface Props {
-  item: SideMenuItem;
+  item: MenuTreeNode;
   depth?: number;
   activeKey: string;
   expandedKeys: string[];
@@ -67,7 +68,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const emit = defineEmits<{
-  select: [item: SideMenuItem];
+  select: [item: MenuTreeNode];
   toggle: [menuKey: string];
 }>();
 
@@ -90,8 +91,8 @@ const iconMap: Record<MenuIconKey, Component> = {
 };
 
 const hasChildren = computed(() => Boolean(props.item.children?.length));
-const isActive = computed(() => props.activeKey === props.item.key);
-const isExpanded = computed(() => props.expandedKeys.includes(props.item.key));
+const isActive = computed(() => props.activeKey === props.item.id);
+const isExpanded = computed(() => props.expandedKeys.includes(props.item.id));
 const isActiveBranch = computed(() => hasChildren.value && isExpanded.value);
 const resolvedIcon = computed(() => (props.item.icon ? iconMap[props.item.icon] || Menu : null));
 const depthStyle = computed(() => {
@@ -112,7 +113,7 @@ const buttonClassName = computed(() => ({
 
 function handleClick() {
   if (hasChildren.value) {
-    emit("toggle", props.item.key);
+    emit("toggle", props.item.id);
     return;
   }
 

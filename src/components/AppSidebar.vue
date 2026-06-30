@@ -3,9 +3,9 @@
     <div class="sidebar-menu">
       <SidebarMenuNode
         v-for="item in currentMenus"
-        :key="item.key"
+        :key="item.id"
         :item="item"
-        :active-key="activeMenuKey"
+        :active-key="activeMenuId"
         :expanded-keys="mergedExpandedKeys"
         @select="handleMenuSelect"
         @toggle="handleToggle"
@@ -19,12 +19,12 @@ import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useNavigationStore } from "@/stores/navigation";
-import type { SideMenuItem } from "@/types/navigation";
+import type { MenuTreeNode } from "@/features/menu-config/types";
 import SidebarMenuNode from "@/components/SidebarMenuNode.vue";
 
 const router = useRouter();
 const navigationStore = useNavigationStore();
-const { activeModule, activeMenuKey, currentMenus, defaultOpenMenus } =
+const { activeModuleId, activeMenuId, currentMenus, defaultOpenMenus } =
   storeToRefs(navigationStore);
 
 const userExpandedKeys = ref<string[]>([]);
@@ -38,16 +38,13 @@ const mergedExpandedKeys = computed(() => {
 });
 
 // 切换模块时重置用户手动展开/折叠状态
-watch(activeModule, () => {
+watch(activeModuleId, () => {
   userExpandedKeys.value = [];
   userCollapsedKeys.value = [];
 });
 
-function handleMenuSelect(item: SideMenuItem) {
-  if (item.path) {
-    router.push(item.path);
-    navigationStore.setActiveMenu(item.key);
-  }
+function handleMenuSelect(item: MenuTreeNode) {
+  navigationStore.navigateToMenu(item.id, router);
 }
 
 function handleToggle(menuKey: string) {

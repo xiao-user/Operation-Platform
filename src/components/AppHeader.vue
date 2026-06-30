@@ -35,13 +35,13 @@
     <div class="header-shell">
       <nav class="header-nav">
         <div
-          v-for="tab in visibleNavTabs"
-          :key="tab.key"
+          v-for="tab in moduleNodes"
+          :key="tab.id"
           class="nav-tab"
-          :class="{ active: activeModule === tab.key }"
+          :class="{ active: activeModuleId === tab.id }"
           @click="handleTabClick(tab)"
         >
-          <span class="nav-tab-label">{{ tab.label }}</span>
+          <span class="nav-tab-label">{{ tab.name }}</span>
           <div class="nav-tab-indicator" />
         </div>
       </nav>
@@ -130,17 +130,17 @@ import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { Bell, ArrowDown } from "@element-plus/icons-vue";
-import { topNavTabs, getModuleDefaultPath } from "@/config/navigation";
 import { ROLE_OPTIONS, ROLE_LABEL } from "@/config/user";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
+import type { MenuTreeNode } from "@/features/menu-config/types";
 import type { UserRole, TenantType } from "@/types/user";
 
 const router = useRouter();
 const navigationStore = useNavigationStore();
 const userStore = useUserStore();
 
-const { activeModule } = storeToRefs(navigationStore);
+const { activeModuleId, moduleNodes } = storeToRefs(navigationStore);
 const { role: currentRole, userInfo, currentTenant, tenantList } = storeToRefs(userStore);
 
 // 租户类型标签与颜色映射
@@ -156,13 +156,6 @@ const TENANT_TAG_TYPE: Record<TenantType, "info" | "warning" | "success"> = {
   org: "success",
 };
 
-// 只显示当前租户类型对应的 tab
-const visibleNavTabs = computed(() =>
-  topNavTabs.filter(
-    (tab) => !tab.tenantTypes || tab.tenantTypes.includes(currentTenant.value.type),
-  ),
-);
-
 // 按类型分组租户，用于下拉分组展示
 const groupedTenants = computed(() => {
   const groups: Partial<Record<TenantType, typeof tenantList.value>> = {};
@@ -173,22 +166,17 @@ const groupedTenants = computed(() => {
   return groups;
 });
 
-function handleTabClick(tab: (typeof topNavTabs)[0]) {
-  router.push(getModuleDefaultPath(tab.key));
+function handleTabClick(tab: MenuTreeNode) {
+  navigationStore.navigateToMenu(tab.id, router);
 }
 
-function handleTenantSwitch(tenantId: string) {
+async function handleTenantSwitch(tenantId: string) {
   const tenant = tenantList.value.find((t) => t.id === tenantId);
   if (!tenant || tenant.id === currentTenant.value.id) return;
   userStore.switchTenant(tenantId);
-  navigationStore.resetToTenantDefault(tenant.type);
-  // 租户类型 → 默认模块 → 默认路径
-  const TENANT_DEFAULT_MODULE: Record<TenantType, string> = {
-    school: "security",
-    bureau: "bureau-custody",
-    org: "org-manage",
-  };
-  router.push(getModuleDefaultPath(TENANT_DEFAULT_MODULE[tenant.type]));
+  navigationStore.loadTenant(tenant);
+  const firstModule = navigationStore.moduleNodes[0];
+  if (firstModule) await navigationStore.navigateToMenu(firstModule.id, router);
 }
 
 function handleNotification() {

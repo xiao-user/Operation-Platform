@@ -1,70 +1,160 @@
 import { computed, ref } from "vue";
-import type { RouteLocationNormalizedLoaded } from "vue-router";
+import type { RouteLocationNormalizedLoaded, Router } from "vue-router";
 import { defineStore } from "pinia";
-import { findMenuTrailByPath, moduleMenus, moduleDefaultPaths } from "@/config/navigation";
-import type { SideMenuItem } from "@/types/navigation";
-import type { TenantType } from "@/types/user";
+import { pageRegistryByKey } from "@/config/page-registry";
+import { tenantMenuRepository } from "@/features/menu-config/local-storage-menu-repository";
+import { buildMenuTree, resolveFirstTarget } from "@/features/menu-config/menu-tree";
+import type { MenuConfigRecord, MenuTreeNode } from "@/features/menu-config/types";
+import type { TenantInfo } from "@/types/user";
 
-// 各租户类型的默认首页模块
-const tenantDefaultModule: Record<TenantType, string> = {
-  school: "security",
-  bureau: "bureau-custody",
-  org: "org-manage",
-};
+function filterVisibleTree(nodes: readonly MenuTreeNode[]): MenuTreeNode[] {
+  return nodes
+    .filter((node) => node.visible)
+    .map((node) => ({ ...node, children: filterVisibleTree(node.children) }));
+}
+
+function findNode(nodes: readonly MenuTreeNode[], id: string): MenuTreeNode | null {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    const child = findNode(node.children, id);
+    if (child) return child;
+  }
+  return null;
+}
+
+function findTrail(
+  nodes: readonly MenuTreeNode[],
+  id: string,
+  trail: MenuTreeNode[] = [],
+): MenuTreeNode[] {
+  for (const node of nodes) {
+    const nextTrail = [...trail, node];
+    if (node.id === id) return nextTrail;
+    const childTrail = findTrail(node.children, id, nextTrail);
+    if (childTrail.length) return childTrail;
+  }
+  return [];
+}
 
 export const useNavigationStore = defineStore("navigation", () => {
-  const activeModule = ref("security");
-  const activeMenuKey = ref("");
-  const currentPath = ref(moduleDefaultPaths["security"]!);
+  const records = ref<MenuConfigRecord[]>([]);
+  const currentTenant = ref<TenantInfo | null>(null);
+  const activeModuleId = ref("");
+  const activeMenuId = ref("");
+  const currentPath = ref("");
+  const recoveryNotice = ref<string | null>(null);
 
-  const currentMenus = computed<SideMenuItem[]>(() => moduleMenus[activeModule.value] ?? []);
-
-  const activeMenuTrail = computed<SideMenuItem[]>(() =>
-    findMenuTrailByPath(currentMenus.value, currentPath.value),
+  const tree = computed(() => filterVisibleTree(buildMenuTree(records.value)));
+  const moduleNodes = computed(() =>
+    tree.value.filter(
+      (node) => node.type === "module" && resolveFirstTarget(node, pageRegistryByKey) !== null,
+    ),
+  );
+  const activeModuleNode = computed(() =>
+    moduleNodes.value.find((node) => node.id === activeModuleId.value) ?? null,
+  );
+  const currentMenus = computed(() => activeModuleNode.value?.children ?? []);
+  const activeMenuNode = computed(() =>
+    activeMenuId.value ? findNode(tree.value, activeMenuId.value) : null,
+  );
+  const activeMenuTrail = computed(() =>
+    activeMenuId.value ? findTrail(currentMenus.value, activeMenuId.value) : [],
+  );
+  const defaultOpenMenus = computed(() =>
+    activeMenuTrail.value.filter((node) => node.children.length > 0).map((node) => node.id),
   );
 
-  const defaultOpenMenus = computed<string[]>(() =>
-    activeMenuTrail.value
-      .filter((menu: SideMenuItem) => menu.children?.length)
-      .map((menu) => menu.key),
-  );
+  function loadTenant(tenant: TenantInfo) {
+    const result = tenantMenuRepository.list(tenant);
+    currentTenant.value = { ...tenant };
+    records.value = result.records;
+    recoveryNotice.value = result.recoveryNotice;
+
+    if (!moduleNodes.value.some((node) => node.id === activeModuleId.value)) {
+      activeModuleId.value = moduleNodes.value[0]?.id ?? "";
+      activeMenuId.value = "";
+    }
+  }
+
+  function setActiveModule(moduleId: string) {
+    if (!moduleNodes.value.some((node) => node.id === moduleId)) return;
+    activeModuleId.value = moduleId;
+    activeMenuId.value = "";
+  }
+
+  function setActiveMenu(menuId: string) {
+    activeMenuId.value = menuId;
+  }
+
+  function rootModuleIdFor(record: MenuConfigRecord) {
+    const byId = new Map(records.value.map((item) => [item.id, item]));
+    let current: MenuConfigRecord | undefined = record;
+    const visited = new Set<string>();
+    while (current?.parentId) {
+      if (visited.has(current.id)) return "";
+      visited.add(current.id);
+      current = byId.get(current.parentId);
+    }
+    return current?.type === "module" ? current.id : "";
+  }
 
   function syncByRoute(route: RouteLocationNormalizedLoaded) {
-    const segments = route.path.split("/").filter(Boolean);
     currentPath.value = route.path;
+    const ownerKey =
+      typeof route.meta.menuOwnerKey === "string"
+        ? route.meta.menuOwnerKey
+        : typeof route.meta.pageKey === "string"
+          ? route.meta.pageKey
+          : "";
+    if (!ownerKey) return;
 
-    activeModule.value =
-      typeof route.meta.moduleKey === "string" ? route.meta.moduleKey : segments[0] || "security";
-
-    const menuTrail = findMenuTrailByPath(moduleMenus[activeModule.value] ?? [], route.path);
-
-    activeMenuKey.value =
-      menuTrail[menuTrail.length - 1]?.key ||
-      (typeof route.meta.menuKey === "string"
-        ? route.meta.menuKey
-        : segments[segments.length - 1] || "");
+    const menu = records.value.find(
+      (record) => record.type === "page" && record.pageKey === ownerKey && record.visible,
+    );
+    if (!menu) return;
+    activeMenuId.value = menu.id;
+    activeModuleId.value = rootModuleIdFor(menu);
   }
 
-  /** 切换租户类型时重置到对应默认模块 */
-  function resetToTenantDefault(tenantType: TenantType) {
-    const defaultModule = tenantDefaultModule[tenantType];
-    activeModule.value = defaultModule;
-    activeMenuKey.value = "";
-    currentPath.value = moduleDefaultPaths[defaultModule] ?? "/";
-  }
+  async function navigateToMenu(menuId: string, router: Router) {
+    const node = findNode(tree.value, menuId);
+    if (!node) return;
+    const target = resolveFirstTarget(node, pageRegistryByKey);
+    if (!target) return;
 
-  function setActiveMenu(menuKey: string) {
-    activeMenuKey.value = menuKey;
+    if (node.type === "module") setActiveModule(node.id);
+    else setActiveMenu(node.id);
+
+    if (target.kind === "internal") {
+      await router.push(target.path);
+      return;
+    }
+
+    if (target.openMode === "new-tab") {
+      window.open(target.url, "_blank", "noopener,noreferrer");
+    } else {
+      window.location.assign(target.url);
+    }
   }
 
   return {
-    activeModule,
-    activeMenuKey,
+    records,
+    currentTenant,
+    activeModuleId,
+    activeMenuId,
+    currentPath,
+    recoveryNotice,
+    tree,
+    moduleNodes,
+    activeModuleNode,
     currentMenus,
+    activeMenuNode,
     activeMenuTrail,
     defaultOpenMenus,
-    syncByRoute,
-    resetToTenantDefault,
+    loadTenant,
+    setActiveModule,
     setActiveMenu,
+    syncByRoute,
+    navigateToMenu,
   };
 });
