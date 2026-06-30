@@ -9,6 +9,12 @@ const school: TenantInfo = {
   shortName: "学校 A",
   type: "school",
 };
+const platform: TenantInfo = {
+  id: "platform-a",
+  name: "运营平台",
+  shortName: "运营平台",
+  type: "platform",
+};
 
 describe("tenant route access", () => {
   it("allows a visible page owned by the tenant menu", () => {
@@ -50,24 +56,34 @@ describe("tenant route access", () => {
     expect(result).toHaveProperty("path", "/family-interaction/notice");
   });
 
-  it("allows admins to access the fixed configuration route", () => {
+  it("allows admins to access the platform-owned configuration route", () => {
     expect(
       resolveTenantRouteAccess(
-        { path: "/system/menu-config", meta: { fixedSystem: true } },
+        { path: "/system/menu-config", meta: { pageKey: "system-menu-config", requiresAdmin: true } },
         "admin",
-        cloneTenantTemplate(school),
+        cloneTenantTemplate(platform),
       ),
     ).toEqual({ kind: "allow" });
   });
 
-  it("redirects teachers away from the fixed configuration route", () => {
+  it("redirects school tenants away from the platform-owned configuration route", () => {
     expect(
       resolveTenantRouteAccess(
-        { path: "/system/menu-config", meta: { fixedSystem: true } },
-        "teacher",
+        { path: "/system/menu-config", meta: { pageKey: "system-menu-config", requiresAdmin: true } },
+        "admin",
         cloneTenantTemplate(school),
       ),
     ).toEqual({ kind: "redirect", path: "/family-interaction/notice" });
+  });
+
+  it("blocks teachers from the platform-owned configuration route", () => {
+    expect(
+      resolveTenantRouteAccess(
+        { path: "/system/menu-config", meta: { pageKey: "system-menu-config", requiresAdmin: true } },
+        "teacher",
+        cloneTenantTemplate(platform),
+      ),
+    ).toEqual({ kind: "empty" });
   });
 
   it("returns an empty result when the tenant has no internal page", () => {

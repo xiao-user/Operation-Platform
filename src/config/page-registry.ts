@@ -9,16 +9,19 @@ export interface PageRegistryItem {
   tenantTypes: TenantType[];
   selectable: boolean;
   menuOwnerKey: string;
+  requiresAdmin: boolean;
 }
 
 interface PageOptions {
   selectable?: boolean;
   menuOwnerKey?: string;
+  requiresAdmin?: boolean;
 }
 
 const school: TenantType[] = ["school"];
 const bureau: TenantType[] = ["bureau"];
 const org: TenantType[] = ["org"];
+const platform: TenantType[] = ["platform"];
 const PlaceholderView = () => import("@/views/PlaceholderView.vue");
 
 function page(
@@ -37,6 +40,7 @@ function page(
     component,
     selectable: options.selectable ?? true,
     menuOwnerKey: options.menuOwnerKey ?? key,
+    requiresAdmin: options.requiresAdmin ?? false,
   };
 }
 
@@ -155,6 +159,16 @@ export const pageRegistry: PageRegistryItem[] = [
   page("org-course-list", "课程列表", "/org/course/list", org),
   page("org-class-manage", "课班管理", "/org/course/class", org),
   page("org-notice-list", "通知公告", "/org/notice/list", org),
+
+  // 运营平台
+  page(
+    "system-menu-config",
+    "菜单配置",
+    "/system/menu-config",
+    platform,
+    () => import("@/views/system/menu-config/MenuConfigView.vue"),
+    { requiresAdmin: true },
+  ),
 ];
 
 export const pageRegistryByKey = new Map(pageRegistry.map((item) => [item.key, item]));
@@ -168,5 +182,6 @@ export const pageRouteRecords: RouteRecordRaw[] = pageRegistry.map((item) => ({
     pageKey: item.key,
     menuOwnerKey: item.menuOwnerKey,
     title: item.title,
+    requiresAdmin: item.requiresAdmin,
   },
 }));

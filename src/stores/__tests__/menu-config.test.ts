@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
+import { MenuValidationError } from "@/features/menu-config/menu-validation";
 import { useMenuConfigStore } from "@/stores/menu-config";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
@@ -116,5 +117,35 @@ describe("menu configuration store", () => {
     });
 
     expect(navigationStore.moduleNodes.map((node) => node.name)).toContain("运行时已刷新");
+  });
+
+  it("moves a page across levels and normalizes sibling order", () => {
+    const store = useMenuConfigStore();
+    store.load(schoolA);
+    const securityModule = store.records.find((record) => record.name === "校园安全")!;
+    const smartSafetyDirectory = store.records.find((record) => record.name === "校园智能安防")!;
+    const visitorPage = store.records.find((record) => record.name === "访客管理")!;
+
+    store.move(visitorPage.id, securityModule.id, 0);
+
+    const moved = store.records.find((record) => record.id === visitorPage.id)!;
+    const siblings = store.records
+      .filter((record) => record.parentId === securityModule.id)
+      .sort((a, b) => a.sort - b.sort);
+    expect(moved.parentId).toBe(securityModule.id);
+    expect(siblings.map((record) => record.id)).toEqual([
+      visitorPage.id,
+      smartSafetyDirectory.id,
+    ]);
+    expect(siblings.map((record) => record.sort)).toEqual([10, 20]);
+  });
+
+  it("rejects moving a module below another menu", () => {
+    const store = useMenuConfigStore();
+    store.load(schoolA);
+    const familyModule = store.records.find((record) => record.name === "家校互动")!;
+    const securityModule = store.records.find((record) => record.name === "校园安全")!;
+
+    expect(() => store.move(familyModule.id, securityModule.id, 0)).toThrow(MenuValidationError);
   });
 });

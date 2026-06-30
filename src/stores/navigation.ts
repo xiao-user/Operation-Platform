@@ -9,10 +9,16 @@ import { useUserStore } from "@/stores/user";
 import type { MenuConfigRecord, MenuTreeNode } from "@/features/menu-config/types";
 import type { TenantInfo } from "@/types/user";
 
-function filterVisibleTree(nodes: readonly MenuTreeNode[]): MenuTreeNode[] {
+function isRoleAllowedNode(node: MenuTreeNode, isAdmin: boolean) {
+  if (node.type !== "page" || !node.pageKey) return true;
+  const page = pageRegistryByKey.get(node.pageKey);
+  return Boolean(page && (!page.requiresAdmin || isAdmin));
+}
+
+function filterVisibleTree(nodes: readonly MenuTreeNode[], isAdmin: boolean): MenuTreeNode[] {
   return nodes
-    .filter((node) => node.visible)
-    .map((node) => ({ ...node, children: filterVisibleTree(node.children) }));
+    .filter((node) => node.visible && isRoleAllowedNode(node, isAdmin))
+    .map((node) => ({ ...node, children: filterVisibleTree(node.children, isAdmin) }));
 }
 
 function findNode(nodes: readonly MenuTreeNode[], id: string): MenuTreeNode | null {
@@ -39,6 +45,7 @@ function findTrail(
 }
 
 export const useNavigationStore = defineStore("navigation", () => {
+  const userStore = useUserStore();
   const records = ref<MenuConfigRecord[]>([]);
   const currentTenant = ref<TenantInfo | null>(null);
   const activeModuleId = ref("");
@@ -46,7 +53,7 @@ export const useNavigationStore = defineStore("navigation", () => {
   const currentPath = ref("");
   const recoveryNotice = ref<string | null>(null);
 
-  const tree = computed(() => filterVisibleTree(buildMenuTree(records.value)));
+  const tree = computed(() => filterVisibleTree(buildMenuTree(records.value), userStore.isAdmin));
   const moduleNodes = computed(() =>
     tree.value.filter(
       (node) => node.type === "module" && resolveFirstTarget(node, pageRegistryByKey) !== null,
@@ -142,7 +149,6 @@ export const useNavigationStore = defineStore("navigation", () => {
   async function ensureValidCurrentRoute(router: Router) {
     if (!currentTenant.value) return;
     const route = router.currentRoute.value;
-    const userStore = useUserStore();
     const result = resolveTenantRouteAccess(
       { path: route.path, meta: route.meta },
       userStore.role,

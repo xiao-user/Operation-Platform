@@ -21,13 +21,22 @@ const schoolB: TenantInfo = {
 
 describe("tenant menu templates", () => {
   it("contains templates for every tenant type", () => {
-    expect(Object.keys(tenantMenuTemplates)).toEqual(["school", "bureau", "org"]);
+    expect(Object.keys(tenantMenuTemplates)).toEqual(["school", "bureau", "org", "platform"]);
   });
 
   it("preserves the current top-level module counts", () => {
     expect(tenantMenuTemplates.school.filter((item) => item.type === "module")).toHaveLength(9);
     expect(tenantMenuTemplates.bureau.filter((item) => item.type === "module")).toHaveLength(3);
     expect(tenantMenuTemplates.org.filter((item) => item.type === "module")).toHaveLength(4);
+    expect(tenantMenuTemplates.platform.filter((item) => item.type === "module")).toHaveLength(1);
+  });
+
+  it("binds menu configuration to the operation platform template", () => {
+    expect(tenantMenuTemplates.platform).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "page", name: "菜单配置", pageKey: "system-menu-config" }),
+      ]),
+    );
   });
 
   it("references only registered pages", () => {

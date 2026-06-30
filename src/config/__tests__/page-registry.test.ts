@@ -18,4 +18,12 @@ describe("page registry", () => {
   it("declares at least one tenant type for every page", () => {
     expect(pageRegistry.every((page) => page.tenantTypes.length > 0)).toBe(true);
   });
+
+  it("registers menu configuration as an operation platform admin page", () => {
+    expect(pageRegistryByKey.get("system-menu-config")).toMatchObject({
+      path: "/system/menu-config",
+      tenantTypes: ["platform"],
+      requiresAdmin: true,
+    });
+  });
 });

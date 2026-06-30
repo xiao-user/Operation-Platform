@@ -112,6 +112,7 @@ export const tenantMenuTemplates: Record<TenantType, MenuConfigRecord[]> = {
   school: buildTemplate("school"),
   bureau: buildTemplate("bureau"),
   org: buildTemplate("org"),
+  platform: buildTemplate("platform"),
 };
 
 export function cloneTenantTemplate(tenant: TenantInfo): MenuConfigRecord[] {

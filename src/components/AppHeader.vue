@@ -48,7 +48,7 @@
 
       <div class="header-right">
         <!-- 租户切换 -->
-        <el-dropdown @command="handleTenantSwitch">
+        <el-dropdown trigger="click" @command="handleTenantSwitch">
           <div class="tenant-switch">
             <el-tag
               :type="TENANT_TAG_TYPE[currentTenant.type]"
@@ -84,7 +84,7 @@
         </button>
 
         <!-- 角色切换 -->
-        <el-dropdown @command="handleRoleCommand">
+        <el-dropdown trigger="click" @command="handleRoleCommand">
           <div class="role-switch">
             <el-tag :type="currentRole === 'admin' ? 'primary' : 'success'" size="small">
               {{ ROLE_LABEL[currentRole] }}
@@ -106,7 +106,7 @@
         </el-dropdown>
 
         <!-- 用户菜单 -->
-        <el-dropdown @command="handleUserCommand">
+        <el-dropdown trigger="click" @command="handleUserCommand">
           <div class="user-info">
             <el-avatar :size="32" class="user-avatar">{{ userInfo.initials }}</el-avatar>
             <span class="user-name">{{ userInfo.name }}</span>
@@ -131,6 +131,7 @@ import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { Bell, ArrowDown } from "@element-plus/icons-vue";
+import { TENANT_TAG_TYPE, TENANT_TYPE_LABEL } from "@/config/tenant";
 import { ROLE_OPTIONS, ROLE_LABEL } from "@/config/user";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
@@ -143,19 +144,6 @@ const userStore = useUserStore();
 
 const { activeModuleId, moduleNodes } = storeToRefs(navigationStore);
 const { role: currentRole, userInfo, currentTenant, tenantList, isAdmin } = storeToRefs(userStore);
-
-// 租户类型标签与颜色映射
-const TENANT_TYPE_LABEL: Record<TenantType, string> = {
-  school: "学校",
-  bureau: "教育局",
-  org: "机构",
-};
-
-const TENANT_TAG_TYPE: Record<TenantType, "info" | "warning" | "success"> = {
-  school: "info",
-  bureau: "warning",
-  org: "success",
-};
 
 // 按类型分组租户，用于下拉分组展示
 const groupedTenants = computed(() => {
@@ -191,6 +179,11 @@ function handleRoleCommand(role: UserRole) {
 
 function handleUserCommand(command: string) {
   if (command === "menu-config") {
+    const platformTenant = tenantList.value.find((tenant) => tenant.type === "platform");
+    if (platformTenant && currentTenant.value.id !== platformTenant.id) {
+      userStore.switchTenant(platformTenant.id);
+      navigationStore.loadTenant(platformTenant);
+    }
     router.push("/system/menu-config");
     return;
   }

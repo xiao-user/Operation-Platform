@@ -32,12 +32,6 @@ const routes: RouteRecordRaw[] = [
       ...legacyRedirects,
       ...pageRouteRecords,
       {
-        path: "system/menu-config",
-        name: "system-menu-config",
-        component: () => import("@/views/system/menu-config/MenuConfigView.vue"),
-        meta: { title: "菜单配置", fixedSystem: true },
-      },
-      {
         path: "menu-unavailable",
         name: "menu-unavailable",
         component: () => import("@/views/MenuUnavailableView.vue"),

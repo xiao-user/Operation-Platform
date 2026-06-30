@@ -98,6 +98,57 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
     update(id, input);
   }
 
+  function sortedSiblings(source: readonly MenuConfigRecord[], parentId: string | null) {
+    return source
+      .filter((record) => record.parentId === parentId)
+      .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name, "zh-CN"));
+  }
+
+  function replaceSiblings(
+    source: readonly MenuConfigRecord[],
+    parentId: string | null,
+    siblings: readonly MenuConfigRecord[],
+  ) {
+    const siblingIds = new Set(siblings.map((record) => record.id));
+    const normalizedSiblings = siblings.map((record, index) => ({
+      ...record,
+      parentId,
+      sort: (index + 1) * 10,
+    }));
+
+    return [
+      ...source.filter(
+        (record) => record.parentId !== parentId && !siblingIds.has(record.id),
+      ),
+      ...normalizedSiblings,
+    ];
+  }
+
+  function move(id: string, nextParentId: string | null, nextIndex: number) {
+    const existing = records.value.find((record) => record.id === id);
+    if (!existing) throw new Error("菜单不存在或已被删除");
+
+    const moved: MenuConfigRecord = { ...existing, parentId: nextParentId };
+    validate(moved);
+
+    const withoutMoved = records.value.filter((record) => record.id !== id);
+    const targetSiblings = sortedSiblings(withoutMoved, nextParentId);
+    const safeIndex = Math.max(0, Math.min(nextIndex, targetSiblings.length));
+    targetSiblings.splice(safeIndex, 0, moved);
+
+    let nextRecords = replaceSiblings(withoutMoved, nextParentId, targetSiblings);
+    if (existing.parentId !== nextParentId) {
+      nextRecords = replaceSiblings(
+        nextRecords,
+        existing.parentId,
+        sortedSiblings(nextRecords, existing.parentId),
+      );
+    }
+
+    persist(nextRecords);
+    return { ...moved, sort: (safeIndex + 1) * 10 };
+  }
+
   function reset() {
     const tenant = requireTenant();
     records.value = tenantMenuRepository.reset(tenant);
@@ -116,6 +167,7 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
     update,
     removeCascade,
     setVisible,
+    move,
     reset,
   };
 });

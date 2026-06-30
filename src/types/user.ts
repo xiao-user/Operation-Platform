@@ -1,6 +1,6 @@
 export type UserRole = "admin" | "teacher";
 
-export type TenantType = "school" | "bureau" | "org"; // 学校 | 教育局 | 机构
+export type TenantType = "school" | "bureau" | "org" | "platform"; // 学校 | 教育局 | 机构 | 运营平台
 
 export interface TenantInfo {
   id: string;

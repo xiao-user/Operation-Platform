@@ -13,28 +13,41 @@ export type TenantRouteAccessResult =
   | { kind: "redirect"; path: string }
   | { kind: "empty" };
 
-function firstInternalPath(nodes: readonly MenuTreeNode[]): string | null {
+function canAccessPage(pageKey: string, role: UserRole) {
+  const page = pageRegistryByKey.get(pageKey);
+  return Boolean(page && (!page.requiresAdmin || role === "admin"));
+}
+
+function firstInternalPath(nodes: readonly MenuTreeNode[], role: UserRole): string | null {
   for (const node of nodes) {
     if (!node.visible) continue;
     if (node.type === "page" && node.pageKey) {
       const page = pageRegistryByKey.get(node.pageKey);
-      if (page) return page.path;
+      if (page && canAccessPage(node.pageKey, role)) return page.path;
     }
-    const childPath = firstInternalPath(node.children);
+    const childPath = firstInternalPath(node.children, role);
     if (childPath) return childPath;
   }
   return null;
 }
 
-export function resolveFirstTenantInternalPath(records: readonly MenuConfigRecord[]) {
-  return firstInternalPath(buildMenuTree(records));
+export function resolveFirstTenantInternalPath(
+  records: readonly MenuConfigRecord[],
+  role: UserRole = "admin",
+) {
+  return firstInternalPath(buildMenuTree(records), role);
 }
 
-function isVisibleMenuOwner(ownerKey: string, records: readonly MenuConfigRecord[]) {
+function isVisibleMenuOwner(
+  ownerKey: string,
+  role: UserRole,
+  records: readonly MenuConfigRecord[],
+) {
   const owner = records.find(
     (record) => record.type === "page" && record.pageKey === ownerKey,
   );
   if (!owner?.visible) return false;
+  if (!canAccessPage(ownerKey, role)) return false;
 
   const byId = new Map(records.map((record) => [record.id, record]));
   let current: MenuConfigRecord | undefined = owner;
@@ -53,10 +66,14 @@ export function resolveTenantRouteAccess(
   role: UserRole,
   records: readonly MenuConfigRecord[],
 ): TenantRouteAccessResult {
-  const fallbackPath = resolveFirstTenantInternalPath(records);
+  const fallbackPath = resolveFirstTenantInternalPath(records, role);
 
   if (to.meta.fixedSystem === true) {
     if (role === "admin") return { kind: "allow" };
+    return fallbackPath ? { kind: "redirect", path: fallbackPath } : { kind: "empty" };
+  }
+
+  if (to.meta.requiresAdmin === true && role !== "admin") {
     return fallbackPath ? { kind: "redirect", path: fallbackPath } : { kind: "empty" };
   }
 
@@ -68,6 +85,6 @@ export function resolveTenantRouteAccess(
       ? to.meta.menuOwnerKey
       : registeredPage?.menuOwnerKey ?? pageKey;
 
-  if (isVisibleMenuOwner(ownerKey, records)) return { kind: "allow" };
+  if (isVisibleMenuOwner(ownerKey, role, records)) return { kind: "allow" };
   return fallbackPath ? { kind: "redirect", path: fallbackPath } : { kind: "empty" };
 }

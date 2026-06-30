@@ -14,9 +14,12 @@
       <div class="filter-item">
         <span>租户类型</span>
         <el-select v-model="tenantType" clearable placeholder="全部类型">
-          <el-option label="学校" value="school" />
-          <el-option label="教育局" value="bureau" />
-          <el-option label="机构" value="org" />
+          <el-option
+            v-for="option in TENANT_TYPE_OPTIONS"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
         </el-select>
       </div>
       <div class="filter-item tenant-filter">
@@ -48,11 +51,22 @@
         <div>
           <strong>{{ selectedTenant?.name ?? "请选择租户" }}</strong>
           <span v-if="selectedTenant" class="record-count">共 {{ records.length }} 条菜单记录</span>
+          <span v-if="selectedTenant" class="drag-help">
+            拖动排序柄可调整同级顺序，也可拖入顶部模块/目录
+          </span>
         </div>
         <el-button :icon="RefreshLeft" :disabled="!selectedTenant" @click="handleReset">
           恢复默认模板
         </el-button>
       </div>
+      <el-alert
+        v-if="dragDisabled"
+        class="drag-alert"
+        title="当前筛选条件下已暂停拖拽排序；清空菜单名称和显示状态筛选后可拖拽。"
+        type="info"
+        show-icon
+        :closable="false"
+      />
 
       <el-table
         :data="filteredTree"
@@ -61,7 +75,29 @@
         :tree-props="{ children: 'children' }"
         class="menu-table"
       >
-        <el-table-column prop="name" label="菜单名称" min-width="200" />
+        <el-table-column label="菜单名称" min-width="260">
+          <template #default="{ row }">
+            <div
+              class="menu-name-cell"
+              :data-menu-id="row.id"
+              :class="dropClass(row)"
+            >
+              <button
+                class="drag-handle"
+                type="button"
+                :disabled="dragDisabled"
+                title="拖拽排序"
+                @pointerdown="handlePointerDown(row, $event)"
+              >
+                <el-icon><Rank /></el-icon>
+              </button>
+              <span class="menu-name-text">{{ row.name }}</span>
+              <span v-if="isInsideDropTarget(row)" class="drop-hint">
+                放入
+              </span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="类型" width="100">
           <template #default="{ row }">
             <MenuTypeTag :type="row.type" />
@@ -112,11 +148,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Plus, RefreshLeft, Search } from "@element-plus/icons-vue";
+import { Plus, Rank, RefreshLeft, Search } from "@element-plus/icons-vue";
+import { TENANT_TYPE_OPTIONS } from "@/config/tenant";
 import { pageRegistryByKey } from "@/config/page-registry";
 import { collectDescendantIds } from "@/features/menu-config/menu-tree";
 import { MenuValidationError } from "@/features/menu-config/menu-validation";
@@ -132,6 +169,8 @@ import type { TenantType } from "@/types/user";
 import MenuEditorDrawer from "./MenuEditorDrawer.vue";
 import MenuTypeTag from "./MenuTypeTag.vue";
 
+type DropPosition = "before" | "inside" | "after";
+
 const menuConfigStore = useMenuConfigStore();
 const userStore = useUserStore();
 const navigationStore = useNavigationStore();
@@ -146,6 +185,9 @@ const visibleFilter = ref<boolean | "">("");
 const drawerVisible = ref(false);
 const editingRecord = ref<MenuConfigRecord | null>(null);
 const defaultParentId = ref<string | null>(null);
+const draggingRecordId = ref<string | null>(null);
+const dropPreview = ref<{ targetId: string; position: DropPosition } | null>(null);
+let stopPointerListeners: (() => void) | null = null;
 
 const filteredTenants = computed(() =>
   tenantType.value
@@ -153,6 +195,7 @@ const filteredTenants = computed(() =>
     : tenantList.value,
 );
 const filteredTree = computed(() => filterTree(tree.value));
+const dragDisabled = computed(() => Boolean(keyword.value.trim()) || visibleFilter.value !== "");
 
 watch(
   selectedTenantId,
@@ -171,6 +214,8 @@ watch(tenantType, () => {
   }
 });
 
+onBeforeUnmount(() => endDrag());
+
 function filterTree(nodes: MenuTreeNode[]): MenuTreeNode[] {
   return nodes.flatMap((node) => {
     const children = filterTree(node.children);
@@ -188,6 +233,128 @@ function targetLabel(row: MenuConfigRecord) {
   if (row.type === "external") return row.externalUrl ?? "未配置";
   const page = row.pageKey ? pageRegistryByKey.get(row.pageKey) : null;
   return page ? `${page.title} · ${page.path}` : "页面不可用";
+}
+
+function sortedSiblings(parentId: string | null, excludeId?: string) {
+  return records.value
+    .filter((record) => record.parentId === parentId && record.id !== excludeId)
+    .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name, "zh-CN"));
+}
+
+function getDropPosition(element: HTMLElement, clientY: number): DropPosition {
+  const rect = element.getBoundingClientRect();
+  const ratio = rect.height ? (clientY - rect.top) / rect.height : 0.5;
+  if (ratio < 0.28) return "before";
+  if (ratio > 0.72) return "after";
+  return "inside";
+}
+
+function dropClass(row: MenuConfigRecord) {
+  if (!dropPreview.value || dropPreview.value.targetId !== row.id) return {};
+  return {
+    "is-drop-before": dropPreview.value.position === "before",
+    "is-drop-inside": dropPreview.value.position === "inside",
+    "is-drop-after": dropPreview.value.position === "after",
+  };
+}
+
+function isInsideDropTarget(row: MenuConfigRecord) {
+  return dropPreview.value?.targetId === row.id && dropPreview.value.position === "inside";
+}
+
+function endDrag() {
+  draggingRecordId.value = null;
+  dropPreview.value = null;
+  stopPointerListeners?.();
+  stopPointerListeners = null;
+}
+
+function resolveDropTarget(clientX: number, clientY: number) {
+  const element = document.elementFromPoint(clientX, clientY);
+  const cell = element?.closest<HTMLElement>(".menu-name-cell[data-menu-id]");
+  const targetId = cell?.dataset.menuId;
+  if (!targetId || targetId === draggingRecordId.value) return null;
+
+  const target = records.value.find((record) => record.id === targetId);
+  if (!target) return null;
+  return {
+    target,
+    position: getDropPosition(cell, clientY),
+  };
+}
+
+function resolveDropPlacement(
+  draggedId: string,
+  target: MenuConfigRecord,
+  position: DropPosition,
+) {
+  if (position === "inside") {
+    return {
+      parentId: target.id,
+      index: sortedSiblings(target.id, draggedId).length,
+    };
+  }
+
+  const parentId = target.parentId;
+  const siblings = sortedSiblings(parentId, draggedId);
+  const targetIndex = siblings.findIndex((record) => record.id === target.id);
+  return {
+    parentId,
+    index: position === "after" ? targetIndex + 1 : targetIndex,
+  };
+}
+
+function applyDrop(draggedId: string, target: MenuConfigRecord, position: DropPosition) {
+  if (draggedId === target.id) {
+    endDrag();
+    return;
+  }
+  const placement = resolveDropPlacement(draggedId, target, position);
+
+  try {
+    menuConfigStore.move(draggedId, placement.parentId, placement.index);
+    void navigationStore.ensureValidCurrentRoute(router);
+    ElMessage.success("菜单排序已更新");
+  } catch (error) {
+    if (error instanceof MenuValidationError) {
+      ElMessage.warning("不支持拖放到该层级，请调整目标位置");
+    } else {
+      ElMessage.error(error instanceof Error ? error.message : "菜单排序失败");
+    }
+  } finally {
+    endDrag();
+  }
+}
+
+function handlePointerDown(row: MenuConfigRecord, event: PointerEvent) {
+  if (dragDisabled.value || event.button !== 0) return;
+
+  event.preventDefault();
+  endDrag();
+  draggingRecordId.value = row.id;
+
+  const onPointerMove = (moveEvent: PointerEvent) => {
+    const dropTarget = resolveDropTarget(moveEvent.clientX, moveEvent.clientY);
+    dropPreview.value = dropTarget
+      ? { targetId: dropTarget.target.id, position: dropTarget.position }
+      : null;
+  };
+
+  const onPointerUp = (upEvent: PointerEvent) => {
+    const dropTarget = resolveDropTarget(upEvent.clientX, upEvent.clientY);
+    if (dropTarget) applyDrop(row.id, dropTarget.target, dropTarget.position);
+    else endDrag();
+  };
+
+  window.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointerup", onPointerUp, { once: true });
+  window.addEventListener("pointercancel", endDrag, { once: true });
+
+  stopPointerListeners = () => {
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+    window.removeEventListener("pointercancel", endDrag);
+  };
 }
 
 function openCreateModule() {
@@ -360,7 +527,99 @@ async function handleReset() {
   font-size: var(--font-size-sm);
 }
 
+.drag-help {
+  margin-left: var(--spacing-12);
+  color: var(--color-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.drag-alert {
+  margin: var(--spacing-12) var(--spacing-24) 0;
+}
+
 .menu-table {
   width: 100%;
+}
+
+.menu-name-cell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  max-width: 100%;
+  min-height: 30px;
+  padding: 2px var(--spacing-8) 2px 2px;
+  border-radius: var(--radius-sm);
+}
+
+.menu-name-cell::before,
+.menu-name-cell::after {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+}
+
+.menu-name-cell::before {
+  top: -4px;
+}
+
+.menu-name-cell::after {
+  bottom: -4px;
+}
+
+.menu-name-cell.is-drop-before::before,
+.menu-name-cell.is-drop-after::after {
+  opacity: 1;
+}
+
+.menu-name-cell.is-drop-inside {
+  background: var(--color-primary-light);
+  outline: 1px dashed var(--color-primary);
+}
+
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--color-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: grab;
+}
+
+.drag-handle:hover:not(:disabled) {
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
+}
+
+.drag-handle:active:not(:disabled) {
+  cursor: grabbing;
+}
+
+.drag-handle:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.menu-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drop-hint {
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
 }
 </style>

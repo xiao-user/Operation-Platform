@@ -33,6 +33,8 @@ export const topNavTabs: NavTab[] = [
   { key: "org-settlement", label: "结算中心", path: "/org/settlement", tenantTypes: ["org"] },
   { key: "org-course", label: "课程课班管理", path: "/org/course", tenantTypes: ["org"] },
   { key: "org-notice", label: "通知公告", path: "/org/notice", tenantTypes: ["org"] },
+  // 运营平台专属
+  { key: "platform-system", label: "系统管理", path: "/system", tenantTypes: ["platform"] },
 ];
 
 // ==========================================
@@ -261,6 +263,11 @@ export const moduleMenus: Record<string, SideMenuItem[]> = {
   "org-notice": [
     { key: "org-notice-list", label: "通知公告", icon: "chat", path: "/org/notice/list" },
   ],
+
+  // ---------- 运营平台 · 系统管理 ----------
+  "platform-system": [
+    { key: "menu-config", label: "菜单配置", icon: "setting", path: "/system/menu-config" },
+  ],
 };
 
 // ==========================================
@@ -287,6 +294,8 @@ export const moduleDefaultPaths: Record<string, string> = {
   "org-settlement": "/org/settlement/payment",
   "org-course": "/org/course/list",
   "org-notice": "/org/notice/list",
+  // 运营平台
+  "platform-system": "/system/menu-config",
 };
 
 export function getModuleDefaultPath(moduleKey: string): string {

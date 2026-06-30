@@ -42,4 +42,10 @@ export const MOCK_TENANTS: TenantInfo[] = [
     shortName: "未来教育",
     type: "org",
   },
+  {
+    id: "platform-001",
+    name: "运营平台",
+    shortName: "运营平台",
+    type: "platform",
+  },
 ];
