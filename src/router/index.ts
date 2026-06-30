@@ -1,147 +1,44 @@
 import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
 import AppLayout from "@/layouts/AppLayout.vue";
-import { securityRoutes } from "@/router/modules/security";
-import { bureauRoutes } from "@/router/modules/bureau";
-import { orgRoutes } from "@/router/modules/org";
 import PlaceholderView from "@/views/PlaceholderView.vue";
+import { pageRouteRecords } from "@/config/page-registry";
+
+const legacyRedirects: RouteRecordRaw[] = [
+  { path: "security", redirect: "/security/new-gate/device-list" },
+  { path: "security/new-gate", redirect: "/security/new-gate/device-list" },
+  { path: "family-interaction", redirect: "/family-interaction/notice" },
+  { path: "academic", redirect: "/academic/course-list" },
+  { path: "dorm", redirect: "/dorm/room-manage" },
+  { path: "finance", redirect: "/finance/fee-set" },
+  { path: "bureau/custody", redirect: "/bureau/custody/course-data/analysis" },
+  { path: "bureau/org", redirect: "/bureau/org/structure" },
+  { path: "bureau/operator", redirect: "/bureau/operator/list" },
+  { path: "org/manage", redirect: "/org/manage/basic-info" },
+  { path: "org/settlement", redirect: "/org/settlement/payment" },
+  { path: "org/course", redirect: "/org/course/list" },
+  { path: "org/notice", redirect: "/org/notice/list" },
+];
 
 const routes: RouteRecordRaw[] = [
   {
     path: "/",
     component: AppLayout,
     children: [
+      { path: "", redirect: "/security/new-gate/device-list" },
+      ...legacyRedirects,
+      ...pageRouteRecords,
       {
-        path: "",
-        redirect: "/security/new-gate/device-list",
-      },
-      {
-        path: "security",
-        redirect: "/security/new-gate/device-list",
-      },
-      ...securityRoutes,
-      ...bureauRoutes,
-      ...orgRoutes,
-      {
-        path: "family-interaction",
-        redirect: "/family-interaction/notice",
-      },
-      {
-        path: "family-interaction/notice",
-        name: "family-notice",
+        path: "system/menu-config",
+        name: "system-menu-config",
         component: PlaceholderView,
-        meta: {
-          moduleKey: "family-interaction",
-          menuKey: "notice",
-          title: "通知公告",
-        },
-      },
-      {
-        path: "family-interaction/activity",
-        name: "family-activity",
-        component: PlaceholderView,
-        meta: {
-          moduleKey: "family-interaction",
-          menuKey: "activity",
-          title: "活动管理",
-        },
-      },
-      {
-        path: "academic",
-        redirect: "/academic/course-list",
-      },
-      {
-        path: "academic/course-list",
-        name: "course-list",
-        component: PlaceholderView,
-        meta: {
-          moduleKey: "academic",
-          menuKey: "course-list",
-          title: "课程列表",
-        },
-      },
-      {
-        path: "academic/class-manage",
-        name: "class-manage",
-        component: PlaceholderView,
-        meta: {
-          moduleKey: "academic",
-          menuKey: "class-manage",
-          title: "班级管理",
-        },
-      },
-      {
-        path: "dorm",
-        redirect: "/dorm/room-manage",
-      },
-      {
-        path: "dorm/room-manage",
-        name: "room-manage",
-        component: PlaceholderView,
-        meta: {
-          moduleKey: "dorm",
-          menuKey: "room-manage",
-          title: "宿舍管理",
-        },
-      },
-      {
-        path: "finance",
-        redirect: "/finance/fee-set",
-      },
-      {
-        path: "finance/fee-set",
-        name: "fee-set",
-        component: PlaceholderView,
-        meta: {
-          moduleKey: "finance",
-          menuKey: "fee-set",
-          title: "收费设置",
-        },
-      },
-      {
-        path: "care-management",
-        name: "care-management",
-        component: PlaceholderView,
-        meta: {
-          moduleKey: "care-management",
-          title: "托管管理",
-        },
-      },
-      {
-        path: "schedule",
-        name: "schedule",
-        component: PlaceholderView,
-        meta: {
-          moduleKey: "schedule",
-          title: "排课系统",
-        },
-      },
-      {
-        path: "office",
-        name: "office",
-        component: PlaceholderView,
-        meta: {
-          moduleKey: "office",
-          title: "校园办公",
-        },
-      },
-      {
-        path: "sports",
-        name: "sports",
-        component: PlaceholderView,
-        meta: {
-          moduleKey: "sports",
-          title: "智慧操场",
-        },
+        meta: { title: "菜单配置", fixedSystem: true },
       },
       {
         path: ":pathMatch(.*)*",
         name: "not-found",
         component: PlaceholderView,
-        meta: {
-          moduleKey: "security",
-          title: "页面未找到",
-        },
+        meta: { title: "页面未找到" },
       },
     ],
   },
