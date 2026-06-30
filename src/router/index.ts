@@ -3,6 +3,9 @@ import type { RouteRecordRaw } from "vue-router";
 import AppLayout from "@/layouts/AppLayout.vue";
 import PlaceholderView from "@/views/PlaceholderView.vue";
 import { pageRouteRecords } from "@/config/page-registry";
+import { resolveTenantRouteAccess } from "@/router/tenant-route-access";
+import { useNavigationStore } from "@/stores/navigation";
+import { useUserStore } from "@/stores/user";
 
 const legacyRedirects: RouteRecordRaw[] = [
   { path: "security", redirect: "/security/new-gate/device-list" },
@@ -35,6 +38,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "菜单配置", fixedSystem: true },
       },
       {
+        path: "menu-unavailable",
+        name: "menu-unavailable",
+        component: () => import("@/views/MenuUnavailableView.vue"),
+        meta: { title: "暂无可访问页面", tenantFallback: true },
+      },
+      {
         path: ":pathMatch(.*)*",
         name: "not-found",
         component: PlaceholderView,
@@ -47,6 +56,25 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
+});
+
+router.beforeEach((to) => {
+  const userStore = useUserStore();
+  const navigationStore = useNavigationStore();
+  if (navigationStore.currentTenant?.id !== userStore.currentTenant.id) {
+    navigationStore.loadTenant(userStore.currentTenant);
+  }
+
+  const result = resolveTenantRouteAccess(
+    { path: to.path, meta: to.meta },
+    userStore.role,
+    navigationStore.records,
+  );
+  if (result.kind === "allow") return true;
+  if (result.kind === "empty") {
+    return to.name === "menu-unavailable" ? true : { name: "menu-unavailable" };
+  }
+  return result.path === to.path ? true : result.path;
 });
 
 export default router;

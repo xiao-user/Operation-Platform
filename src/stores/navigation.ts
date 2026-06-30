@@ -4,6 +4,8 @@ import { defineStore } from "pinia";
 import { pageRegistryByKey } from "@/config/page-registry";
 import { tenantMenuRepository } from "@/features/menu-config/local-storage-menu-repository";
 import { buildMenuTree, resolveFirstTarget } from "@/features/menu-config/menu-tree";
+import { resolveTenantRouteAccess } from "@/router/tenant-route-access";
+import { useUserStore } from "@/stores/user";
 import type { MenuConfigRecord, MenuTreeNode } from "@/features/menu-config/types";
 import type { TenantInfo } from "@/types/user";
 
@@ -137,6 +139,22 @@ export const useNavigationStore = defineStore("navigation", () => {
     }
   }
 
+  async function ensureValidCurrentRoute(router: Router) {
+    if (!currentTenant.value) return;
+    const route = router.currentRoute.value;
+    const userStore = useUserStore();
+    const result = resolveTenantRouteAccess(
+      { path: route.path, meta: route.meta },
+      userStore.role,
+      records.value,
+    );
+    if (result.kind === "redirect" && result.path !== route.path) {
+      await router.push(result.path);
+    } else if (result.kind === "empty" && route.name !== "menu-unavailable") {
+      await router.push({ name: "menu-unavailable" });
+    }
+  }
+
   return {
     records,
     currentTenant,
@@ -156,5 +174,6 @@ export const useNavigationStore = defineStore("navigation", () => {
     setActiveMenu,
     syncByRoute,
     navigateToMenu,
+    ensureValidCurrentRoute,
   };
 });

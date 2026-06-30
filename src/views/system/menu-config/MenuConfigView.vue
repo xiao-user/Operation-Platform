@@ -113,6 +113,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { Plus, RefreshLeft, Search } from "@element-plus/icons-vue";
@@ -125,6 +126,7 @@ import type {
   MenuTreeNode,
 } from "@/features/menu-config/types";
 import { useMenuConfigStore } from "@/stores/menu-config";
+import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
 import type { TenantType } from "@/types/user";
 import MenuEditorDrawer from "./MenuEditorDrawer.vue";
@@ -132,6 +134,8 @@ import MenuTypeTag from "./MenuTypeTag.vue";
 
 const menuConfigStore = useMenuConfigStore();
 const userStore = useUserStore();
+const navigationStore = useNavigationStore();
+const router = useRouter();
 const { selectedTenant, records, tree, recoveryNotice } = storeToRefs(menuConfigStore);
 const { tenantList, currentTenant } = storeToRefs(userStore);
 
@@ -208,6 +212,7 @@ function handleSave(input: MenuRecordInput) {
   try {
     if (editingRecord.value) menuConfigStore.update(editingRecord.value.id, input);
     else menuConfigStore.create(input);
+    void navigationStore.ensureValidCurrentRoute(router);
     drawerVisible.value = false;
     ElMessage.success(editingRecord.value ? "菜单已更新" : "菜单已新增");
   } catch (error) {
@@ -222,6 +227,7 @@ function handleSave(input: MenuRecordInput) {
 function handleVisibleChange(row: MenuConfigRecord, value: boolean | string | number) {
   try {
     menuConfigStore.setVisible(row.id, Boolean(value));
+    void navigationStore.ensureValidCurrentRoute(router);
     ElMessage.success(Boolean(value) ? "菜单已显示" : "菜单已隐藏");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "状态更新失败");
@@ -240,6 +246,7 @@ async function handleDelete(row: MenuConfigRecord) {
       cancelButtonText: "取消",
     });
     menuConfigStore.removeCascade(row.id);
+    await navigationStore.ensureValidCurrentRoute(router);
     ElMessage.success("菜单已删除");
   } catch {
     // 用户取消时保持原数据。
@@ -259,6 +266,7 @@ async function handleReset() {
       },
     );
     menuConfigStore.reset();
+    await navigationStore.ensureValidCurrentRoute(router);
     ElMessage.success("已恢复默认菜单");
   } catch {
     // 用户取消时保持原数据。
