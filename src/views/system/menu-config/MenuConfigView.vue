@@ -92,9 +92,20 @@
           class="menu-draggable-tree"
           @node-drop="handleNodeDrop"
         >
-          <template #default="{ data }">
+          <template #default="{ node, data }">
             <div class="menu-tree-row">
-              <div class="menu-tree-cell name-column">
+              <div class="menu-tree-cell name-column" :style="nameColumnStyle(node)">
+                <button
+                  v-if="hasTreeChildren(node, data)"
+                  class="tree-toggle"
+                  :class="{ 'is-expanded': node.expanded }"
+                  type="button"
+                  :aria-label="node.expanded ? '收起菜单' : '展开菜单'"
+                  @click.stop="toggleTreeNode(node)"
+                >
+                  <el-icon><CaretRight /></el-icon>
+                </button>
+                <span v-else class="tree-toggle tree-toggle-placeholder" />
                 <el-icon class="drag-handle"><Rank /></el-icon>
                 <span class="menu-name-text">{{ data.name }}</span>
               </div>
@@ -153,7 +164,7 @@ import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { ElMessage, ElMessageBox } from "element-plus";
 import type { AllowDropType, NodeDropType } from "element-plus";
-import { Plus, Rank, RefreshLeft, Search } from "@element-plus/icons-vue";
+import { CaretRight, Plus, Rank, RefreshLeft, Search } from "@element-plus/icons-vue";
 import { TENANT_TYPE_OPTIONS } from "@/config/tenant";
 import { pageRegistryByKey } from "@/config/page-registry";
 import { collectDescendantIds } from "@/features/menu-config/menu-tree";
@@ -174,6 +185,14 @@ type TreeDropType = Extract<NodeDropType, "before" | "after" | "inner">;
 
 interface TreeNodeLike {
   data: MenuTreeNode;
+}
+
+interface TreeRenderNodeLike {
+  level?: number;
+  expanded?: boolean;
+  childNodes?: unknown[];
+  expand?: () => void;
+  collapse?: () => void;
 }
 
 const menuConfigStore = useMenuConfigStore();
@@ -237,6 +256,27 @@ function targetLabel(row: MenuConfigRecord) {
   if (row.type === "external") return row.externalUrl ?? "未配置";
   const page = row.pageKey ? pageRegistryByKey.get(row.pageKey) : null;
   return page ? `${page.title} · ${page.path}` : "页面不可用";
+}
+
+function nameColumnStyle(node: TreeRenderNodeLike) {
+  const level = typeof node.level === "number" ? node.level : 1;
+  return {
+    "--menu-level-indent": `${Math.max(0, level - 1) * 24}px`,
+  };
+}
+
+function hasTreeChildren(node: TreeRenderNodeLike, data: MenuTreeNode) {
+  return Boolean(node.childNodes?.length || data.children.length);
+}
+
+function toggleTreeNode(node: TreeRenderNodeLike) {
+  if (node.expanded) {
+    node.collapse?.();
+    if (!node.collapse) node.expanded = false;
+    return;
+  }
+  node.expand?.();
+  if (!node.expand) node.expanded = true;
 }
 
 function sortedSiblings(parentId: string | null, excludeId?: string) {
@@ -495,25 +535,29 @@ async function handleReset() {
 .menu-tree-row {
   display: grid;
   grid-template-columns:
-    minmax(260px, 1.2fr)
+    minmax(300px, 1.2fr)
     100px
     minmax(220px, 1fr)
     90px
     70px
     70px
-    220px;
+    190px;
   align-items: center;
   min-width: 1040px;
 }
 
 .menu-tree-header {
   height: 44px;
-  padding: 0 var(--spacing-12);
   color: var(--color-secondary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   background: var(--color-bg-soft);
   border-bottom: 1px solid var(--color-border);
+}
+
+.menu-tree-header > div {
+  min-width: 0;
+  padding: 0 var(--spacing-8);
 }
 
 .menu-draggable-tree {
@@ -523,6 +567,7 @@ async function handleReset() {
 :deep(.menu-draggable-tree .el-tree-node__content) {
   height: auto;
   min-height: 48px;
+  padding-left: 0 !important;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -531,7 +576,11 @@ async function handleReset() {
 }
 
 :deep(.menu-draggable-tree .el-tree-node__expand-icon) {
-  margin-left: var(--spacing-8);
+  display: none;
+}
+
+:deep(.menu-draggable-tree .el-tree-node__children) {
+  overflow: visible;
 }
 
 :deep(.menu-draggable-tree .is-drop-inner > .el-tree-node__content) {
@@ -542,7 +591,6 @@ async function handleReset() {
 .menu-tree-row {
   flex: 1;
   min-height: 48px;
-  padding-right: var(--spacing-12);
   cursor: grab;
 }
 
@@ -559,6 +607,11 @@ async function handleReset() {
   font-size: var(--font-size-sm);
 }
 
+.menu-tree-cell.name-column {
+  gap: var(--spacing-4);
+  padding-left: calc(var(--spacing-8) + var(--menu-level-indent, 0px));
+}
+
 .target-column {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -572,6 +625,34 @@ async function handleReset() {
 
 .action-column {
   justify-content: flex-start;
+}
+
+.tree-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: var(--color-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tree-toggle .el-icon {
+  transition: transform 0.15s ease;
+}
+
+.tree-toggle.is-expanded .el-icon {
+  transform: rotate(90deg);
+}
+
+.tree-toggle-placeholder {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .drag-handle {
