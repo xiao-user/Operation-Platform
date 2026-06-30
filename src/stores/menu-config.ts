@@ -98,6 +98,16 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
     update(id, input);
   }
 
+  function canMove(id: string, nextParentId: string | null) {
+    const existing = records.value.find((record) => record.id === id);
+    if (!existing) return false;
+    const moved: MenuConfigRecord = { ...existing, parentId: nextParentId };
+    return validateMenuRecord(moved, records.value, {
+      tenantType: requireTenant().type,
+      pages: pageRegistryByKey,
+    }).length === 0;
+  }
+
   function sortedSiblings(source: readonly MenuConfigRecord[], parentId: string | null) {
     return source
       .filter((record) => record.parentId === parentId)
@@ -167,6 +177,7 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
     update,
     removeCascade,
     setVisible,
+    canMove,
     move,
     reset,
   };

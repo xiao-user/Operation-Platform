@@ -140,6 +140,20 @@ describe("menu configuration store", () => {
     expect(siblings.map((record) => record.sort)).toEqual([10, 20]);
   });
 
+  it("pre-validates allowed and forbidden drag targets", () => {
+    const store = useMenuConfigStore();
+    store.load(schoolA);
+    const familyModule = store.records.find((record) => record.name === "家校互动")!;
+    const securityModule = store.records.find((record) => record.name === "校园安全")!;
+    const smartSafetyDirectory = store.records.find((record) => record.name === "校园智能安防")!;
+    const visitorPage = store.records.find((record) => record.name === "访客管理")!;
+
+    expect(store.canMove(visitorPage.id, securityModule.id)).toBe(true);
+    expect(store.canMove(visitorPage.id, smartSafetyDirectory.id)).toBe(true);
+    expect(store.canMove(familyModule.id, securityModule.id)).toBe(false);
+    expect(store.canMove(smartSafetyDirectory.id, smartSafetyDirectory.id)).toBe(false);
+  });
+
   it("rejects moving a module below another menu", () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
