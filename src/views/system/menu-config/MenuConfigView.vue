@@ -1045,21 +1045,7 @@ async function handleReset() {
   flex: 1;
   min-height: 48px;
   cursor: default;
-  transition: border-width 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
-}
-
-.menu-tree-row.is-drop-preview-before,
-.menu-tree-row.is-drop-preview-after {
-  border-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-white));
-  border-style: solid;
-}
-
-.menu-tree-row.is-drop-preview-before {
-  border-width: 18px 0 0;
-}
-
-.menu-tree-row.is-drop-preview-after {
-  border-width: 0 0 18px;
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .menu-tree-row.is-drop-preview-before::before,
@@ -1068,57 +1054,23 @@ async function handleReset() {
   right: 0;
   left: 0;
   z-index: 4;
-  height: 3px;
+  height: 1px;
   content: "";
   background: var(--color-primary);
-  border-radius: 999px;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
   pointer-events: none;
 }
 
 .menu-tree-row.is-drop-preview-before::before {
-  top: -10px;
+  top: -1px;
 }
 
 .menu-tree-row.is-drop-preview-after::before {
-  bottom: -10px;
-}
-
-.menu-tree-row.is-drop-preview-before::after,
-.menu-tree-row.is-drop-preview-after::after,
-.menu-tree-row.is-drop-preview-inner::after {
-  position: absolute;
-  right: var(--spacing-12);
-  z-index: 5;
-  height: 20px;
-  padding: 0 var(--spacing-8);
-  color: var(--color-white);
-  font-size: var(--font-size-xs);
-  line-height: 20px;
-  background: var(--color-primary);
-  border-radius: 999px;
-  pointer-events: none;
-}
-
-.menu-tree-row.is-drop-preview-before::after {
-  top: -18px;
-  content: "松手插入此处";
-}
-
-.menu-tree-row.is-drop-preview-after::after {
-  bottom: -18px;
-  content: "松手插入此处";
+  bottom: -1px;
 }
 
 .menu-tree-row.is-drop-preview-inner {
   background: var(--color-primary-light);
-  box-shadow: inset 0 0 0 2px var(--color-primary);
-}
-
-.menu-tree-row.is-drop-preview-inner::after {
-  top: 50%;
-  content: "松手移入此菜单";
-  transform: translateY(-50%);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 
 .menu-tree-cell {
