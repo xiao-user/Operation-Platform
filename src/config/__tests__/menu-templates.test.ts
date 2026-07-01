@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pageRegistryByKey } from "@/config/page-registry";
+import { DEVELOPING_PAGE_KEY, pageRegistryByKey } from "@/config/page-registry";
 import {
   cloneTenantTemplate,
   tenantMenuTemplates,
@@ -24,11 +24,70 @@ describe("tenant menu templates", () => {
     expect(Object.keys(tenantMenuTemplates)).toEqual(["school", "bureau", "org", "platform"]);
   });
 
-  it("preserves the current top-level module counts", () => {
-    expect(tenantMenuTemplates.school.filter((item) => item.type === "module")).toHaveLength(9);
+  it("uses the supplied school module structure", () => {
+    expect(
+      tenantMenuTemplates.school
+        .filter((item) => item.type === "module")
+        .map((item) => item.name),
+    ).toEqual([
+      "家校共育",
+      "教育教学",
+      "教育评价",
+      "教育管理",
+      "平安校园",
+      "文化生活",
+      "数据中心",
+    ]);
+    expect(tenantMenuTemplates.school.some((item) => item.name === "工作台")).toBe(false);
     expect(tenantMenuTemplates.bureau.filter((item) => item.type === "module")).toHaveLength(3);
     expect(tenantMenuTemplates.org.filter((item) => item.type === "module")).toHaveLength(4);
     expect(tenantMenuTemplates.platform.filter((item) => item.type === "module")).toHaveLength(1);
+  });
+
+  it("preserves representative school menu hierarchy and flattens only beyond level four", () => {
+    const records = tenantMenuTemplates.school;
+    const child = (parentId: string, name: string) =>
+      records.find((record) => record.parentId === parentId && record.name === name)!;
+
+    const educationEvaluation = records.find(
+      (record) => record.parentId === null && record.name === "教育评价",
+    )!;
+    const comprehensive = child(educationEvaluation.id, "综合评价");
+    const classReview = child(comprehensive.id, "班级评比");
+    expect(child(classReview.id, "班级点评")).toMatchObject({
+      type: "page",
+      pageKey: DEVELOPING_PAGE_KEY,
+    });
+
+    const educationManagement = records.find(
+      (record) => record.parentId === null && record.name === "教育管理",
+    )!;
+    const campusOffice = child(educationManagement.id, "校园办公");
+    const agendaManagement = child(campusOffice.id, "议题管理");
+    expect(child(agendaManagement.id, "议题设置")).toMatchObject({ type: "page" });
+    expect(child(agendaManagement.id, "会议设置")).toMatchObject({ type: "page" });
+  });
+
+  it("keeps the school template valid for the four-level editor", () => {
+    const records = tenantMenuTemplates.school;
+    const byId = new Map(records.map((record) => [record.id, record]));
+    const levelOf = (recordId: string) => {
+      let level = 1;
+      let current = byId.get(recordId);
+      while (current?.parentId) {
+        level += 1;
+        current = byId.get(current.parentId);
+      }
+      return level;
+    };
+    const siblingNames = new Set<string>();
+
+    for (const record of records) {
+      expect(levelOf(record.id)).toBeLessThanOrEqual(4);
+      const siblingKey = `${record.parentId ?? "root"}:${record.name}`;
+      expect(siblingNames.has(siblingKey)).toBe(false);
+      siblingNames.add(siblingKey);
+    }
   });
 
   it("binds menu configuration to the operation platform template", () => {

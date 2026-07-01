@@ -36,7 +36,7 @@ describe("MenuConfigView", () => {
     expect(wrapper.find(".page-heading").exists()).toBe(false);
     expect(wrapper.find(".table-toolbar .el-button-group").exists()).toBe(true);
     expect(wrapper.text()).toContain("体育东路小学海明学校");
-    expect(useMenuConfigStore().records.some((record) => record.name === "家校互动")).toBe(true);
+    expect(useMenuConfigStore().records.some((record) => record.name === "家校共育")).toBe(true);
     expect(wrapper.findAll(".el-tree-node.is-expanded")).toHaveLength(0);
   });
 
@@ -46,14 +46,14 @@ describe("MenuConfigView", () => {
 
     const moduleRow = wrapper
       .findAll(".menu-tree-row")
-      .find((item) => item.find(".menu-name-text").text() === "家校互动")!;
+      .find((item) => item.find(".menu-name-text").text() === "家校共育")!;
     await moduleRow.find('button[aria-label="展开菜单"]').trigger("click");
     await wrapper.vm.$nextTick();
     expect(wrapper.text()).toContain("通知公告");
 
     const store = useMenuConfigStore();
-    const module = store.records.find((record) => record.name === "家校互动")!;
-    store.update(module.id, { ...module, name: "家校互动更新" });
+    const module = store.records.find((record) => record.name === "家校共育")!;
+    store.update(module.id, { ...module, name: "家校共育更新" });
     await wrapper.vm.$nextTick();
 
     expect(wrapper.text()).toContain("通知公告");
@@ -74,7 +74,7 @@ describe("MenuConfigView", () => {
     const wrapper = mountView();
     await wrapper.vm.$nextTick();
 
-    const row = wrapper.findAll(".menu-tree-row").find((item) => item.text().includes("家校互动"));
+    const row = wrapper.findAll(".menu-tree-row").find((item) => item.text().includes("家校共育"));
     expect(row).toBeDefined();
     expect(row!.text()).toContain("编辑");
     expect(row!.text()).not.toContain("行内编辑");
@@ -95,7 +95,7 @@ describe("MenuConfigView", () => {
     const wrapper = mountView();
     await wrapper.vm.$nextTick();
 
-    const row = wrapper.findAll(".menu-tree-row").find((item) => item.text().includes("家校互动"));
+    const row = wrapper.findAll(".menu-tree-row").find((item) => item.text().includes("家校共育"));
     await row!.trigger("dblclick");
     await wrapper.vm.$nextTick();
 
@@ -108,20 +108,20 @@ describe("MenuConfigView", () => {
 
     const moduleRow = wrapper
       .findAll(".menu-tree-row")
-      .find((item) => item.find(".menu-name-text").text() === "家校互动")!;
+      .find((item) => item.find(".menu-name-text").text() === "家校共育")!;
     await moduleRow.find('button[aria-label="展开菜单"]').trigger("click");
     await wrapper.vm.$nextTick();
 
     const store = useMenuConfigStore();
     const source = store.tree
       .flatMap((node) => node.children)
-      .find((record) => record.name === "通知公告")!;
+      .find((record) => record.name === "活动报名")!;
     const target = store.tree
       .flatMap((node) => node.children)
-      .find((record) => record.name === "活动管理")!;
+      .find((record) => record.name === "投票管理")!;
     const targetRow = wrapper
       .findAll(".menu-tree-row")
-      .find((item) => item.find(".menu-name-text").text() === "活动管理")!;
+      .find((item) => item.find(".menu-name-text").text() === "投票管理")!;
     const targetContent = targetRow.element.parentElement as HTMLElement;
     targetContent.getBoundingClientRect = () => ({
       x: 0,

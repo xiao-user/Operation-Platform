@@ -33,8 +33,8 @@ describe("navigation store", () => {
 
     store.loadTenant(schoolA);
 
-    expect(store.moduleNodes).toHaveLength(9);
-    expect(store.moduleNodes.map((node) => node.name)).toContain("校园安全");
+    expect(store.moduleNodes).toHaveLength(7);
+    expect(store.moduleNodes.map((node) => node.name)).toContain("平安校园");
     expect(store.topLevelNavItems[0]).toMatchObject({ kind: "workbench", name: "工作台" });
     expect(store.currentMenus.every((node) => node.parentId === store.activeModuleId)).toBe(true);
   });
@@ -50,12 +50,12 @@ describe("navigation store", () => {
 
     expect(store.workbenchConfig).toEqual({ enabled: false, label: "首页", sort: 0 });
     expect(store.topLevelNavItems.some((item) => item.kind === "workbench")).toBe(false);
-    expect(store.moduleNodes.map((node) => node.name)).toContain("校园安全");
+    expect(store.moduleNodes.map((node) => node.name)).toContain("平安校园");
   });
 
   it("keeps two schools on independent menu configurations", () => {
     const firstRecords = tenantMenuRepository.list(schoolA).records;
-    const security = firstRecords.find((record) => record.name === "校园安全" && record.type === "module")!;
+    const security = firstRecords.find((record) => record.name === "平安校园" && record.type === "module")!;
     security.name = "学校 A 安防";
     tenantMenuRepository.replace(schoolA, firstRecords);
 
@@ -64,13 +64,13 @@ describe("navigation store", () => {
     expect(store.moduleNodes.map((node) => node.name)).toContain("学校 A 安防");
 
     store.loadTenant(schoolB);
-    expect(store.moduleNodes.map((node) => node.name)).toContain("校园安全");
+    expect(store.moduleNodes.map((node) => node.name)).toContain("平安校园");
     expect(store.moduleNodes.map((node) => node.name)).not.toContain("学校 A 安防");
   });
 
   it("does not show modules without a visible navigable target", () => {
     const records = tenantMenuRepository.list(schoolA).records;
-    const familyModule = records.find((record) => record.name === "家校互动" && record.type === "module")!;
+    const familyModule = records.find((record) => record.name === "家校共育" && record.type === "module")!;
     for (const record of records) {
       if (record.parentId === familyModule.id) record.visible = false;
     }
@@ -79,41 +79,47 @@ describe("navigation store", () => {
     const store = useNavigationStore();
     store.loadTenant(schoolA);
 
-    expect(store.moduleNodes.map((node) => node.name)).not.toContain("家校互动");
+    expect(store.moduleNodes.map((node) => node.name)).not.toContain("家校共育");
   });
 
   it("syncs the active module and menu from route ownership metadata", () => {
     const store = useNavigationStore();
     store.loadTenant(schoolA);
+    const badgeMenu = store.records.find((record) => record.name === "班牌列表")!;
 
     store.syncByRoute({
-      path: "/security/new-gate/person-group",
-      fullPath: "/security/new-gate/person-group",
-      meta: { pageKey: "person-group", menuOwnerKey: "device-list" },
+      path: `/developing/${badgeMenu.id}`,
+      fullPath: `/developing/${badgeMenu.id}`,
+      params: { menuId: badgeMenu.id },
+      meta: { pageKey: DEVELOPING_PAGE_KEY },
     } as never);
 
-    expect(store.activeMenuNode?.pageKey).toBe("device-list");
-    expect(store.activeModuleNode?.name).toBe("校园安全");
-    expect(store.activeSecondLevelNode?.name).toBe("校园智能安防");
-    expect(store.deepMenus.map((node) => node.name)).toEqual(["新版门禁设置", "访客管理"]);
-    expect(store.secondLevelTabs.map((node) => node.name)).toEqual(["校园智能安防"]);
+    expect(store.activeMenuNode?.name).toBe("班牌列表");
+    expect(store.activeModuleNode?.name).toBe("平安校园");
+    expect(store.activeSecondLevelNode?.name).toBe("班牌管理");
+    expect(store.deepMenus.map((node) => node.name)).toContain("班牌列表");
+    expect(store.secondLevelTabs.map((node) => node.name)).toEqual([
+      "职工考勤",
+      "学生考勤",
+      "班牌管理",
+    ]);
   });
 
   it("navigates an internal menu through its registered page", async () => {
     const store = useNavigationStore();
     store.loadTenant(schoolA);
-    const deviceMenu = store.records.find((record) => record.pageKey === "device-list")!;
+    const deviceMenu = store.records.find((record) => record.name === "班牌列表")!;
     const push = vi.fn().mockResolvedValue(undefined);
 
     await store.navigateToMenu(deviceMenu.id, { push } as never);
 
-    expect(push).toHaveBeenCalledWith("/security/new-gate/device-list");
+    expect(push).toHaveBeenCalledWith(`/developing/${deviceMenu.id}`);
   });
 
   it("supports four-level navigation with second-level tabs and recursive sidebar menus", async () => {
     const records = tenantMenuRepository.list(schoolA).records;
     const securityModule = records.find(
-      (record) => record.name === "校园安全" && record.type === "module",
+      (record) => record.name === "平安校园" && record.type === "module",
     )!;
     const secondLevel = {
       id: "custom-second-level",
@@ -170,7 +176,7 @@ describe("navigation store", () => {
       meta: { pageKey: DEVELOPING_PAGE_KEY },
     } as never);
 
-    expect(store.activeModuleNode?.name).toBe("校园安全");
+    expect(store.activeModuleNode?.name).toBe("平安校园");
     expect(store.activeSecondLevelNode?.name).toBe("二级业务");
     expect(store.activeMenuTrail.map((node) => node.name)).toEqual([
       "二级业务",

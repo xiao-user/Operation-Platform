@@ -149,9 +149,9 @@ describe("menu configuration store", () => {
   it("moves a page across levels and normalizes sibling order", () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
-    const securityModule = store.records.find((record) => record.name === "校园安全")!;
-    const smartSafetyDirectory = store.records.find((record) => record.name === "校园智能安防")!;
-    const visitorPage = store.records.find((record) => record.name === "访客管理")!;
+    const securityModule = store.records.find((record) => record.name === "平安校园")!;
+    const smartSafetyDirectory = store.records.find((record) => record.name === "班牌管理")!;
+    const visitorPage = store.records.find((record) => record.name === "班牌列表")!;
 
     store.move(visitorPage.id, securityModule.id, 0);
 
@@ -160,20 +160,20 @@ describe("menu configuration store", () => {
       .filter((record) => record.parentId === securityModule.id)
       .sort((a, b) => a.sort - b.sort);
     expect(moved.parentId).toBe(securityModule.id);
-    expect(siblings.map((record) => record.id)).toEqual([
-      visitorPage.id,
-      smartSafetyDirectory.id,
-    ]);
-    expect(siblings.map((record) => record.sort)).toEqual([10, 20]);
+    expect(siblings[0]?.id).toBe(visitorPage.id);
+    expect(siblings.map((record) => record.id)).toContain(smartSafetyDirectory.id);
+    expect(siblings.map((record) => record.sort)).toEqual(
+      siblings.map((_, index) => (index + 1) * 10),
+    );
   });
 
   it("pre-validates allowed and forbidden drag targets", () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
-    const familyModule = store.records.find((record) => record.name === "家校互动")!;
-    const securityModule = store.records.find((record) => record.name === "校园安全")!;
-    const smartSafetyDirectory = store.records.find((record) => record.name === "校园智能安防")!;
-    const visitorPage = store.records.find((record) => record.name === "访客管理")!;
+    const familyModule = store.records.find((record) => record.name === "家校共育")!;
+    const securityModule = store.records.find((record) => record.name === "平安校园")!;
+    const smartSafetyDirectory = store.records.find((record) => record.name === "班牌管理")!;
+    const visitorPage = store.records.find((record) => record.name === "班牌列表")!;
 
     expect(store.canMove(visitorPage.id, securityModule.id)).toBe(true);
     expect(store.canMove(visitorPage.id, smartSafetyDirectory.id)).toBe(true);
@@ -184,7 +184,7 @@ describe("menu configuration store", () => {
   it("supports four-level menu configuration", () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
-    const securityModule = store.records.find((record) => record.name === "校园安全")!;
+    const securityModule = store.records.find((record) => record.name === "平安校园")!;
     const secondLevel = store.create({
       parentId: securityModule.id,
       type: "directory",
@@ -230,7 +230,10 @@ describe("menu configuration store", () => {
   it("allows multiple menus to use the developing placeholder page", () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
-    const securityModule = store.records.find((record) => record.name === "校园安全")!;
+    const securityModule = store.records.find((record) => record.name === "平安校园")!;
+    const existingPlaceholderCount = store.records.filter(
+      (record) => record.pageKey === DEVELOPING_PAGE_KEY,
+    ).length;
 
     store.create({
       parentId: securityModule.id,
@@ -257,14 +260,14 @@ describe("menu configuration store", () => {
 
     expect(
       store.records.filter((record) => record.pageKey === DEVELOPING_PAGE_KEY),
-    ).toHaveLength(2);
+    ).toHaveLength(existingPlaceholderCount + 2);
   });
 
   it("rejects moving a module below another menu", () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
-    const familyModule = store.records.find((record) => record.name === "家校互动")!;
-    const securityModule = store.records.find((record) => record.name === "校园安全")!;
+    const familyModule = store.records.find((record) => record.name === "家校共育")!;
+    const securityModule = store.records.find((record) => record.name === "平安校园")!;
 
     expect(() => store.move(familyModule.id, securityModule.id, 0)).toThrow(MenuValidationError);
   });

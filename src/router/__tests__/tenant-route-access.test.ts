@@ -21,9 +21,29 @@ const platform: TenantInfo = {
   type: "platform",
 };
 
+function addDeviceMenu(records: ReturnType<typeof cloneTenantTemplate>) {
+  const moduleRecord = records.find((record) => record.type === "module")!;
+  const deviceMenu = {
+    id: "custom-device-list",
+    tenantId: school.id,
+    parentId: moduleRecord.id,
+    type: "page" as const,
+    name: "设备列表",
+    icon: null,
+    pageKey: "device-list",
+    externalUrl: null,
+    externalOpenMode: null,
+    sort: 999,
+    visible: true,
+  };
+  records.push(deviceMenu);
+  return deviceMenu;
+}
+
 describe("tenant route access", () => {
   it("allows a visible page owned by the tenant menu", () => {
     const records = cloneTenantTemplate(school);
+    addDeviceMenu(records);
 
     expect(
       resolveTenantRouteAccess(
@@ -36,6 +56,7 @@ describe("tenant route access", () => {
 
   it("allows a static subpage when its owner menu is visible", () => {
     const records = cloneTenantTemplate(school);
+    addDeviceMenu(records);
 
     expect(
       resolveTenantRouteAccess(
@@ -111,8 +132,9 @@ describe("tenant route access", () => {
 
   it("redirects a hidden page to the first visible internal page", () => {
     const records = cloneTenantTemplate(school);
-    const deviceMenu = records.find((record) => record.pageKey === "device-list")!;
+    const deviceMenu = addDeviceMenu(records);
     deviceMenu.visible = false;
+    const fallbackPath = resolveFirstTenantInternalPath(records, "admin");
 
     const result = resolveTenantRouteAccess(
       { path: "/security/new-gate/device-list", meta: { pageKey: "device-list", menuOwnerKey: "device-list" } },
@@ -121,7 +143,7 @@ describe("tenant route access", () => {
     );
 
     expect(result.kind).toBe("redirect");
-    expect(result).toHaveProperty("path", "/family-interaction/notice");
+    expect(result).toHaveProperty("path", fallbackPath);
   });
 
   it("allows admins to access the platform-owned configuration route", () => {
@@ -148,15 +170,17 @@ describe("tenant route access", () => {
   it("redirects hidden workbench to the first visible internal page", () => {
     const shellConfig = defaultTenantShellConfig();
     shellConfig.workbench.enabled = false;
+    const records = cloneTenantTemplate(school);
+    const fallbackPath = resolveFirstTenantInternalPath(records, "admin");
 
     expect(
       resolveTenantRouteAccess(
         { path: "/workbench", meta: { fixedWorkbench: true } },
         "admin",
-        cloneTenantTemplate(school),
+        records,
         shellConfig,
       ),
-    ).toEqual({ kind: "redirect", path: "/family-interaction/notice" });
+    ).toEqual({ kind: "redirect", path: fallbackPath });
   });
 
   it("returns empty when hidden workbench has no business fallback", () => {
@@ -174,13 +198,15 @@ describe("tenant route access", () => {
   });
 
   it("redirects school tenants away from the platform-owned configuration route", () => {
+    const records = cloneTenantTemplate(school);
+    const fallbackPath = resolveFirstTenantInternalPath(records, "admin");
     expect(
       resolveTenantRouteAccess(
         { path: "/system/menu-config", meta: { pageKey: "system-menu-config", requiresAdmin: true } },
         "admin",
-        cloneTenantTemplate(school),
+        records,
       ),
-    ).toEqual({ kind: "redirect", path: "/family-interaction/notice" });
+    ).toEqual({ kind: "redirect", path: fallbackPath });
   });
 
   it("blocks teachers from the platform-owned configuration route", () => {

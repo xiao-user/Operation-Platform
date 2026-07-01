@@ -3,9 +3,14 @@ import {
   moduleMenus,
   topNavTabs,
 } from "@/config/navigation";
-import { pageRegistryByPath } from "@/config/page-registry";
+import { DEVELOPING_PAGE_KEY, pageRegistryByPath } from "@/config/page-registry";
+import {
+  schoolMenuOutline,
+  type SchoolMenuOutlineNode,
+} from "@/config/school-menu-outline";
+import { MAX_MENU_DEPTH } from "@/features/menu-config/menu-validation";
 import type { MenuConfigRecord, MenuItemType } from "@/features/menu-config/types";
-import type { SideMenuItem } from "@/types/navigation";
+import type { MenuIconKey, SideMenuItem } from "@/types/navigation";
 import type { TenantInfo, TenantType } from "@/types/user";
 
 const TEMPLATE_TENANT_ID = "__template__";
@@ -42,6 +47,72 @@ function pageKeyForPath(path: string) {
   const registeredPage = pageRegistryByPath.get(canonicalPath);
   if (!registeredPage) throw new Error(`菜单模板引用了未注册页面：${path}`);
   return registeredPage.menuOwnerKey;
+}
+
+const schoolModuleIcons: Record<string, MenuIconKey> = {
+  家校共育: "chat",
+  教育教学: "notebook",
+  教育评价: "data",
+  教育管理: "office",
+  平安校园: "shield",
+  文化生活: "house",
+  数据中心: "data",
+};
+
+function flattenPageLevel(nodes: readonly SchoolMenuOutlineNode[]) {
+  const names: string[] = [];
+  const visit = (node: SchoolMenuOutlineNode) => {
+    names.push(node.name);
+    node.children.forEach(visit);
+  };
+  nodes.forEach(visit);
+  return names;
+}
+
+function buildSchoolMenuRecords(
+  nodes: readonly SchoolMenuOutlineNode[],
+  parentId: string,
+  level: number,
+  path: string,
+): MenuConfigRecord[] {
+  if (level >= MAX_MENU_DEPTH) {
+    return flattenPageLevel(nodes).map((name, index) =>
+      record(
+        `template:school:${path}:page:${index}`,
+        "page",
+        name,
+        parentId,
+        (index + 1) * 10,
+        { pageKey: DEVELOPING_PAGE_KEY },
+      ),
+    );
+  }
+
+  return nodes.flatMap((node, index) => {
+    const id = `template:school:${path}:${index}`;
+    const sort = (index + 1) * 10;
+    if (node.children.length) {
+      return [
+        record(id, "directory", node.name, parentId, sort),
+        ...buildSchoolMenuRecords(node.children, id, level + 1, `${path}:${index}`),
+      ];
+    }
+    return [
+      record(id, "page", node.name, parentId, sort, { pageKey: DEVELOPING_PAGE_KEY }),
+    ];
+  });
+}
+
+function buildSchoolTemplate() {
+  return schoolMenuOutline.flatMap((module, index) => {
+    const moduleId = `template:school:module:${index}`;
+    return [
+      record(moduleId, "module", module.name, null, (index + 1) * 10, {
+        icon: schoolModuleIcons[module.name] ?? "menu",
+      }),
+      ...buildSchoolMenuRecords(module.children, moduleId, 2, `module:${index}`),
+    ];
+  });
 }
 
 function convertMenuItems(
@@ -110,7 +181,7 @@ function buildTemplate(tenantType: TenantType): MenuConfigRecord[] {
 }
 
 export const tenantMenuTemplates: Record<TenantType, MenuConfigRecord[]> = {
-  school: buildTemplate("school"),
+  school: buildSchoolTemplate(),
   bureau: buildTemplate("bureau"),
   org: buildTemplate("org"),
   platform: buildTemplate("platform"),
