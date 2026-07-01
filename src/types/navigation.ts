@@ -21,6 +21,7 @@ export interface NavTab {
   key: string;
   label: string;
   path: string;
+  icon?: MenuIconKey;
   /** 限定哪些租户类型可见，不填则所有租户都显示 */
   tenantTypes?: TenantType[];
 }

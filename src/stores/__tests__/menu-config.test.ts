@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
+import { defaultTenantShellConfig } from "@/features/shell-config/local-storage-shell-config-repository";
 import { MenuValidationError } from "@/features/menu-config/menu-validation";
 import { useMenuConfigStore } from "@/stores/menu-config";
 import { useNavigationStore } from "@/stores/navigation";
@@ -117,6 +118,31 @@ describe("menu configuration store", () => {
     });
 
     expect(navigationStore.moduleNodes.map((node) => node.name)).toContain("运行时已刷新");
+  });
+
+  it("updates workbench config and refreshes current tenant navigation", () => {
+    const userStore = useUserStore();
+    const navigationStore = useNavigationStore();
+    const store = useMenuConfigStore();
+    const currentTenant = { ...userStore.currentTenant };
+    navigationStore.loadTenant(currentTenant);
+    store.load(currentTenant);
+
+    store.updateWorkbench({ enabled: false, label: "首页", sort: 50 });
+
+    expect(store.shellConfig.workbench).toEqual({ enabled: false, label: "首页", sort: 50 });
+    expect(navigationStore.workbenchConfig).toEqual({ enabled: false, label: "首页", sort: 50 });
+    expect(navigationStore.topLevelNavItems.some((item) => item.kind === "workbench")).toBe(false);
+  });
+
+  it("resets workbench config together with the selected tenant menu", () => {
+    const store = useMenuConfigStore();
+    store.load(schoolA);
+    store.updateWorkbench({ enabled: false, label: "首页", sort: 30 });
+
+    store.reset();
+
+    expect(store.shellConfig).toEqual(defaultTenantShellConfig());
   });
 
   it("moves a page across levels and normalizes sibling order", () => {

@@ -83,6 +83,8 @@
   /* Layout */
   --header-height: 56px;
   --sidebar-width: 200px;
+  --module-rail-width: 48px;
+  --deep-sidebar-width: 160px;
   --content-padding: var(--spacing-16);
 
   /* Tag Colors - Matches Element Plus defaults */

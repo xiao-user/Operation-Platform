@@ -28,8 +28,14 @@ const routes: RouteRecordRaw[] = [
     path: "/",
     component: AppLayout,
     children: [
-      { path: "", redirect: "/security/new-gate/device-list" },
+      { path: "", redirect: "/workbench" },
       ...legacyRedirects,
+      {
+        path: "workbench",
+        name: "workbench",
+        component: () => import("@/views/WorkbenchView.vue"),
+        meta: { title: "工作台", fixedWorkbench: true },
+      },
       ...pageRouteRecords,
       {
         path: "menu-unavailable",
@@ -63,6 +69,7 @@ router.beforeEach((to) => {
     { path: to.path, meta: to.meta },
     userStore.role,
     navigationStore.records,
+    navigationStore.shellConfig,
   );
   if (result.kind === "allow") return true;
   if (result.kind === "empty") {

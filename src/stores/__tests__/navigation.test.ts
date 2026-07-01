@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useNavigationStore } from "@/stores/navigation";
 import { tenantMenuRepository } from "@/features/menu-config/local-storage-menu-repository";
+import {
+  defaultTenantShellConfig,
+  tenantShellConfigRepository,
+} from "@/features/shell-config/local-storage-shell-config-repository";
 import type { TenantInfo } from "@/types/user";
 
 const schoolA: TenantInfo = {
@@ -30,7 +34,22 @@ describe("navigation store", () => {
 
     expect(store.moduleNodes).toHaveLength(9);
     expect(store.moduleNodes.map((node) => node.name)).toContain("校园安全");
+    expect(store.topLevelNavItems[0]).toMatchObject({ kind: "workbench", name: "工作台" });
     expect(store.currentMenus.every((node) => node.parentId === store.activeModuleId)).toBe(true);
+  });
+
+  it("loads hidden workbench config independently from business menus", () => {
+    const shellConfig = defaultTenantShellConfig();
+    shellConfig.workbench.enabled = false;
+    shellConfig.workbench.label = "首页";
+    tenantShellConfigRepository.replace(schoolA, shellConfig);
+
+    const store = useNavigationStore();
+    store.loadTenant(schoolA);
+
+    expect(store.workbenchConfig).toEqual({ enabled: false, label: "首页", sort: 0 });
+    expect(store.topLevelNavItems.some((item) => item.kind === "workbench")).toBe(false);
+    expect(store.moduleNodes.map((node) => node.name)).toContain("校园安全");
   });
 
   it("keeps two schools on independent menu configurations", () => {
@@ -74,6 +93,9 @@ describe("navigation store", () => {
 
     expect(store.activeMenuNode?.pageKey).toBe("device-list");
     expect(store.activeModuleNode?.name).toBe("校园安全");
+    expect(store.activeSecondLevelNode?.name).toBe("校园智能安防");
+    expect(store.deepMenus.map((node) => node.name)).toEqual(["新版门禁设置", "访客管理"]);
+    expect(store.secondLevelTabs.map((node) => node.name)).toEqual(["校园智能安防"]);
   });
 
   it("navigates an internal menu through its registered page", async () => {

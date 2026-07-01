@@ -82,6 +82,7 @@ function buildTemplate(tenantType: TenantType): MenuConfigRecord[] {
         tab.label,
         null,
         (index + 1) * 10,
+        { icon: tab.icon ?? null },
       );
       const configuredMenus = moduleMenus[tab.key] ?? [];
 

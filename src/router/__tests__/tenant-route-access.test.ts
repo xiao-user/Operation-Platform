@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cloneTenantTemplate } from "@/config/menu-templates";
+import { defaultTenantShellConfig } from "@/features/shell-config/local-storage-shell-config-repository";
 import { resolveTenantRouteAccess } from "@/router/tenant-route-access";
 import type { TenantInfo } from "@/types/user";
 
@@ -64,6 +65,45 @@ describe("tenant route access", () => {
         cloneTenantTemplate(platform),
       ),
     ).toEqual({ kind: "allow" });
+  });
+
+  it("allows workbench when the tenant shell config enables it", () => {
+    expect(
+      resolveTenantRouteAccess(
+        { path: "/workbench", meta: { fixedWorkbench: true } },
+        "admin",
+        cloneTenantTemplate(school),
+        defaultTenantShellConfig(),
+      ),
+    ).toEqual({ kind: "allow" });
+  });
+
+  it("redirects hidden workbench to the first visible internal page", () => {
+    const shellConfig = defaultTenantShellConfig();
+    shellConfig.workbench.enabled = false;
+
+    expect(
+      resolveTenantRouteAccess(
+        { path: "/workbench", meta: { fixedWorkbench: true } },
+        "admin",
+        cloneTenantTemplate(school),
+        shellConfig,
+      ),
+    ).toEqual({ kind: "redirect", path: "/family-interaction/notice" });
+  });
+
+  it("returns empty when hidden workbench has no business fallback", () => {
+    const shellConfig = defaultTenantShellConfig();
+    shellConfig.workbench.enabled = false;
+
+    expect(
+      resolveTenantRouteAccess(
+        { path: "/workbench", meta: { fixedWorkbench: true } },
+        "admin",
+        [],
+        shellConfig,
+      ),
+    ).toEqual({ kind: "empty" });
   });
 
   it("redirects school tenants away from the platform-owned configuration route", () => {

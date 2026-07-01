@@ -3,7 +3,7 @@
     <section class="page-heading">
       <div>
         <h1>菜单配置</h1>
-        <p>按租户维护顶部模块和侧边菜单，保存后当前租户导航立即生效。</p>
+        <p>按租户维护系统入口、顶部模块和侧边菜单，保存后当前租户导航立即生效。</p>
       </div>
       <el-button type="primary" :icon="Plus" :disabled="!selectedTenant" @click="openCreateModule">
         新增顶部模块
@@ -46,11 +46,57 @@
       </div>
     </section>
 
+    <section class="system-entry-card">
+      <div class="system-entry-heading">
+        <div>
+          <h2>系统入口配置</h2>
+          <p>工作台是固定系统入口，不参与普通菜单层级拖拽。</p>
+        </div>
+        <el-tag type="primary" effect="plain">租户独立配置</el-tag>
+      </div>
+
+      <div class="system-entry-row">
+        <div class="entry-name">
+          <strong>{{ shellConfig.workbench.label }}</strong>
+          <span>系统入口 · /workbench</span>
+        </div>
+        <div class="entry-field">
+          <label>入口名称</label>
+          <el-input
+            v-model="workbenchLabel"
+            :disabled="!selectedTenant"
+            maxlength="12"
+            @change="handleWorkbenchLabelChange"
+          />
+        </div>
+        <div class="entry-field entry-sort">
+          <label>排序</label>
+          <el-input-number
+            v-model="workbenchSort"
+            :disabled="!selectedTenant"
+            :min="-999"
+            :max="999"
+            :step="10"
+            controls-position="right"
+            @change="handleWorkbenchSortChange"
+          />
+        </div>
+        <div class="entry-visible">
+          <label>显示</label>
+          <el-switch
+            :model-value="shellConfig.workbench.enabled"
+            :disabled="!selectedTenant"
+            @change="handleWorkbenchVisibleChange"
+          />
+        </div>
+      </div>
+    </section>
+
     <section class="table-card">
       <div class="table-toolbar">
         <div>
           <strong>{{ selectedTenant?.name ?? "请选择租户" }}</strong>
-          <span v-if="selectedTenant" class="record-count">共 {{ records.length }} 条菜单记录</span>
+          <span v-if="selectedTenant" class="record-count">共 {{ records.length }} 条业务菜单记录</span>
           <span v-if="selectedTenant" class="drag-help">
             拖动菜单行可调整同级顺序，也可拖入顶部模块/目录
           </span>
@@ -199,13 +245,15 @@ const menuConfigStore = useMenuConfigStore();
 const userStore = useUserStore();
 const navigationStore = useNavigationStore();
 const router = useRouter();
-const { selectedTenant, records, tree, recoveryNotice } = storeToRefs(menuConfigStore);
+const { selectedTenant, records, tree, shellConfig, recoveryNotice } = storeToRefs(menuConfigStore);
 const { tenantList, currentTenant } = storeToRefs(userStore);
 
 const tenantType = ref<TenantType | "">("");
 const selectedTenantId = ref(currentTenant.value.id);
 const keyword = ref("");
 const visibleFilter = ref<boolean | "">("");
+const workbenchLabel = ref("");
+const workbenchSort = ref(0);
 const drawerVisible = ref(false);
 const editingRecord = ref<MenuConfigRecord | null>(null);
 const defaultParentId = ref<string | null>(null);
@@ -238,6 +286,15 @@ watch(tenantType, () => {
     selectedTenantId.value = filteredTenants.value[0]?.id ?? "";
   }
 });
+
+watch(
+  () => shellConfig.value.workbench,
+  (workbench) => {
+    workbenchLabel.value = workbench.label;
+    workbenchSort.value = workbench.sort;
+  },
+  { immediate: true },
+);
 
 function filterTree(nodes: MenuTreeNode[]): MenuTreeNode[] {
   return nodes.flatMap((node) => {
@@ -390,6 +447,42 @@ function handleVisibleChange(row: MenuConfigRecord, value: boolean | string | nu
   }
 }
 
+function updateWorkbench(input: Parameters<typeof menuConfigStore.updateWorkbench>[0]) {
+  try {
+    const updated = menuConfigStore.updateWorkbench(input);
+    workbenchLabel.value = updated.label;
+    workbenchSort.value = updated.sort;
+    void navigationStore.ensureValidCurrentRoute(router);
+    ElMessage.success("工作台配置已更新");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "工作台配置更新失败");
+  }
+}
+
+function handleWorkbenchVisibleChange(value: boolean | string | number) {
+  updateWorkbench({ enabled: Boolean(value) });
+}
+
+function handleWorkbenchLabelChange(value: string) {
+  const label = value.trim();
+  if (!label) {
+    workbenchLabel.value = shellConfig.value.workbench.label;
+    ElMessage.warning("工作台名称不能为空");
+    return;
+  }
+  updateWorkbench({ label });
+}
+
+function handleWorkbenchSortChange(value: number | undefined) {
+  const sort = Number(value);
+  if (!Number.isFinite(sort)) {
+    workbenchSort.value = shellConfig.value.workbench.sort;
+    ElMessage.warning("请输入有效排序值");
+    return;
+  }
+  updateWorkbench({ sort });
+}
+
 async function handleDelete(row: MenuConfigRecord) {
   const childCount = collectDescendantIds(records.value, row.id).size;
   const description = childCount
@@ -413,7 +506,7 @@ async function handleReset() {
   if (!selectedTenant.value) return;
   try {
     await ElMessageBox.confirm(
-      `将覆盖“${selectedTenant.value.name}”的全部自定义菜单。`,
+      `将覆盖“${selectedTenant.value.name}”的全部自定义菜单和系统入口配置。`,
       "恢复默认模板",
       {
         type: "warning",
@@ -440,6 +533,7 @@ async function handleReset() {
 
 .page-heading,
 .filter-card,
+.system-entry-card,
 .table-card {
   background: var(--color-white);
   border: 1px solid var(--color-border);
@@ -490,6 +584,81 @@ async function handleReset() {
 
 .status-filter {
   width: 140px;
+}
+
+.system-entry-card {
+  padding: var(--spacing-16) var(--spacing-24);
+}
+
+.system-entry-heading,
+.system-entry-row {
+  display: flex;
+  align-items: center;
+}
+
+.system-entry-heading {
+  justify-content: space-between;
+  gap: var(--spacing-16);
+  margin-bottom: var(--spacing-16);
+}
+
+.system-entry-heading h2 {
+  margin: 0;
+  color: var(--color-title);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.system-entry-heading p {
+  margin: var(--spacing-4) 0 0;
+  color: var(--color-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.system-entry-row {
+  min-height: 72px;
+  gap: var(--spacing-24);
+  padding: var(--spacing-16);
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.entry-name {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  min-width: 220px;
+}
+
+.entry-name strong {
+  color: var(--color-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+.entry-name span,
+.entry-field label,
+.entry-visible label {
+  color: var(--color-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.entry-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-8);
+  width: 220px;
+}
+
+.entry-sort {
+  width: 160px;
+}
+
+.entry-visible {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-8);
+  margin-left: auto;
 }
 
 .table-card {

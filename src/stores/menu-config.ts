@@ -7,10 +7,15 @@ import {
   MenuValidationError,
   validateMenuRecord,
 } from "@/features/menu-config/menu-validation";
+import {
+  defaultTenantShellConfig,
+  tenantShellConfigRepository,
+} from "@/features/shell-config/local-storage-shell-config-repository";
 import type {
   MenuConfigRecord,
   MenuRecordInput,
 } from "@/features/menu-config/types";
+import type { TenantShellConfig, WorkbenchConfig } from "@/features/shell-config/types";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
 import type { TenantInfo } from "@/types/user";
@@ -18,14 +23,19 @@ import type { TenantInfo } from "@/types/user";
 export const useMenuConfigStore = defineStore("menu-config", () => {
   const selectedTenant = ref<TenantInfo | null>(null);
   const records = ref<MenuConfigRecord[]>([]);
+  const shellConfig = ref<TenantShellConfig>(defaultTenantShellConfig());
   const recoveryNotice = ref<string | null>(null);
   const tree = computed(() => buildMenuTree(records.value));
 
   function load(tenant: TenantInfo) {
-    const result = tenantMenuRepository.list(tenant);
+    const menuResult = tenantMenuRepository.list(tenant);
+    const shellResult = tenantShellConfigRepository.list(tenant);
     selectedTenant.value = { ...tenant };
-    records.value = result.records;
-    recoveryNotice.value = result.recoveryNotice;
+    records.value = menuResult.records;
+    shellConfig.value = shellResult.config;
+    recoveryNotice.value = [menuResult.recoveryNotice, shellResult.recoveryNotice]
+      .filter(Boolean)
+      .join("；") || null;
   }
 
   function requireTenant() {
@@ -44,6 +54,14 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
     const tenant = requireTenant();
     const saved = tenantMenuRepository.replace(tenant, nextRecords);
     records.value = saved;
+    refreshRuntimeIfCurrent(tenant);
+    return saved;
+  }
+
+  function persistShellConfig(nextConfig: TenantShellConfig) {
+    const tenant = requireTenant();
+    const saved = tenantShellConfigRepository.replace(tenant, nextConfig);
+    shellConfig.value = saved;
     refreshRuntimeIfCurrent(tenant);
     return saved;
   }
@@ -96,6 +114,20 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
     if (!existing) return;
     const input: MenuRecordInput = { ...existing, visible };
     update(id, input);
+  }
+
+  function updateWorkbench(input: Partial<WorkbenchConfig>) {
+    const current = shellConfig.value.workbench;
+    const label = input.label !== undefined ? input.label.trim() : current.label;
+    const sort = input.sort !== undefined ? Number(input.sort) : current.sort;
+    return persistShellConfig({
+      version: 1,
+      workbench: {
+        enabled: input.enabled ?? current.enabled,
+        label,
+        sort,
+      },
+    }).workbench;
   }
 
   function canMove(id: string, nextParentId: string | null) {
@@ -162,6 +194,7 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
   function reset() {
     const tenant = requireTenant();
     records.value = tenantMenuRepository.reset(tenant);
+    shellConfig.value = tenantShellConfigRepository.reset(tenant);
     recoveryNotice.value = null;
     refreshRuntimeIfCurrent(tenant);
     return records.value;
@@ -170,6 +203,7 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
   return {
     selectedTenant,
     records,
+    shellConfig,
     recoveryNotice,
     tree,
     load,
@@ -177,6 +211,7 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
     update,
     removeCascade,
     setVisible,
+    updateWorkbench,
     canMove,
     move,
     reset,

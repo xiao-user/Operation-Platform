@@ -35,25 +35,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, type Component } from "vue";
-import {
-  ArrowDown,
-  Calendar,
-  ChatLineRound,
-  Coin,
-  DataAnalysis,
-  Document,
-  Grid,
-  HomeFilled,
-  Lock,
-  Menu,
-  Notebook,
-  OfficeBuilding,
-  Setting,
-  Tickets,
-  User,
-} from "@element-plus/icons-vue";
-import type { MenuIconKey } from "@/types/navigation";
+import { computed } from "vue";
+import { ArrowDown } from "@element-plus/icons-vue";
+import { resolveMenuIcon } from "@/components/menu-icons";
 import type { MenuTreeNode } from "@/features/menu-config/types";
 
 interface Props {
@@ -72,29 +56,11 @@ const emit = defineEmits<{
   toggle: [menuKey: string];
 }>();
 
-const iconMap: Record<MenuIconKey, Component> = {
-  grid: Grid,
-  notebook: Notebook,
-  chat: ChatLineRound,
-  calendar: Calendar,
-  house: HomeFilled,
-  money: Coin,
-  shield: Lock,
-  setting: Setting,
-  menu: Menu,
-  data: DataAnalysis,
-  document: Document,
-  coin: Coin,
-  office: OfficeBuilding,
-  user: User,
-  list: Tickets,
-};
-
 const hasChildren = computed(() => Boolean(props.item.children?.length));
 const isActive = computed(() => props.activeKey === props.item.id);
 const isExpanded = computed(() => props.expandedKeys.includes(props.item.id));
 const isActiveBranch = computed(() => hasChildren.value && isExpanded.value);
-const resolvedIcon = computed(() => (props.item.icon ? iconMap[props.item.icon] || Menu : null));
+const resolvedIcon = computed(() => (props.item.icon ? resolveMenuIcon(props.item.icon) : null));
 const depthStyle = computed(() => {
   const indent = props.depth === 0 ? 20 : 50 + (props.depth - 1) * 20;
 

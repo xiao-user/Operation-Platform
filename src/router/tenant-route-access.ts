@@ -1,6 +1,8 @@
 import { pageRegistryByKey } from "@/config/page-registry";
 import { buildMenuTree } from "@/features/menu-config/menu-tree";
+import { defaultTenantShellConfig } from "@/features/shell-config/local-storage-shell-config-repository";
 import type { MenuConfigRecord, MenuTreeNode } from "@/features/menu-config/types";
+import type { TenantShellConfig } from "@/features/shell-config/types";
 import type { UserRole } from "@/types/user";
 
 interface RouteAccessTarget {
@@ -65,8 +67,14 @@ export function resolveTenantRouteAccess(
   to: RouteAccessTarget,
   role: UserRole,
   records: readonly MenuConfigRecord[],
+  shellConfig: TenantShellConfig = defaultTenantShellConfig(),
 ): TenantRouteAccessResult {
   const fallbackPath = resolveFirstTenantInternalPath(records, role);
+
+  if (to.meta.fixedWorkbench === true) {
+    if (shellConfig.workbench.enabled) return { kind: "allow" };
+    return fallbackPath ? { kind: "redirect", path: fallbackPath } : { kind: "empty" };
+  }
 
   if (to.meta.fixedSystem === true) {
     if (role === "admin") return { kind: "allow" };

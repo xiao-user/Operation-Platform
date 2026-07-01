@@ -33,17 +33,32 @@
     </div>
 
     <div class="header-shell">
-      <nav class="header-nav">
-        <div
-          v-for="tab in moduleNodes"
+      <nav v-if="isWorkbenchRoute" class="header-nav">
+        <button
+          v-for="tab in topLevelNavItems"
           :key="tab.id"
           class="nav-tab"
-          :class="{ active: activeModuleId === tab.id }"
-          @click="handleTabClick(tab)"
+          :class="{ active: isTopLevelActive(tab) }"
+          type="button"
+          @click="handleTopLevelClick(tab)"
         >
           <span class="nav-tab-label">{{ tab.name }}</span>
           <div class="nav-tab-indicator" />
-        </div>
+        </button>
+      </nav>
+
+      <nav v-else class="header-nav">
+        <button
+          v-for="tab in secondLevelTabs"
+          :key="tab.id"
+          class="nav-tab"
+          :class="{ active: activeSecondLevelNode?.id === tab.id }"
+          type="button"
+          @click="handleSecondLevelClick(tab)"
+        >
+          <span class="nav-tab-label">{{ tab.name }}</span>
+          <div class="nav-tab-indicator" />
+        </button>
       </nav>
 
       <div class="header-right">
@@ -136,13 +151,20 @@ import { ROLE_OPTIONS, ROLE_LABEL } from "@/config/user";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
 import type { MenuTreeNode } from "@/features/menu-config/types";
+import type { TopLevelNavItem } from "@/stores/navigation";
 import type { UserRole, TenantType } from "@/types/user";
 
 const router = useRouter();
 const navigationStore = useNavigationStore();
 const userStore = useUserStore();
 
-const { activeModuleId, moduleNodes } = storeToRefs(navigationStore);
+const {
+  activeModuleId,
+  activeSecondLevelNode,
+  isWorkbenchRoute,
+  secondLevelTabs,
+  topLevelNavItems,
+} = storeToRefs(navigationStore);
 const { role: currentRole, userInfo, currentTenant, tenantList, isAdmin } = storeToRefs(userStore);
 
 // 按类型分组租户，用于下拉分组展示
@@ -155,7 +177,20 @@ const groupedTenants = computed(() => {
   return groups;
 });
 
-function handleTabClick(tab: MenuTreeNode) {
+function isTopLevelActive(tab: TopLevelNavItem) {
+  if (tab.kind === "workbench") return isWorkbenchRoute.value;
+  return !isWorkbenchRoute.value && activeModuleId.value === tab.id;
+}
+
+function handleTopLevelClick(tab: TopLevelNavItem) {
+  if (tab.kind === "workbench") {
+    navigationStore.navigateToWorkbench(router);
+    return;
+  }
+  navigationStore.navigateToMenu(tab.id, router);
+}
+
+function handleSecondLevelClick(tab: MenuTreeNode) {
   navigationStore.navigateToMenu(tab.id, router);
 }
 
@@ -164,8 +199,7 @@ async function handleTenantSwitch(tenantId: string) {
   if (!tenant || tenant.id === currentTenant.value.id) return;
   userStore.switchTenant(tenantId);
   navigationStore.loadTenant(tenant);
-  const firstModule = navigationStore.moduleNodes[0];
-  if (firstModule) await navigationStore.navigateToMenu(firstModule.id, router);
+  await navigationStore.navigateToDefault(router);
 }
 
 function handleNotification() {
@@ -274,6 +308,10 @@ function handleUserCommand(command: string) {
   cursor: pointer;
   flex-shrink: 0;
   justify-content: space-between;
+  padding: 0;
+  font: inherit;
+  background: transparent;
+  border: 0;
 }
 
 .nav-tab-label {

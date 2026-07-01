@@ -2,8 +2,11 @@
   <div class="app-layout">
     <AppHeader />
 
-    <div class="app-body">
-      <AppSidebar />
+    <div class="app-body" :class="{ 'is-workbench': isWorkbenchRoute }">
+      <template v-if="!isWorkbenchRoute">
+        <AppModuleRail />
+        <AppSidebar v-if="deepMenus.length" />
+      </template>
       <main class="app-content">
         <div class="app-content-inner">
           <RouterView />
@@ -18,6 +21,7 @@ import { watch } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import AppHeader from "@/components/AppHeader.vue";
+import AppModuleRail from "@/components/AppModuleRail.vue";
 import AppSidebar from "@/components/AppSidebar.vue";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
@@ -26,6 +30,7 @@ const route = useRoute();
 const navigationStore = useNavigationStore();
 const userStore = useUserStore();
 const { currentTenant } = storeToRefs(userStore);
+const { deepMenus, isWorkbenchRoute } = storeToRefs(navigationStore);
 
 watch(
   () => currentTenant.value.id,
@@ -64,5 +69,9 @@ watch(
 .app-content-inner {
   min-height: 100%;
   padding: var(--content-padding);
+}
+
+.app-body.is-workbench .app-content-inner {
+  padding: var(--spacing-16) var(--spacing-24);
 }
 </style>

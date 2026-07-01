@@ -2,7 +2,7 @@
   <aside class="app-sidebar">
     <div class="sidebar-menu">
       <SidebarMenuNode
-        v-for="item in currentMenus"
+        v-for="item in deepMenus"
         :key="item.id"
         :item="item"
         :active-key="activeMenuId"
@@ -24,7 +24,7 @@ import SidebarMenuNode from "@/components/SidebarMenuNode.vue";
 
 const router = useRouter();
 const navigationStore = useNavigationStore();
-const { activeModuleId, activeMenuId, currentMenus, defaultOpenMenus } =
+const { activeModuleId, activeMenuId, activeSecondLevelNode, deepMenus, defaultOpenMenus } =
   storeToRefs(navigationStore);
 
 const userExpandedKeys = ref<string[]>([]);
@@ -38,7 +38,7 @@ const mergedExpandedKeys = computed(() => {
 });
 
 // 切换模块时重置用户手动展开/折叠状态
-watch(activeModuleId, () => {
+watch([activeModuleId, activeSecondLevelNode], () => {
   userExpandedKeys.value = [];
   userCollapsedKeys.value = [];
 });
@@ -63,7 +63,7 @@ function handleToggle(menuKey: string) {
 
 <style scoped>
 .app-sidebar {
-  width: var(--sidebar-width);
+  width: var(--deep-sidebar-width);
   height: 100%;
   background: var(--color-white);
   border-right: 1px solid var(--color-border);

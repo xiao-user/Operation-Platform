@@ -21,6 +21,8 @@ describe("MenuConfigView", () => {
     await wrapper.vm.$nextTick();
 
     expect(wrapper.text()).toContain("菜单配置");
+    expect(wrapper.text()).toContain("系统入口配置");
+    expect(wrapper.text()).toContain("工作台");
     expect(wrapper.text()).toContain("体育东路小学海明学校");
     expect(useMenuConfigStore().records.some((record) => record.name === "家校互动")).toBe(true);
   });
