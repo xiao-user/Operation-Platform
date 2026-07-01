@@ -212,7 +212,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import type { AllowDropType, NodeDropType } from "element-plus";
 import { CaretRight, Plus, Rank, RefreshLeft, Search } from "@element-plus/icons-vue";
 import { TENANT_TYPE_OPTIONS } from "@/config/tenant";
-import { pageRegistryByKey } from "@/config/page-registry";
+import { pageRegistryByKey, resolvePagePathForMenu } from "@/config/page-registry";
 import { collectDescendantIds } from "@/features/menu-config/menu-tree";
 import { MenuValidationError } from "@/features/menu-config/menu-validation";
 import type {
@@ -312,7 +312,7 @@ function targetLabel(row: MenuConfigRecord) {
   if (row.type === "directory") return "目录";
   if (row.type === "external") return row.externalUrl ?? "未配置";
   const page = row.pageKey ? pageRegistryByKey.get(row.pageKey) : null;
-  return page ? `${page.title} · ${page.path}` : "页面不可用";
+  return page ? `${page.title} · ${resolvePagePathForMenu(page, row.id)}` : "页面不可用";
 }
 
 function nameColumnStyle(node: TreeRenderNodeLike) {

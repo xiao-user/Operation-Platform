@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { DEVELOPING_PAGE_KEY } from "@/config/page-registry";
 import { cloneTenantTemplate } from "@/config/menu-templates";
 import { defaultTenantShellConfig } from "@/features/shell-config/local-storage-shell-config-repository";
-import { resolveTenantRouteAccess } from "@/router/tenant-route-access";
+import {
+  resolveFirstTenantInternalPath,
+  resolveTenantRouteAccess,
+} from "@/router/tenant-route-access";
 import type { TenantInfo } from "@/types/user";
 
 const school: TenantInfo = {
@@ -40,6 +44,69 @@ describe("tenant route access", () => {
         records,
       ),
     ).toEqual({ kind: "allow" });
+  });
+
+  it("allows a menu-scoped developing placeholder route when the menu is visible", () => {
+    const records = cloneTenantTemplate(school);
+    const moduleRecord = records.find((record) => record.type === "module")!;
+    records.push({
+      id: "custom-placeholder",
+      tenantId: school.id,
+      parentId: moduleRecord.id,
+      type: "page",
+      name: "自定义页面",
+      icon: null,
+      pageKey: DEVELOPING_PAGE_KEY,
+      externalUrl: null,
+      externalOpenMode: null,
+      sort: 999,
+      visible: true,
+    });
+
+    expect(
+      resolveTenantRouteAccess(
+        {
+          path: "/developing/custom-placeholder",
+          meta: { pageKey: DEVELOPING_PAGE_KEY },
+          params: { menuId: "custom-placeholder" },
+        },
+        "admin",
+        records,
+      ),
+    ).toEqual({ kind: "allow" });
+  });
+
+  it("uses the menu id when resolving the first developing placeholder path", () => {
+    const records = [
+      {
+        id: "module",
+        tenantId: school.id,
+        parentId: null,
+        type: "module",
+        name: "自定义模块",
+        icon: null,
+        pageKey: null,
+        externalUrl: null,
+        externalOpenMode: null,
+        sort: 10,
+        visible: true,
+      },
+      {
+        id: "placeholder-page",
+        tenantId: school.id,
+        parentId: "module",
+        type: "page",
+        name: "自定义页面",
+        icon: null,
+        pageKey: DEVELOPING_PAGE_KEY,
+        externalUrl: null,
+        externalOpenMode: null,
+        sort: 10,
+        visible: true,
+      },
+    ] as const;
+
+    expect(resolveFirstTenantInternalPath(records, "admin")).toBe("/developing/placeholder-page");
   });
 
   it("redirects a hidden page to the first visible internal page", () => {

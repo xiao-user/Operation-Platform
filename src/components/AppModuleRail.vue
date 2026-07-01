@@ -85,9 +85,9 @@ function handleModuleClick(module: MenuTreeNode) {
   gap: var(--spacing-8);
   width: var(--module-rail-width);
   height: 100vh;
-  padding: var(--spacing-12) var(--spacing-6);
+  padding: var(--spacing-6) var(--spacing-6);
   background: var(--color-white);
-  border-right: 1px solid var(--color-border-strong);
+  border-right: 1px solid var(--color-border);
   overflow-y: auto;
   overflow-x: hidden;
   flex-shrink: 0;

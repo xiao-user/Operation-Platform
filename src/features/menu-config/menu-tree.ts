@@ -4,6 +4,7 @@ import type {
   MenuTarget,
   MenuTreeNode,
 } from "@/features/menu-config/types";
+import { resolvePagePathForMenu } from "@/config/page-registry";
 
 function compareMenu(a: MenuConfigRecord, b: MenuConfigRecord) {
   return a.sort - b.sort || a.name.localeCompare(b.name, "zh-CN");
@@ -69,7 +70,9 @@ export function resolveFirstTarget(
 
   if (node.type === "page" && node.pageKey) {
     const page = pages.get(node.pageKey);
-    return page ? { kind: "internal", path: page.path, pageKey: node.pageKey } : null;
+    return page
+      ? { kind: "internal", path: resolvePagePathForMenu(page, node.id), pageKey: node.pageKey }
+      : null;
   }
 
   if (node.type === "external" && node.externalUrl && node.externalOpenMode) {

@@ -63,7 +63,7 @@ function handleToggle(menuKey: string) {
 
 <style scoped>
 .app-sidebar {
-  width: var(--deep-sidebar-width);
+  width: var(--sidebar-width);
   height: 100%;
   background: var(--color-white);
   border-right: 1px solid var(--color-border);

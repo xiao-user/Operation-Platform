@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { pageRegistry, pageRegistryByKey } from "@/config/page-registry";
+import {
+  DEVELOPING_PAGE_KEY,
+  pageRegistry,
+  pageRegistryByKey,
+  resolvePagePathForMenu,
+} from "@/config/page-registry";
 
 describe("page registry", () => {
   it("uses unique stable keys and paths", () => {
@@ -25,5 +30,18 @@ describe("page registry", () => {
       tenantTypes: ["platform"],
       requiresAdmin: true,
     });
+  });
+
+  it("registers a reusable menu-scoped developing placeholder page", () => {
+    const page = pageRegistryByKey.get(DEVELOPING_PAGE_KEY);
+
+    expect(page).toMatchObject({
+      path: "/developing/:menuId",
+      selectable: true,
+      allowDuplicateMenuBinding: true,
+      menuRouteParam: "menuId",
+    });
+    expect(page?.tenantTypes).toEqual(["school", "bureau", "org", "platform"]);
+    expect(page ? resolvePagePathForMenu(page, "menu-123") : "").toBe("/developing/menu-123");
   });
 });

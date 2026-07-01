@@ -48,6 +48,9 @@
               :value="page.key"
             />
           </el-select>
+          <p class="field-help">
+            没有真实页面时默认使用“缺省页”；已绑定到其他菜单的普通页面不会重复展示。
+          </p>
         </el-form-item>
       </div>
 
@@ -89,9 +92,13 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue";
 import { ElMessage } from "element-plus";
-import { pageRegistry } from "@/config/page-registry";
+import { DEVELOPING_PAGE_KEY, pageRegistry } from "@/config/page-registry";
 import { collectDescendantIds } from "@/features/menu-config/menu-tree";
-import { validateMenuRecord } from "@/features/menu-config/menu-validation";
+import {
+  MAX_DIRECTORY_LEVEL,
+  MAX_MENU_DEPTH,
+  validateMenuRecord,
+} from "@/features/menu-config/menu-validation";
 import type {
   ExternalOpenMode,
   MenuConfigRecord,
@@ -150,16 +157,16 @@ const form = reactive<MenuRecordInput>({
 const selectedParent = computed(() =>
   props.records.find((record) => record.id === form.parentId),
 );
+const recordsById = computed(() => new Map(props.records.map((record) => [record.id, record])));
 const typeOptions = computed(() => {
   if (props.editingRecord) {
     return [{ value: props.editingRecord.type, label: typeLabel(props.editingRecord.type) }];
   }
   if (!props.defaultParentId) return [{ value: "module", label: "顶部模块" }];
-  const parent = props.records.find((record) => record.id === props.defaultParentId);
-  const types: MenuItemType[] = parent?.type === "directory"
-    ? ["page", "external"]
-    : ["directory", "page", "external"];
-  return types.map((type) => ({ value: type, label: typeLabel(type) }));
+  return allowedChildTypes(props.defaultParentId).map((type) => ({
+    value: type,
+    label: typeLabel(type),
+  }));
 });
 const excludedParentIds = computed(() =>
   props.editingRecord
@@ -169,8 +176,7 @@ const excludedParentIds = computed(() =>
 const parentOptions = computed(() =>
   props.records.filter((record) => {
     if (excludedParentIds.value.has(record.id)) return false;
-    if (form.type === "directory") return record.type === "module";
-    return record.type === "module" || record.type === "directory";
+    return canUseParent(form.type, record.id);
   }),
 );
 const availablePages = computed(() => {
@@ -183,9 +189,15 @@ const availablePages = computed(() => {
     (page) =>
       page.selectable &&
       page.tenantTypes.includes(props.tenant.type) &&
-      !usedPageKeys.has(page.key),
+      (page.allowDuplicateMenuBinding || !usedPageKeys.has(page.key)),
   );
 });
+const defaultPageKey = computed(
+  () =>
+    availablePages.value.find((page) => page.key === DEVELOPING_PAGE_KEY)?.key ??
+    availablePages.value[0]?.key ??
+    null,
+);
 
 watch(
   () => [visible.value, props.editingRecord?.id, props.defaultParentId] as const,
@@ -204,10 +216,85 @@ function typeLabel(type: MenuItemType) {
   }[type];
 }
 
+function recordLevel(record: MenuConfigRecord) {
+  let level = 1;
+  let current: MenuConfigRecord | undefined = record;
+  const visited = new Set<string>();
+
+  while (current?.parentId) {
+    if (visited.has(current.id)) return Number.POSITIVE_INFINITY;
+    visited.add(current.id);
+    current = recordsById.value.get(current.parentId);
+    if (!current) return Number.POSITIVE_INFINITY;
+    level += 1;
+  }
+
+  return level;
+}
+
+function maxDescendantRelativeDepth(recordId: string) {
+  const childrenByParent = new Map<string, string[]>();
+  for (const record of props.records) {
+    if (!record.parentId) continue;
+    const children = childrenByParent.get(record.parentId) ?? [];
+    children.push(record.id);
+    childrenByParent.set(record.parentId, children);
+  }
+
+  let maxDepth = 0;
+  const visit = (parentId: string, depth: number) => {
+    for (const childId of childrenByParent.get(parentId) ?? []) {
+      maxDepth = Math.max(maxDepth, depth + 1);
+      visit(childId, depth + 1);
+    }
+  };
+  visit(recordId, 0);
+  return maxDepth;
+}
+
+function canUseParent(type: MenuItemType, parentId: string | null) {
+  if (type === "module") return parentId === null;
+  if (!parentId) return false;
+
+  const parent = recordsById.value.get(parentId);
+  if (!parent || (parent.type !== "module" && parent.type !== "directory")) return false;
+
+  const level = recordLevel(parent) + 1;
+  const descendantDepth = props.editingRecord
+    ? maxDescendantRelativeDepth(props.editingRecord.id)
+    : 0;
+
+  if (level + descendantDepth > MAX_MENU_DEPTH) return false;
+  if (type === "directory" && level > MAX_DIRECTORY_LEVEL) return false;
+  return true;
+}
+
+function allowedChildTypes(parentId: string | null): MenuItemType[] {
+  if (!parentId) return ["module"];
+  return (["directory", "page", "external"] as MenuItemType[]).filter((type) =>
+    canUseParent(type, parentId),
+  );
+}
+
+function defaultChildType(parentId: string | null): MenuItemType {
+  const types = allowedChildTypes(parentId);
+  return types.includes("page") ? "page" : types[0] ?? "page";
+}
+
+function firstAllowedParentId(type: MenuItemType) {
+  if (type === "module") return null;
+  if (props.defaultParentId && canUseParent(type, props.defaultParentId)) {
+    return props.defaultParentId;
+  }
+  return parentOptions.value[0]?.id ?? null;
+}
+
 function resetForm() {
   const source = props.editingRecord;
   form.parentId = source?.parentId ?? props.defaultParentId;
-  form.type = source?.type ?? (props.defaultParentId ? "page" : "module");
+  form.type = source?.type ?? (
+    props.defaultParentId ? defaultChildType(props.defaultParentId) : "module"
+  );
   form.name = source?.name ?? "";
   form.icon = source?.icon ?? null;
   form.pageKey = source?.pageKey ?? null;
@@ -220,8 +307,16 @@ function resetForm() {
 
 function handleTypeChange(type: MenuItemType) {
   if (type === "module") form.parentId = null;
-  else if (!form.parentId) form.parentId = props.defaultParentId;
-  if (type !== "page") form.pageKey = null;
+  else if (!form.parentId || !canUseParent(type, form.parentId)) {
+    form.parentId = firstAllowedParentId(type);
+  }
+  if (type === "page") {
+    if (!form.pageKey || !availablePages.value.some((page) => page.key === form.pageKey)) {
+      form.pageKey = defaultPageKey.value;
+    }
+  } else {
+    form.pageKey = null;
+  }
   if (type !== "external") {
     form.externalUrl = null;
     form.externalOpenMode = null;
@@ -229,8 +324,8 @@ function handleTypeChange(type: MenuItemType) {
     form.externalOpenMode = "new-tab" satisfies ExternalOpenMode;
   }
 
-  if (type === "directory" && selectedParent.value?.type === "directory") {
-    form.parentId = null;
+  if (type !== "module" && selectedParent.value && !canUseParent(type, selectedParent.value.id)) {
+    form.parentId = firstAllowedParentId(type);
   }
 }
 
@@ -249,7 +344,8 @@ function handleSubmit() {
       "name-required": "请输入菜单名称",
       "duplicate-sibling-name": "同级菜单名称不能重复",
       "parent-required": "请选择上级菜单",
-      "directory-depth-exceeded": "目录下不能继续新增目录",
+      "directory-depth-exceeded": "目录最多支持到第三级，第四级请配置页面或外链",
+      "menu-depth-exceeded": "菜单最多支持四级",
       "page-required": "请选择关联页面",
       "page-not-available": "当前租户无法使用该页面",
       "duplicate-page-key": "该页面已经绑定到其他菜单",
@@ -282,5 +378,12 @@ function handleSubmit() {
   gap: var(--spacing-8);
   min-height: 32px;
   color: var(--color-body);
+}
+
+.field-help {
+  margin: var(--spacing-6) 0 0;
+  color: var(--color-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-xs);
 }
 </style>

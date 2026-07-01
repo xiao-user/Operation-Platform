@@ -71,6 +71,11 @@ function findTrail(
   return [];
 }
 
+function routeParamValue(value: unknown) {
+  if (Array.isArray(value)) return value[0];
+  return typeof value === "string" ? value : "";
+}
+
 export const useNavigationStore = defineStore("navigation", () => {
   const userStore = useUserStore();
   const records = ref<MenuConfigRecord[]>([]);
@@ -192,6 +197,23 @@ export const useNavigationStore = defineStore("navigation", () => {
           ? route.meta.pageKey
           : "";
     if (!ownerKey) return;
+
+    const pageKey = typeof route.meta.pageKey === "string" ? route.meta.pageKey : "";
+    const registeredPage = pageKey ? pageRegistryByKey.get(pageKey) : null;
+    if (registeredPage?.menuRouteParam) {
+      const scopedMenuId = routeParamValue(route.params[registeredPage.menuRouteParam]);
+      const scopedMenu = records.value.find(
+        (record) =>
+          record.id === scopedMenuId &&
+          record.type === "page" &&
+          record.pageKey === registeredPage.key &&
+          record.visible,
+      );
+      if (!scopedMenu) return;
+      activeMenuId.value = scopedMenu.id;
+      activeModuleId.value = rootModuleIdFor(scopedMenu);
+      return;
+    }
 
     const menu = records.value.find(
       (record) => record.type === "page" && record.pageKey === ownerKey && record.visible,

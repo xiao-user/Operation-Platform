@@ -10,19 +10,25 @@ export interface PageRegistryItem {
   selectable: boolean;
   menuOwnerKey: string;
   requiresAdmin: boolean;
+  allowDuplicateMenuBinding: boolean;
+  menuRouteParam: string | null;
 }
 
 interface PageOptions {
   selectable?: boolean;
   menuOwnerKey?: string;
   requiresAdmin?: boolean;
+  allowDuplicateMenuBinding?: boolean;
+  menuRouteParam?: string;
 }
 
 const school: TenantType[] = ["school"];
 const bureau: TenantType[] = ["bureau"];
 const org: TenantType[] = ["org"];
 const platform: TenantType[] = ["platform"];
+const allTenantTypes: TenantType[] = ["school", "bureau", "org", "platform"];
 const PlaceholderView = () => import("@/views/PlaceholderView.vue");
+export const DEVELOPING_PAGE_KEY = "developing-placeholder";
 
 function page(
   key: string,
@@ -41,10 +47,29 @@ function page(
     selectable: options.selectable ?? true,
     menuOwnerKey: options.menuOwnerKey ?? key,
     requiresAdmin: options.requiresAdmin ?? false,
+    allowDuplicateMenuBinding: options.allowDuplicateMenuBinding ?? false,
+    menuRouteParam: options.menuRouteParam ?? null,
   };
 }
 
+export function resolvePagePathForMenu(
+  page: { path: string; menuRouteParam?: string | null },
+  menuId: string,
+) {
+  if (!page.menuRouteParam) return page.path;
+  return page.path.replace(`:${page.menuRouteParam}`, encodeURIComponent(menuId));
+}
+
 export const pageRegistry: PageRegistryItem[] = [
+  page(
+    DEVELOPING_PAGE_KEY,
+    "缺省页",
+    "/developing/:menuId",
+    allTenantTypes,
+    PlaceholderView,
+    { allowDuplicateMenuBinding: true, menuRouteParam: "menuId" },
+  ),
+
   // 学校通用模块
   page("family-notice", "通知公告", "/family-interaction/notice", school),
   page("family-activity", "活动管理", "/family-interaction/activity", school),

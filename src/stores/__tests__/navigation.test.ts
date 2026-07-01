@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
+import { DEVELOPING_PAGE_KEY } from "@/config/page-registry";
 import { useNavigationStore } from "@/stores/navigation";
 import { tenantMenuRepository } from "@/features/menu-config/local-storage-menu-repository";
 import {
@@ -107,5 +108,80 @@ describe("navigation store", () => {
     await store.navigateToMenu(deviceMenu.id, { push } as never);
 
     expect(push).toHaveBeenCalledWith("/security/new-gate/device-list");
+  });
+
+  it("supports four-level navigation with second-level tabs and recursive sidebar menus", async () => {
+    const records = tenantMenuRepository.list(schoolA).records;
+    const securityModule = records.find(
+      (record) => record.name === "校园安全" && record.type === "module",
+    )!;
+    const secondLevel = {
+      id: "custom-second-level",
+      tenantId: schoolA.id,
+      parentId: securityModule.id,
+      type: "directory",
+      name: "二级业务",
+      icon: null,
+      pageKey: null,
+      externalUrl: null,
+      externalOpenMode: null,
+      sort: 999,
+      visible: true,
+    } as const;
+    const thirdLevel = {
+      id: "custom-third-level",
+      tenantId: schoolA.id,
+      parentId: secondLevel.id,
+      type: "directory",
+      name: "三级目录",
+      icon: null,
+      pageKey: null,
+      externalUrl: null,
+      externalOpenMode: null,
+      sort: 10,
+      visible: true,
+    } as const;
+    const fourthLevel = {
+      id: "custom-fourth-level",
+      tenantId: schoolA.id,
+      parentId: thirdLevel.id,
+      type: "page",
+      name: "四级页面",
+      icon: null,
+      pageKey: DEVELOPING_PAGE_KEY,
+      externalUrl: null,
+      externalOpenMode: null,
+      sort: 10,
+      visible: true,
+    } as const;
+    tenantMenuRepository.replace(schoolA, [
+      ...records,
+      secondLevel,
+      thirdLevel,
+      fourthLevel,
+    ]);
+
+    const store = useNavigationStore();
+    store.loadTenant(schoolA);
+    store.syncByRoute({
+      path: "/developing/custom-fourth-level",
+      fullPath: "/developing/custom-fourth-level",
+      params: { menuId: fourthLevel.id },
+      meta: { pageKey: DEVELOPING_PAGE_KEY },
+    } as never);
+
+    expect(store.activeModuleNode?.name).toBe("校园安全");
+    expect(store.activeSecondLevelNode?.name).toBe("二级业务");
+    expect(store.activeMenuTrail.map((node) => node.name)).toEqual([
+      "二级业务",
+      "三级目录",
+      "四级页面",
+    ]);
+    expect(store.deepMenus.map((node) => node.name)).toEqual(["三级目录"]);
+    expect(store.secondLevelTabs.map((node) => node.name)).toContain("二级业务");
+
+    const push = vi.fn().mockResolvedValue(undefined);
+    await store.navigateToMenu(fourthLevel.id, { push } as never);
+    expect(push).toHaveBeenCalledWith("/developing/custom-fourth-level");
   });
 });

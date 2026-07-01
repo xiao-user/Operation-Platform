@@ -66,7 +66,7 @@ router.beforeEach((to) => {
   }
 
   const result = resolveTenantRouteAccess(
-    { path: to.path, meta: to.meta },
+    { path: to.path, meta: to.meta, params: to.params },
     userStore.role,
     navigationStore.records,
     navigationStore.shellConfig,

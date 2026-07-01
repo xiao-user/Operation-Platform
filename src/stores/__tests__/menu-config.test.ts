@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
+import { DEVELOPING_PAGE_KEY } from "@/config/page-registry";
 import { defaultTenantShellConfig } from "@/features/shell-config/local-storage-shell-config-repository";
 import { MenuValidationError } from "@/features/menu-config/menu-validation";
 import { useMenuConfigStore } from "@/stores/menu-config";
@@ -178,6 +179,85 @@ describe("menu configuration store", () => {
     expect(store.canMove(visitorPage.id, smartSafetyDirectory.id)).toBe(true);
     expect(store.canMove(familyModule.id, securityModule.id)).toBe(false);
     expect(store.canMove(smartSafetyDirectory.id, smartSafetyDirectory.id)).toBe(false);
+  });
+
+  it("supports four-level menu configuration", () => {
+    const store = useMenuConfigStore();
+    store.load(schoolA);
+    const securityModule = store.records.find((record) => record.name === "校园安全")!;
+    const secondLevel = store.create({
+      parentId: securityModule.id,
+      type: "directory",
+      name: "二级业务",
+      icon: null,
+      pageKey: null,
+      externalUrl: null,
+      externalOpenMode: null,
+      sort: 999,
+      visible: true,
+    });
+    const thirdLevel = store.create({
+      parentId: secondLevel.id,
+      type: "directory",
+      name: "三级目录",
+      icon: null,
+      pageKey: null,
+      externalUrl: null,
+      externalOpenMode: null,
+      sort: 10,
+      visible: true,
+    });
+    const fourthLevel = store.create({
+      parentId: thirdLevel.id,
+      type: "page",
+      name: "四级页面",
+      icon: null,
+      pageKey: DEVELOPING_PAGE_KEY,
+      externalUrl: null,
+      externalOpenMode: null,
+      sort: 10,
+      visible: true,
+    });
+
+    expect(store.records.find((record) => record.id === fourthLevel.id)?.parentId).toBe(
+      thirdLevel.id,
+    );
+    expect(store.tree.find((node) => node.id === securityModule.id)?.children).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: secondLevel.id })]),
+    );
+  });
+
+  it("allows multiple menus to use the developing placeholder page", () => {
+    const store = useMenuConfigStore();
+    store.load(schoolA);
+    const securityModule = store.records.find((record) => record.name === "校园安全")!;
+
+    store.create({
+      parentId: securityModule.id,
+      type: "page",
+      name: "占位页面一",
+      icon: null,
+      pageKey: DEVELOPING_PAGE_KEY,
+      externalUrl: null,
+      externalOpenMode: null,
+      sort: 991,
+      visible: true,
+    });
+    store.create({
+      parentId: securityModule.id,
+      type: "page",
+      name: "占位页面二",
+      icon: null,
+      pageKey: DEVELOPING_PAGE_KEY,
+      externalUrl: null,
+      externalOpenMode: null,
+      sort: 992,
+      visible: true,
+    });
+
+    expect(
+      store.records.filter((record) => record.pageKey === DEVELOPING_PAGE_KEY),
+    ).toHaveLength(2);
   });
 
   it("rejects moving a module below another menu", () => {

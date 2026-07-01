@@ -29,4 +29,5 @@ export type MenuTarget =
 
 export interface MenuPageReference {
   path: string;
+  menuRouteParam?: string | null;
 }
