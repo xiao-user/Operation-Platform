@@ -136,12 +136,18 @@
           :allow-drag="allowDrag"
           :allow-drop="allowDrop"
           class="menu-draggable-tree"
+          @node-drag-over="handleNodeDragOver"
+          @node-drag-leave="handleNodeDragLeave"
+          @node-drag-end="clearDropPreview"
           @node-drop="handleNodeDrop"
         >
           <template #default="{ node, data }">
             <div
               class="menu-tree-row"
-              :class="{ 'is-inline-editing': isInlineEditing(data) }"
+              :class="[
+                { 'is-inline-editing': isInlineEditing(data) },
+                dropPreviewClass(data),
+              ]"
               title="双击可行内编辑"
               @dblclick.stop="handleRowDoubleClick(data)"
               @keyup="handleInlineKeyup(data, $event)"
@@ -355,6 +361,9 @@ type TreeDropType = Extract<NodeDropType, "before" | "after" | "inner">;
 
 interface TreeNodeLike {
   data: MenuTreeNode;
+  previousSibling?: TreeNodeLike | null;
+  nextSibling?: TreeNodeLike | null;
+  contains?: (node: TreeNodeLike, deep?: boolean) => boolean;
 }
 
 interface TreeRenderNodeLike {
@@ -383,6 +392,7 @@ const editingRecord = ref<MenuConfigRecord | null>(null);
 const defaultParentId = ref<string | null>(null);
 const inlineEditingId = ref<string | null>(null);
 const inlineDraft = ref<MenuRecordInput>(emptyInlineDraft());
+const dropPreview = ref<{ targetId: string; type: TreeDropType } | null>(null);
 const iconOptions: MenuIconKey[] = [
   "grid", "notebook", "chat", "calendar", "house", "money", "shield", "setting",
   "menu", "data", "document", "coin", "office", "user", "list",
@@ -515,11 +525,70 @@ function allowDrop(
   return menuConfigStore.canMove(draggingNode.data.id, placement.parentId);
 }
 
+function dropPreviewClass(row: MenuConfigRecord) {
+  if (dropPreview.value?.targetId !== row.id) return "";
+  return `is-drop-preview-${dropPreview.value.type}`;
+}
+
+function resolvePreviewDropType(
+  draggingNode: TreeNodeLike,
+  dropNode: TreeNodeLike,
+  event: DragEvent,
+): TreeDropType | null {
+  let dropPrev = allowDrop(draggingNode, dropNode, "prev");
+  let dropInner = allowDrop(draggingNode, dropNode, "inner");
+  let dropNext = allowDrop(draggingNode, dropNode, "next");
+
+  if (dropNode.nextSibling?.data.id === draggingNode.data.id) dropNext = false;
+  if (dropNode.previousSibling?.data.id === draggingNode.data.id) dropPrev = false;
+  if (dropNode.contains?.(draggingNode, false)) dropInner = false;
+  if (
+    draggingNode.data.id === dropNode.data.id ||
+    draggingNode.contains?.(dropNode)
+  ) {
+    return null;
+  }
+
+  const eventTarget = event.target;
+  const targetElement = eventTarget instanceof Element
+    ? eventTarget.closest(".el-tree-node__content")
+    : null;
+  if (!targetElement) return null;
+
+  const rect = targetElement.getBoundingClientRect();
+  const distance = event.clientY - rect.top;
+  const prevPercent = dropPrev ? (dropInner ? 0.25 : dropNext ? 0.45 : 1) : -Infinity;
+  const nextPercent = dropNext ? (dropInner ? 0.75 : dropPrev ? 0.55 : 0) : Infinity;
+
+  if (distance < rect.height * prevPercent) return "before";
+  if (distance > rect.height * nextPercent) return "after";
+  if (dropInner) return "inner";
+  return null;
+}
+
+function handleNodeDragOver(
+  draggingNode: TreeNodeLike,
+  dropNode: TreeNodeLike,
+  event: DragEvent,
+) {
+  const type = resolvePreviewDropType(draggingNode, dropNode, event);
+  dropPreview.value = type ? { targetId: dropNode.data.id, type } : null;
+}
+
+function handleNodeDragLeave(_draggingNode: TreeNodeLike, dropNode: TreeNodeLike) {
+  if (dropPreview.value?.targetId === dropNode.data.id) clearDropPreview();
+}
+
+function clearDropPreview() {
+  dropPreview.value = null;
+}
+
 function handleNodeDrop(
   draggingNode: TreeNodeLike,
   dropNode: TreeNodeLike,
   dropType: TreeDropType,
 ) {
+  clearDropPreview();
   const placement = resolveDropPlacement(draggingNode.data.id, dropNode.data, dropType);
   try {
     menuConfigStore.move(draggingNode.data.id, placement.parentId, placement.index);
@@ -964,62 +1033,7 @@ async function handleReset() {
 }
 
 :deep(.menu-draggable-tree > .el-tree__drop-indicator) {
-  z-index: 5;
-  height: 3px;
-  background: var(--color-primary);
-  border-radius: 999px;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
-  pointer-events: none;
-}
-
-:deep(.menu-draggable-tree > .el-tree__drop-indicator::before) {
-  position: absolute;
-  top: 50%;
-  width: 9px;
-  height: 9px;
-  content: "";
-  background: var(--color-white);
-  border: 3px solid var(--color-primary);
-  border-radius: 50%;
-  transform: translateY(-50%);
-}
-
-:deep(.menu-draggable-tree > .el-tree__drop-indicator::before) {
-  left: -2px;
-}
-
-:deep(.menu-draggable-tree > .el-tree__drop-indicator::after) {
-  position: absolute;
-  top: 50%;
-  right: var(--spacing-12);
-  height: 20px;
-  padding: 0 var(--spacing-8);
-  color: var(--color-white);
-  font-size: var(--font-size-xs);
-  line-height: 20px;
-  content: "插入到此处";
-  background: var(--color-primary);
-  border-radius: 999px;
-  transform: translateY(-50%);
-}
-
-:deep(.menu-draggable-tree.is-drop-inner .el-tree-node.is-drop-inner > .el-tree-node__content) {
-  background: var(--color-primary-light);
-  box-shadow: inset 0 0 0 2px var(--color-primary);
-}
-
-:deep(.menu-draggable-tree.is-drop-inner .el-tree-node.is-drop-inner > .el-tree-node__content::after) {
-  position: absolute;
-  right: var(--spacing-12);
-  z-index: 3;
-  padding: 2px var(--spacing-8);
-  color: var(--color-white);
-  font-size: var(--font-size-xs);
-  line-height: 20px;
-  content: "放入此菜单";
-  background: var(--color-primary);
-  border-radius: 999px;
-  pointer-events: none;
+  display: none !important;
 }
 
 :deep(.menu-draggable-tree.is-drop-not-allow .el-tree-node__content) {
@@ -1027,9 +1041,84 @@ async function handleReset() {
 }
 
 .menu-tree-row {
+  position: relative;
   flex: 1;
   min-height: 48px;
   cursor: default;
+  transition: border-width 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.menu-tree-row.is-drop-preview-before,
+.menu-tree-row.is-drop-preview-after {
+  border-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-white));
+  border-style: solid;
+}
+
+.menu-tree-row.is-drop-preview-before {
+  border-width: 18px 0 0;
+}
+
+.menu-tree-row.is-drop-preview-after {
+  border-width: 0 0 18px;
+}
+
+.menu-tree-row.is-drop-preview-before::before,
+.menu-tree-row.is-drop-preview-after::before {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 4;
+  height: 3px;
+  content: "";
+  background: var(--color-primary);
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  pointer-events: none;
+}
+
+.menu-tree-row.is-drop-preview-before::before {
+  top: -10px;
+}
+
+.menu-tree-row.is-drop-preview-after::before {
+  bottom: -10px;
+}
+
+.menu-tree-row.is-drop-preview-before::after,
+.menu-tree-row.is-drop-preview-after::after,
+.menu-tree-row.is-drop-preview-inner::after {
+  position: absolute;
+  right: var(--spacing-12);
+  z-index: 5;
+  height: 20px;
+  padding: 0 var(--spacing-8);
+  color: var(--color-white);
+  font-size: var(--font-size-xs);
+  line-height: 20px;
+  background: var(--color-primary);
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.menu-tree-row.is-drop-preview-before::after {
+  top: -18px;
+  content: "松手插入此处";
+}
+
+.menu-tree-row.is-drop-preview-after::after {
+  bottom: -18px;
+  content: "松手插入此处";
+}
+
+.menu-tree-row.is-drop-preview-inner {
+  background: var(--color-primary-light);
+  box-shadow: inset 0 0 0 2px var(--color-primary);
+}
+
+.menu-tree-row.is-drop-preview-inner::after {
+  top: 50%;
+  content: "松手移入此菜单";
+  transform: translateY(-50%);
 }
 
 .menu-tree-cell {

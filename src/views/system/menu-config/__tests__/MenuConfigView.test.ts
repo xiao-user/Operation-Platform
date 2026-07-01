@@ -70,4 +70,42 @@ describe("MenuConfigView", () => {
 
     expect(row!.find('input[aria-label="菜单名称"]').exists()).toBe(true);
   });
+
+  it("shows a concrete insertion placeholder while dragging between rows", async () => {
+    const wrapper = mountView();
+    await wrapper.vm.$nextTick();
+
+    const store = useMenuConfigStore();
+    const source = store.tree
+      .flatMap((node) => node.children)
+      .find((record) => record.name === "通知公告")!;
+    const target = store.tree
+      .flatMap((node) => node.children)
+      .find((record) => record.name === "活动管理")!;
+    const targetRow = wrapper
+      .findAll(".menu-tree-row")
+      .find((item) => item.find(".menu-name-text").text() === "活动管理")!;
+    const targetContent = targetRow.element.parentElement as HTMLElement;
+    targetContent.getBoundingClientRect = () => ({
+      x: 0,
+      y: 100,
+      top: 100,
+      right: 1000,
+      bottom: 148,
+      left: 0,
+      width: 1000,
+      height: 48,
+      toJSON: () => ({}),
+    });
+
+    wrapper.findComponent({ name: "ElTree" }).vm.$emit(
+      "node-drag-over",
+      { data: source },
+      { data: target },
+      { target: targetContent, clientY: 102 },
+    );
+    await wrapper.vm.$nextTick();
+
+    expect(targetRow.classes()).toContain("is-drop-preview-before");
+  });
 });
