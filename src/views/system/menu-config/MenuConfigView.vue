@@ -88,7 +88,7 @@
           <strong>{{ selectedTenant?.name ?? "请选择租户" }}</strong>
           <span v-if="selectedTenant" class="record-count">共 {{ records.length }} 条业务菜单记录</span>
           <span v-if="selectedTenant" class="drag-help">
-            拖动菜单行可调整同级顺序，也可拖入一级模块/目录
+            从手柄拖动；横线表示同级插入，整行高亮表示放入模块/目录
           </span>
         </div>
         <el-button-group>
@@ -139,7 +139,13 @@
           @node-drop="handleNodeDrop"
         >
           <template #default="{ node, data }">
-            <div class="menu-tree-row">
+            <div
+              class="menu-tree-row"
+              :class="{ 'is-inline-editing': isInlineEditing(data) }"
+              title="双击可行内编辑"
+              @dblclick.stop="handleRowDoubleClick(data)"
+              @keyup="handleInlineKeyup(data, $event)"
+            >
               <div class="menu-tree-cell name-column" :style="nameColumnStyle(node)">
                 <button
                   v-if="hasTreeChildren(node, data)"
@@ -152,7 +158,12 @@
                   <el-icon><CaretRight /></el-icon>
                 </button>
                 <span v-else class="tree-toggle tree-toggle-placeholder" />
-                <el-icon class="drag-handle"><Rank /></el-icon>
+                <el-icon
+                  class="drag-handle"
+                  title="拖动调整顺序或层级"
+                >
+                  <Rank />
+                </el-icon>
                 <el-input
                   v-if="isInlineEditing(data)"
                   v-model="inlineDraft.name"
@@ -161,7 +172,16 @@
                   aria-label="菜单名称"
                   @click.stop
                 />
-                <span v-else class="menu-name-text">{{ data.name }}</span>
+                <button
+                  v-else
+                  class="inline-edit-trigger menu-name-text"
+                  type="button"
+                  draggable="false"
+                  title="点击编辑菜单名称"
+                  @click.stop="startInlineEdit(data)"
+                >
+                  {{ data.name }}
+                </button>
               </div>
               <div class="menu-tree-cell type-column">
                 <MenuTypeTag :type="data.type" :level="node.level" />
@@ -206,7 +226,16 @@
                     进入首个可用子菜单
                   </span>
                 </div>
-                <template v-else>{{ targetLabel(data) }}</template>
+                <button
+                  v-else
+                  class="inline-edit-trigger target-text"
+                  type="button"
+                  draggable="false"
+                  title="点击编辑上级或关联目标"
+                  @click.stop="startInlineEdit(data)"
+                >
+                  {{ targetLabel(data) }}
+                </button>
               </div>
               <div class="menu-tree-cell icon-column">
                 <el-select
@@ -219,7 +248,16 @@
                 >
                   <el-option v-for="icon in iconOptions" :key="icon" :label="icon" :value="icon" />
                 </el-select>
-                <template v-else>{{ data.icon ?? "—" }}</template>
+                <button
+                  v-else
+                  class="inline-edit-trigger"
+                  type="button"
+                  draggable="false"
+                  title="点击编辑图标"
+                  @click.stop="startInlineEdit(data)"
+                >
+                  {{ data.icon ?? "—" }}
+                </button>
               </div>
               <div class="menu-tree-cell sort-column">
                 <el-input-number
@@ -231,7 +269,16 @@
                   aria-label="排序值"
                   @click.stop
                 />
-                <template v-else>{{ data.sort }}</template>
+                <button
+                  v-else
+                  class="inline-edit-trigger"
+                  type="button"
+                  draggable="false"
+                  title="点击编辑排序"
+                  @click.stop="startInlineEdit(data)"
+                >
+                  {{ data.sort }}
+                </button>
               </div>
               <div class="menu-tree-cell visible-column">
                 <el-switch
@@ -239,7 +286,7 @@
                   @change="handleVisibleChange(data, $event)"
                 />
               </div>
-              <div class="menu-tree-cell action-column">
+              <div class="menu-tree-cell action-column" @dblclick.stop>
                 <template v-if="isInlineEditing(data)">
                   <el-button link type="primary" @click.stop="saveInlineEdit(data)">保存</el-button>
                   <el-button link @click.stop="cancelInlineEdit">取消</el-button>
@@ -253,7 +300,6 @@
                 >
                   新增子菜单
                 </el-button>
-                <el-button link type="primary" @click.stop="startInlineEdit(data)">行内编辑</el-button>
                 <el-button link type="primary" @click.stop="openEdit(data)">编辑</el-button>
                 <el-button link type="danger" @click.stop="handleDelete(data)">删除</el-button>
                 </template>
@@ -528,6 +574,7 @@ function isInlineEditing(row: MenuConfigRecord) {
 }
 
 function startInlineEdit(row: MenuConfigRecord) {
+  if (isInlineEditing(row)) return;
   inlineEditingId.value = row.id;
   inlineDraft.value = {
     parentId: row.parentId,
@@ -540,6 +587,23 @@ function startInlineEdit(row: MenuConfigRecord) {
     sort: row.sort,
     visible: row.visible,
   };
+}
+
+function handleRowDoubleClick(row: MenuConfigRecord) {
+  if (!isInlineEditing(row)) startInlineEdit(row);
+}
+
+function handleInlineKeyup(row: MenuConfigRecord, event: KeyboardEvent) {
+  if (!isInlineEditing(row)) return;
+  if (event.key === "Enter") {
+    event.preventDefault();
+    event.stopPropagation();
+    saveInlineEdit(row);
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    cancelInlineEdit();
+  }
 }
 
 function cancelInlineEdit() {
@@ -856,9 +920,9 @@ async function handleReset() {
     110px
     80px
     70px
-    250px;
+    190px;
   align-items: center;
-  min-width: 1170px;
+  min-width: 1110px;
 }
 
 .menu-tree-header {
@@ -876,10 +940,11 @@ async function handleReset() {
 }
 
 .menu-draggable-tree {
-  min-width: 1170px;
+  min-width: 1110px;
 }
 
 :deep(.menu-draggable-tree .el-tree-node__content) {
+  position: relative;
   height: auto;
   min-height: 48px;
   padding-left: 0 !important;
@@ -898,19 +963,73 @@ async function handleReset() {
   overflow: visible;
 }
 
-:deep(.menu-draggable-tree .is-drop-inner > .el-tree-node__content) {
+:deep(.menu-draggable-tree > .el-tree__drop-indicator) {
+  z-index: 5;
+  height: 3px;
+  background: var(--color-primary);
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  pointer-events: none;
+}
+
+:deep(.menu-draggable-tree > .el-tree__drop-indicator::before) {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  content: "";
+  background: var(--color-white);
+  border: 3px solid var(--color-primary);
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+
+:deep(.menu-draggable-tree > .el-tree__drop-indicator::before) {
+  left: -2px;
+}
+
+:deep(.menu-draggable-tree > .el-tree__drop-indicator::after) {
+  position: absolute;
+  top: 50%;
+  right: var(--spacing-12);
+  height: 20px;
+  padding: 0 var(--spacing-8);
+  color: var(--color-white);
+  font-size: var(--font-size-xs);
+  line-height: 20px;
+  content: "插入到此处";
+  background: var(--color-primary);
+  border-radius: 999px;
+  transform: translateY(-50%);
+}
+
+:deep(.menu-draggable-tree.is-drop-inner .el-tree-node.is-drop-inner > .el-tree-node__content) {
   background: var(--color-primary-light);
-  box-shadow: inset 0 0 0 1px var(--color-primary);
+  box-shadow: inset 0 0 0 2px var(--color-primary);
+}
+
+:deep(.menu-draggable-tree.is-drop-inner .el-tree-node.is-drop-inner > .el-tree-node__content::after) {
+  position: absolute;
+  right: var(--spacing-12);
+  z-index: 3;
+  padding: 2px var(--spacing-8);
+  color: var(--color-white);
+  font-size: var(--font-size-xs);
+  line-height: 20px;
+  content: "放入此菜单";
+  background: var(--color-primary);
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+:deep(.menu-draggable-tree.is-drop-not-allow .el-tree-node__content) {
+  cursor: not-allowed;
 }
 
 .menu-tree-row {
   flex: 1;
   min-height: 48px;
-  cursor: grab;
-}
-
-.menu-tree-row:active {
-  cursor: grabbing;
+  cursor: default;
 }
 
 .menu-tree-cell {
@@ -1003,8 +1122,12 @@ async function handleReset() {
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  cursor: inherit;
+  cursor: grab;
   flex-shrink: 0;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 .menu-tree-row:hover .drag-handle {
@@ -1017,5 +1140,33 @@ async function handleReset() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.inline-edit-trigger {
+  min-width: 0;
+  padding: 2px 3px;
+  overflow: hidden;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: text;
+}
+
+.inline-edit-trigger:hover,
+.inline-edit-trigger:focus-visible {
+  color: var(--color-primary-dark-text);
+  background: var(--color-primary-light);
+  border-color: var(--color-primary-line-light);
+  outline: none;
+}
+
+.target-text {
+  width: 100%;
+  text-align: left;
 }
 </style>

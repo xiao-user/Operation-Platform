@@ -212,6 +212,7 @@ watch(
 
 function typeLabel(type: MenuItemType, parentId: string | null) {
   if (type === "module") return "一级模块";
+  if (type === "page") return "内部页面";
   const parent = parentId ? recordsById.value.get(parentId) : undefined;
   const actualLevel = parent ? recordLevel(parent) + 1 : 2;
   const level = type === "directory"

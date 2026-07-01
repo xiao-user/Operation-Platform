@@ -15,7 +15,7 @@ describe("MenuTypeTag", () => {
     expect(render("module", 1).text()).toBe("一级模块");
     expect(render("directory", 2).text()).toBe("二级目录");
     expect(render("directory", 3).text()).toBe("三级目录");
-    expect(render("page", 2).text()).toBe("四级页面");
+    expect(render("page", 2).text()).toBe("内部页面");
     expect(render("external", 3).text()).toBe("四级外链");
   });
 });

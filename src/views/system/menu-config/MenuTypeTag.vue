@@ -23,6 +23,7 @@ const displayLevel = computed(() => {
   return Math.min(3, Math.max(2, props.level));
 });
 const label = computed(() => {
+  if (props.type === "page") return "内部页面";
   const levelLabel = ["", "一级", "二级", "三级", "四级"][displayLevel.value];
   const typeLabel: Record<MenuItemType, string> = {
     module: "模块",

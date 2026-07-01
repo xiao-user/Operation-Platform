@@ -39,23 +39,35 @@ describe("MenuConfigView", () => {
     expect(useMenuConfigStore().records.some((record) => record.name === "家校互动")).toBe(true);
   });
 
-  it("edits a menu name inline while keeping the full editor action", async () => {
+  it("opens inline editing from text and saves with Enter", async () => {
     const wrapper = mountView();
     await wrapper.vm.$nextTick();
 
     const row = wrapper.findAll(".menu-tree-row").find((item) => item.text().includes("家校互动"));
     expect(row).toBeDefined();
     expect(row!.text()).toContain("编辑");
-    const inlineButton = row!.findAll("button").find((button) => button.text() === "行内编辑");
-    await inlineButton!.trigger("click");
+    expect(row!.text()).not.toContain("行内编辑");
+    const nameTrigger = row!.find(".menu-name-text");
+    expect(nameTrigger.attributes("draggable")).toBe("false");
+    await nameTrigger.trigger("click");
     await wrapper.vm.$nextTick();
 
     const input = row!.find('input[aria-label="菜单名称"]');
     await input.setValue("家校协同");
-    const saveButton = row!.findAll("button").find((button) => button.text() === "保存");
-    await saveButton!.trigger("click");
+    await input.trigger("keyup", { key: "Enter" });
     await wrapper.vm.$nextTick();
 
     expect(useMenuConfigStore().records.some((record) => record.name === "家校协同")).toBe(true);
+  });
+
+  it("opens inline editing by double-clicking a row", async () => {
+    const wrapper = mountView();
+    await wrapper.vm.$nextTick();
+
+    const row = wrapper.findAll(".menu-tree-row").find((item) => item.text().includes("家校互动"));
+    await row!.trigger("dblclick");
+    await wrapper.vm.$nextTick();
+
+    expect(row!.find('input[aria-label="菜单名称"]').exists()).toBe(true);
   });
 });
