@@ -160,12 +160,15 @@ const selectedParent = computed(() =>
 const recordsById = computed(() => new Map(props.records.map((record) => [record.id, record])));
 const typeOptions = computed(() => {
   if (props.editingRecord) {
-    return [{ value: props.editingRecord.type, label: typeLabel(props.editingRecord.type) }];
+    return [{
+      value: props.editingRecord.type,
+      label: typeLabel(props.editingRecord.type, form.parentId),
+    }];
   }
-  if (!props.defaultParentId) return [{ value: "module", label: "顶部模块" }];
+  if (!props.defaultParentId) return [{ value: "module", label: "一级模块" }];
   return allowedChildTypes(props.defaultParentId).map((type) => ({
     value: type,
-    label: typeLabel(type),
+    label: typeLabel(type, props.defaultParentId),
   }));
 });
 const excludedParentIds = computed(() =>
@@ -207,13 +210,20 @@ watch(
   { immediate: true },
 );
 
-function typeLabel(type: MenuItemType) {
-  return {
-    module: "顶部模块",
+function typeLabel(type: MenuItemType, parentId: string | null) {
+  if (type === "module") return "一级模块";
+  const parent = parentId ? recordsById.value.get(parentId) : undefined;
+  const actualLevel = parent ? recordLevel(parent) + 1 : 2;
+  const level = type === "directory"
+    ? Math.min(MAX_DIRECTORY_LEVEL, Math.max(2, actualLevel))
+    : MAX_MENU_DEPTH;
+  const levelLabel = ["", "一级", "二级", "三级", "四级"][level];
+  const labels: Record<Exclude<MenuItemType, "module">, string> = {
     directory: "目录",
-    page: "内部页面",
-    external: "外部链接",
-  }[type];
+    page: "页面",
+    external: "外链",
+  };
+  return `${levelLabel}${labels[type]}`;
 }
 
 function recordLevel(record: MenuConfigRecord) {

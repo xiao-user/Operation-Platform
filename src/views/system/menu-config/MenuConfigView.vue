@@ -1,15 +1,5 @@
 <template>
   <div class="menu-config-page">
-    <section class="page-heading">
-      <div>
-        <h1>菜单配置</h1>
-        <p>按租户维护系统入口、顶部模块和侧边菜单，保存后当前租户导航立即生效。</p>
-      </div>
-      <el-button type="primary" :icon="Plus" :disabled="!selectedTenant" @click="openCreateModule">
-        新增顶部模块
-      </el-button>
-    </section>
-
     <section class="filter-card">
       <div class="filter-item">
         <span>租户类型</span>
@@ -98,12 +88,22 @@
           <strong>{{ selectedTenant?.name ?? "请选择租户" }}</strong>
           <span v-if="selectedTenant" class="record-count">共 {{ records.length }} 条业务菜单记录</span>
           <span v-if="selectedTenant" class="drag-help">
-            拖动菜单行可调整同级顺序，也可拖入顶部模块/目录
+            拖动菜单行可调整同级顺序，也可拖入一级模块/目录
           </span>
         </div>
-        <el-button :icon="RefreshLeft" :disabled="!selectedTenant" @click="handleReset">
-          恢复默认模板
-        </el-button>
+        <el-button-group>
+          <el-button
+            type="primary"
+            :icon="Plus"
+            :disabled="!selectedTenant"
+            @click="openCreateModule"
+          >
+            新增一级模块
+          </el-button>
+          <el-button :icon="RefreshLeft" :disabled="!selectedTenant" @click="handleReset">
+            恢复默认模板
+          </el-button>
+        </el-button-group>
       </div>
       <el-alert
         v-if="dragDisabled"
@@ -118,7 +118,7 @@
         <div class="menu-tree-header">
           <div class="name-column">菜单名称</div>
           <div class="type-column">类型</div>
-          <div class="target-column">关联目标</div>
+          <div class="target-column">上级 / 关联目标</div>
           <div class="icon-column">图标</div>
           <div class="sort-column">排序</div>
           <div class="visible-column">显示</div>
@@ -153,16 +153,86 @@
                 </button>
                 <span v-else class="tree-toggle tree-toggle-placeholder" />
                 <el-icon class="drag-handle"><Rank /></el-icon>
-                <span class="menu-name-text">{{ data.name }}</span>
+                <el-input
+                  v-if="isInlineEditing(data)"
+                  v-model="inlineDraft.name"
+                  class="inline-name-input"
+                  maxlength="30"
+                  aria-label="菜单名称"
+                  @click.stop
+                />
+                <span v-else class="menu-name-text">{{ data.name }}</span>
               </div>
               <div class="menu-tree-cell type-column">
-                <MenuTypeTag :type="data.type" />
+                <MenuTypeTag :type="data.type" :level="node.level" />
               </div>
-              <div class="menu-tree-cell target-column" :title="targetLabel(data)">
-                {{ targetLabel(data) }}
+              <div class="menu-tree-cell target-column" :title="isInlineEditing(data) ? '' : targetLabel(data)">
+                <div v-if="isInlineEditing(data)" class="inline-target-editor" @click.stop>
+                  <el-select
+                    v-if="data.type !== 'module'"
+                    v-model="inlineDraft.parentId"
+                    filterable
+                    aria-label="上级菜单"
+                    placeholder="选择上级菜单"
+                  >
+                    <el-option
+                      v-for="option in inlineParentOptions(data)"
+                      :key="option.id"
+                      :label="option.name"
+                      :value="option.id"
+                    />
+                  </el-select>
+                  <el-select
+                    v-if="data.type === 'page'"
+                    v-model="inlineDraft.pageKey"
+                    filterable
+                    aria-label="关联页面"
+                    placeholder="选择关联页面"
+                  >
+                    <el-option
+                      v-for="page in inlinePageOptions(data)"
+                      :key="page.key"
+                      :label="page.title"
+                      :value="page.key"
+                    />
+                  </el-select>
+                  <el-input
+                    v-if="data.type === 'external'"
+                    v-model="inlineDraft.externalUrl"
+                    aria-label="外部地址"
+                    placeholder="https://"
+                  />
+                  <span v-if="data.type === 'module'" class="inline-static-target">
+                    进入首个可用子菜单
+                  </span>
+                </div>
+                <template v-else>{{ targetLabel(data) }}</template>
               </div>
-              <div class="menu-tree-cell icon-column">{{ data.icon ?? "—" }}</div>
-              <div class="menu-tree-cell sort-column">{{ data.sort }}</div>
+              <div class="menu-tree-cell icon-column">
+                <el-select
+                  v-if="isInlineEditing(data)"
+                  v-model="inlineDraft.icon"
+                  clearable
+                  aria-label="菜单图标"
+                  placeholder="图标"
+                  @click.stop
+                >
+                  <el-option v-for="icon in iconOptions" :key="icon" :label="icon" :value="icon" />
+                </el-select>
+                <template v-else>{{ data.icon ?? "—" }}</template>
+              </div>
+              <div class="menu-tree-cell sort-column">
+                <el-input-number
+                  v-if="isInlineEditing(data)"
+                  v-model="inlineDraft.sort"
+                  :min="0"
+                  :max="9999"
+                  :controls="false"
+                  aria-label="排序值"
+                  @click.stop
+                />
+                <template v-else>{{ data.sort }}</template>
+              </div>
               <div class="menu-tree-cell visible-column">
                 <el-switch
                   :model-value="data.visible"
@@ -170,6 +240,11 @@
                 />
               </div>
               <div class="menu-tree-cell action-column">
+                <template v-if="isInlineEditing(data)">
+                  <el-button link type="primary" @click.stop="saveInlineEdit(data)">保存</el-button>
+                  <el-button link @click.stop="cancelInlineEdit">取消</el-button>
+                </template>
+                <template v-else>
                 <el-button
                   v-if="data.type === 'module' || data.type === 'directory'"
                   link
@@ -178,8 +253,10 @@
                 >
                   新增子菜单
                 </el-button>
+                <el-button link type="primary" @click.stop="startInlineEdit(data)">行内编辑</el-button>
                 <el-button link type="primary" @click.stop="openEdit(data)">编辑</el-button>
                 <el-button link type="danger" @click.stop="handleDelete(data)">删除</el-button>
+                </template>
               </div>
             </div>
           </template>
@@ -212,7 +289,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import type { AllowDropType, NodeDropType } from "element-plus";
 import { CaretRight, Plus, Rank, RefreshLeft, Search } from "@element-plus/icons-vue";
 import { TENANT_TYPE_OPTIONS } from "@/config/tenant";
-import { pageRegistryByKey, resolvePagePathForMenu } from "@/config/page-registry";
+import { pageRegistry, pageRegistryByKey, resolvePagePathForMenu } from "@/config/page-registry";
 import { collectDescendantIds } from "@/features/menu-config/menu-tree";
 import { MenuValidationError } from "@/features/menu-config/menu-validation";
 import type {
@@ -224,6 +301,7 @@ import { useMenuConfigStore } from "@/stores/menu-config";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
 import type { TenantType } from "@/types/user";
+import type { MenuIconKey } from "@/types/navigation";
 import MenuEditorDrawer from "./MenuEditorDrawer.vue";
 import MenuTypeTag from "./MenuTypeTag.vue";
 
@@ -257,6 +335,12 @@ const workbenchSort = ref(0);
 const drawerVisible = ref(false);
 const editingRecord = ref<MenuConfigRecord | null>(null);
 const defaultParentId = ref<string | null>(null);
+const inlineEditingId = ref<string | null>(null);
+const inlineDraft = ref<MenuRecordInput>(emptyInlineDraft());
+const iconOptions: MenuIconKey[] = [
+  "grid", "notebook", "chat", "calendar", "house", "money", "shield", "setting",
+  "menu", "data", "document", "coin", "office", "user", "list",
+];
 const treeProps = {
   children: "children",
   label: "name",
@@ -275,6 +359,7 @@ watch(
   (tenantId) => {
     const tenant = tenantList.value.find((item) => item.id === tenantId);
     if (!tenant) return;
+    cancelInlineEdit();
     menuConfigStore.load(tenant);
     if (recoveryNotice.value) ElMessage.warning(recoveryNotice.value);
   },
@@ -370,7 +455,7 @@ function normalizeAllowDropType(type: AllowDropType): TreeDropType {
 }
 
 function allowDrag() {
-  return !dragDisabled.value;
+  return !dragDisabled.value && !inlineEditingId.value;
 }
 
 function allowDrop(
@@ -404,21 +489,102 @@ function handleNodeDrop(
 }
 
 function openCreateModule() {
+  cancelInlineEdit();
   editingRecord.value = null;
   defaultParentId.value = null;
   drawerVisible.value = true;
 }
 
 function openCreateChild(parent: MenuConfigRecord) {
+  cancelInlineEdit();
   editingRecord.value = null;
   defaultParentId.value = parent.id;
   drawerVisible.value = true;
 }
 
 function openEdit(row: MenuConfigRecord) {
+  cancelInlineEdit();
   editingRecord.value = { ...row };
   defaultParentId.value = row.parentId;
   drawerVisible.value = true;
+}
+
+function emptyInlineDraft(): MenuRecordInput {
+  return {
+    parentId: null,
+    type: "module",
+    name: "",
+    icon: null,
+    pageKey: null,
+    externalUrl: null,
+    externalOpenMode: null,
+    sort: 10,
+    visible: true,
+  };
+}
+
+function isInlineEditing(row: MenuConfigRecord) {
+  return inlineEditingId.value === row.id;
+}
+
+function startInlineEdit(row: MenuConfigRecord) {
+  inlineEditingId.value = row.id;
+  inlineDraft.value = {
+    parentId: row.parentId,
+    type: row.type,
+    name: row.name,
+    icon: row.icon,
+    pageKey: row.pageKey,
+    externalUrl: row.externalUrl,
+    externalOpenMode: row.externalOpenMode,
+    sort: row.sort,
+    visible: row.visible,
+  };
+}
+
+function cancelInlineEdit() {
+  inlineEditingId.value = null;
+  inlineDraft.value = emptyInlineDraft();
+}
+
+function inlineParentOptions(row: MenuConfigRecord) {
+  return records.value.filter(
+    (candidate) =>
+      candidate.id !== row.id &&
+      (candidate.type === "module" || candidate.type === "directory") &&
+      menuConfigStore.canMove(row.id, candidate.id),
+  );
+}
+
+function inlinePageOptions(row: MenuConfigRecord) {
+  const tenant = selectedTenant.value;
+  if (!tenant) return [];
+  const usedPageKeys = new Set(
+    records.value
+      .filter((record) => record.id !== row.id && record.pageKey)
+      .map((record) => record.pageKey),
+  );
+  return pageRegistry.filter(
+    (page) =>
+      page.selectable &&
+      page.tenantTypes.includes(tenant.type) &&
+      (page.allowDuplicateMenuBinding || !usedPageKeys.has(page.key)),
+  );
+}
+
+function saveInlineEdit(row: MenuConfigRecord) {
+  try {
+    menuConfigStore.update(row.id, { ...inlineDraft.value, name: inlineDraft.value.name.trim() });
+    void navigationStore.ensureValidCurrentRoute(router);
+    cancelInlineEdit();
+    ElMessage.success("菜单已更新");
+  } catch (error) {
+    if (error instanceof MenuValidationError) {
+      ElMessage.warning("行内配置不符合菜单层级或字段规则");
+    } else {
+      ElMessage.error(error instanceof Error ? error.message : "菜单更新失败");
+    }
+  }
 }
 
 function handleSave(input: MenuRecordInput) {
@@ -439,9 +605,11 @@ function handleSave(input: MenuRecordInput) {
 
 function handleVisibleChange(row: MenuConfigRecord, value: boolean | string | number) {
   try {
-    menuConfigStore.setVisible(row.id, Boolean(value));
+    const visible = Boolean(value);
+    if (isInlineEditing(row)) inlineDraft.value.visible = visible;
+    menuConfigStore.setVisible(row.id, visible);
     void navigationStore.ensureValidCurrentRoute(router);
-    ElMessage.success(Boolean(value) ? "菜单已显示" : "菜单已隐藏");
+    ElMessage.success(visible ? "菜单已显示" : "菜单已隐藏");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "状态更新失败");
   }
@@ -531,34 +699,12 @@ async function handleReset() {
   min-height: 100%;
 }
 
-.page-heading,
 .filter-card,
 .system-entry-card,
 .table-card {
   background: var(--color-white);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-}
-
-.page-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-20) var(--spacing-24);
-}
-
-.page-heading h1 {
-  margin: 0;
-  color: var(--color-title);
-  font-size: 20px;
-  line-height: 28px;
-  font-weight: var(--font-weight-semibold);
-}
-
-.page-heading p {
-  margin: var(--spacing-4) 0 0;
-  color: var(--color-secondary);
-  font-size: var(--font-size-sm);
 }
 
 .filter-card {
@@ -704,15 +850,15 @@ async function handleReset() {
 .menu-tree-row {
   display: grid;
   grid-template-columns:
-    minmax(300px, 1.2fr)
+    minmax(280px, 1.1fr)
     100px
-    minmax(220px, 1fr)
-    90px
+    minmax(280px, 1.2fr)
+    110px
+    80px
     70px
-    70px
-    190px;
+    250px;
   align-items: center;
-  min-width: 1040px;
+  min-width: 1170px;
 }
 
 .menu-tree-header {
@@ -730,7 +876,7 @@ async function handleReset() {
 }
 
 .menu-draggable-tree {
-  min-width: 1040px;
+  min-width: 1170px;
 }
 
 :deep(.menu-draggable-tree .el-tree-node__content) {
@@ -793,7 +939,29 @@ async function handleReset() {
 }
 
 .action-column {
-  justify-content: flex-start;
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.inline-name-input,
+.inline-target-editor,
+.icon-column :deep(.el-select),
+.sort-column :deep(.el-input-number) {
+  width: 100%;
+}
+
+.inline-target-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-6);
+}
+
+.inline-target-editor > :only-child {
+  grid-column: 1 / -1;
+}
+
+.inline-static-target {
+  color: var(--color-secondary);
 }
 
 .tree-toggle {
