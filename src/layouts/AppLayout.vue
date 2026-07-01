@@ -1,17 +1,18 @@
 <template>
   <div class="app-layout">
-    <AppHeader />
+    <AppModuleRail v-if="!isWorkbenchRoute" />
 
-    <div class="app-body" :class="{ 'is-workbench': isWorkbenchRoute }">
-      <template v-if="!isWorkbenchRoute">
-        <AppModuleRail />
-        <AppSidebar v-if="deepMenus.length" />
-      </template>
-      <main class="app-content">
-        <div class="app-content-inner">
-          <RouterView />
-        </div>
-      </main>
+    <div class="app-shell">
+      <AppHeader />
+
+      <div class="app-body" :class="{ 'is-workbench': isWorkbenchRoute }">
+        <AppSidebar v-if="!isWorkbenchRoute && deepMenus.length" />
+        <main class="app-content">
+          <div class="app-content-inner">
+            <RouterView />
+          </div>
+        </main>
+      </div>
     </div>
   </div>
 </template>
@@ -48,20 +49,30 @@ watch(
 <style scoped>
 .app-layout {
   display: flex;
-  flex-direction: column;
   height: 100vh;
+  background-color: var(--color-bg);
+  overflow: hidden;
+}
+
+.app-shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
   overflow: hidden;
 }
 
 .app-body {
   display: flex;
   flex: 1;
+  min-height: 0;
   overflow: hidden;
-  margin-top: var(--header-height);
 }
 
 .app-content {
   flex: 1;
+  min-width: 0;
   overflow: auto;
   background-color: var(--color-bg);
 }

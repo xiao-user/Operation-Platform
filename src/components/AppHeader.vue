@@ -234,11 +234,9 @@ function handleUserCommand(command: string) {
   height: var(--header-height);
   background: var(--color-white);
   border-bottom: 1px solid var(--color-border);
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1000;
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
 }
 
 .header-brand {

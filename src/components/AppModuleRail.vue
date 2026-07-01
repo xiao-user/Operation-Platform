@@ -84,13 +84,15 @@ function handleModuleClick(module: MenuTreeNode) {
   align-items: center;
   gap: var(--spacing-8);
   width: var(--module-rail-width);
-  height: 100%;
+  height: 100vh;
   padding: var(--spacing-12) var(--spacing-6);
   background: var(--color-white);
-  border-right: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border-strong);
   overflow-y: auto;
   overflow-x: hidden;
   flex-shrink: 0;
+  align-self: stretch;
+  z-index: 20;
 }
 
 .module-rail-button {
