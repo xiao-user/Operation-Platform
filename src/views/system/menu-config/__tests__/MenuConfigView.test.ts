@@ -37,6 +37,37 @@ describe("MenuConfigView", () => {
     expect(wrapper.find(".table-toolbar .el-button-group").exists()).toBe(true);
     expect(wrapper.text()).toContain("体育东路小学海明学校");
     expect(useMenuConfigStore().records.some((record) => record.name === "家校互动")).toBe(true);
+    expect(wrapper.findAll(".el-tree-node.is-expanded")).toHaveLength(0);
+  });
+
+  it("only expands manually and keeps that state after menu data changes", async () => {
+    const wrapper = mountView();
+    await wrapper.vm.$nextTick();
+
+    const moduleRow = wrapper
+      .findAll(".menu-tree-row")
+      .find((item) => item.find(".menu-name-text").text() === "家校互动")!;
+    await moduleRow.find('button[aria-label="展开菜单"]').trigger("click");
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain("通知公告");
+
+    const store = useMenuConfigStore();
+    const module = store.records.find((record) => record.name === "家校互动")!;
+    store.update(module.id, { ...module, name: "家校互动更新" });
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.text()).toContain("通知公告");
+  });
+
+  it("does not keep a current-row selection after a single click", async () => {
+    const wrapper = mountView();
+    await wrapper.vm.$nextTick();
+
+    const row = wrapper.findAll(".menu-tree-row")[0]!;
+    await row.trigger("click");
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find(".el-tree-node.is-current").exists()).toBe(false);
   });
 
   it("opens inline editing from text and saves with Enter", async () => {
@@ -73,6 +104,12 @@ describe("MenuConfigView", () => {
 
   it("shows a concrete insertion placeholder while dragging between rows", async () => {
     const wrapper = mountView();
+    await wrapper.vm.$nextTick();
+
+    const moduleRow = wrapper
+      .findAll(".menu-tree-row")
+      .find((item) => item.find(".menu-name-text").text() === "家校互动")!;
+    await moduleRow.find('button[aria-label="展开菜单"]').trigger("click");
     await wrapper.vm.$nextTick();
 
     const store = useMenuConfigStore();

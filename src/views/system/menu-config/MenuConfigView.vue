@@ -127,11 +127,14 @@
 
         <el-tree
           v-if="filteredTree.length"
+          ref="menuTreeRef"
           :data="filteredTree"
           :props="treeProps"
           node-key="id"
-          default-expand-all
+          :default-expanded-keys="expandedMenuIds"
           draggable
+          :highlight-current="false"
+          :check-on-click-node="false"
           :expand-on-click-node="false"
           :allow-drag="allowDrag"
           :allow-drop="allowDrop"
@@ -140,6 +143,7 @@
           @node-drag-leave="handleNodeDragLeave"
           @node-drag-end="clearDropPreview"
           @node-drop="handleNodeDrop"
+          @node-click="clearTreeCurrent"
         >
           <template #default="{ node, data }">
             <div
@@ -159,7 +163,7 @@
                   :class="{ 'is-expanded': node.expanded }"
                   type="button"
                   :aria-label="node.expanded ? '收起菜单' : '展开菜单'"
-                  @click.stop="toggleTreeNode(node)"
+                  @click.stop="toggleTreeNode(node, data)"
                 >
                   <el-icon><CaretRight /></el-icon>
                 </button>
@@ -374,6 +378,10 @@ interface TreeRenderNodeLike {
   collapse?: () => void;
 }
 
+interface TreeInstanceLike {
+  setCurrentKey: (key: string | null, shouldAutoExpandParent?: boolean) => void;
+}
+
 const menuConfigStore = useMenuConfigStore();
 const userStore = useUserStore();
 const navigationStore = useNavigationStore();
@@ -393,6 +401,8 @@ const defaultParentId = ref<string | null>(null);
 const inlineEditingId = ref<string | null>(null);
 const inlineDraft = ref<MenuRecordInput>(emptyInlineDraft());
 const dropPreview = ref<{ targetId: string; type: TreeDropType } | null>(null);
+const expandedMenuIds = ref<string[]>([]);
+const menuTreeRef = ref<TreeInstanceLike | null>(null);
 const iconOptions: MenuIconKey[] = [
   "grid", "notebook", "chat", "calendar", "house", "money", "shield", "setting",
   "menu", "data", "document", "coin", "office", "user", "list",
@@ -416,6 +426,7 @@ watch(
     const tenant = tenantList.value.find((item) => item.id === tenantId);
     if (!tenant) return;
     cancelInlineEdit();
+    expandedMenuIds.value = [];
     menuConfigStore.load(tenant);
     if (recoveryNotice.value) ElMessage.warning(recoveryNotice.value);
   },
@@ -467,14 +478,22 @@ function hasTreeChildren(node: TreeRenderNodeLike, data: MenuTreeNode) {
   return Boolean(node.childNodes?.length || data.children.length);
 }
 
-function toggleTreeNode(node: TreeRenderNodeLike) {
+function toggleTreeNode(node: TreeRenderNodeLike, data: MenuConfigRecord) {
   if (node.expanded) {
+    expandedMenuIds.value = expandedMenuIds.value.filter((id) => id !== data.id);
     node.collapse?.();
     if (!node.collapse) node.expanded = false;
     return;
   }
+  if (!expandedMenuIds.value.includes(data.id)) {
+    expandedMenuIds.value = [...expandedMenuIds.value, data.id];
+  }
   node.expand?.();
   if (!node.expand) node.expanded = true;
+}
+
+function clearTreeCurrent() {
+  menuTreeRef.value?.setCurrentKey(null, false);
 }
 
 function sortedSiblings(parentId: string | null, excludeId?: string) {
@@ -1021,6 +1040,16 @@ async function handleReset() {
 }
 
 :deep(.menu-draggable-tree .el-tree-node__content:hover) {
+  background: var(--color-primary-light);
+}
+
+:deep(.menu-draggable-tree .el-tree-node:focus > .el-tree-node__content),
+:deep(.menu-draggable-tree .el-tree-node.is-current > .el-tree-node__content) {
+  background: transparent;
+}
+
+:deep(.menu-draggable-tree .el-tree-node:focus > .el-tree-node__content:hover),
+:deep(.menu-draggable-tree .el-tree-node.is-current > .el-tree-node__content:hover) {
   background: var(--color-primary-light);
 }
 
