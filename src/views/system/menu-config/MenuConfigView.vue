@@ -222,7 +222,7 @@
                     <el-option
                       v-for="page in inlinePageOptions(data)"
                       :key="page.key"
-                      :label="page.title"
+                      :label="pageResourceOptionLabel(page)"
                       :value="page.key"
                     />
                   </el-select>
@@ -345,7 +345,12 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import type { AllowDropType, NodeDropType } from "element-plus";
 import { CaretRight, Plus, Rank, RefreshLeft, Search } from "@element-plus/icons-vue";
 import { TENANT_TYPE_OPTIONS } from "@/config/tenant";
-import { pageRegistry, pageRegistryByKey, resolvePagePathForMenu } from "@/config/page-registry";
+import {
+  listSelectablePageResources,
+  pageRegistryByKey,
+  pageResourceOptionLabel,
+  resolvePagePathForMenu,
+} from "@/config/page-registry";
 import { collectDescendantIds } from "@/features/menu-config/menu-tree";
 import { MenuValidationError } from "@/features/menu-config/menu-validation";
 import type {
@@ -711,17 +716,11 @@ function inlineParentOptions(row: MenuConfigRecord) {
 function inlinePageOptions(row: MenuConfigRecord) {
   const tenant = selectedTenant.value;
   if (!tenant) return [];
-  const usedPageKeys = new Set(
-    records.value
-      .filter((record) => record.id !== row.id && record.pageKey)
-      .map((record) => record.pageKey),
-  );
-  return pageRegistry.filter(
-    (page) =>
-      page.selectable &&
-      page.tenantTypes.includes(tenant.type) &&
-      (page.allowDuplicateMenuBinding || !usedPageKeys.has(page.key)),
-  );
+  return listSelectablePageResources({
+    tenantType: tenant.type,
+    records: records.value,
+    editingRecordId: row.id,
+  });
 }
 
 function saveInlineEdit(row: MenuConfigRecord) {

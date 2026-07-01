@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { DEVELOPING_PAGE_KEY } from "@/config/page-registry";
+import {
+  DEVELOPING_PAGE_KEY,
+  listSelectablePageResources,
+  pageRegistryByKey,
+} from "@/config/page-registry";
 import { defaultTenantShellConfig } from "@/features/shell-config/local-storage-shell-config-repository";
 import { MenuValidationError } from "@/features/menu-config/menu-validation";
 import { useMenuConfigStore } from "@/stores/menu-config";
@@ -261,6 +265,53 @@ describe("menu configuration store", () => {
     expect(
       store.records.filter((record) => record.pageKey === DEVELOPING_PAGE_KEY),
     ).toHaveLength(existingPlaceholderCount + 2);
+  });
+
+  it("keeps page resources after deleting a menu so they can be rebound later", () => {
+    const store = useMenuConfigStore();
+    store.load(schoolA);
+    const moduleRecord = store.records.find((record) => record.type === "module")!;
+
+    const created = store.create({
+      parentId: moduleRecord.id,
+      type: "page",
+      name: "设备入口",
+      icon: null,
+      pageKey: "device-list",
+      externalUrl: null,
+      externalOpenMode: null,
+      sort: 993,
+      visible: true,
+    });
+    expect(
+      listSelectablePageResources({ tenantType: "school", records: store.records })
+        .some((page) => page.key === "device-list"),
+    ).toBe(false);
+
+    store.removeCascade(created.id);
+
+    expect(pageRegistryByKey.get("device-list")).toMatchObject({
+      title: "设备列表",
+      path: "/security/new-gate/device-list",
+    });
+    expect(
+      listSelectablePageResources({ tenantType: "school", records: store.records })
+        .some((page) => page.key === "device-list"),
+    ).toBe(true);
+
+    const rebound = store.create({
+      parentId: moduleRecord.id,
+      type: "page",
+      name: "设备入口重建",
+      icon: null,
+      pageKey: "device-list",
+      externalUrl: null,
+      externalOpenMode: null,
+      sort: 994,
+      visible: true,
+    });
+
+    expect(store.records.find((record) => record.id === rebound.id)?.pageKey).toBe("device-list");
   });
 
   it("rejects moving a module below another menu", () => {

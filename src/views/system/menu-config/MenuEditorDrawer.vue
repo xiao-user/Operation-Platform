@@ -44,12 +44,12 @@
             <el-option
               v-for="page in availablePages"
               :key="page.key"
-              :label="`${page.title} · ${page.path}`"
+              :label="pageResourceOptionLabel(page)"
               :value="page.key"
             />
           </el-select>
           <p class="field-help">
-            没有真实页面时默认使用“缺省页”；已绑定到其他菜单的普通页面不会重复展示。
+            菜单只绑定页面资源，不删除页面；没有真实页面时默认使用“功能开发中缺省页”。
           </p>
         </el-form-item>
       </div>
@@ -92,7 +92,12 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue";
 import { ElMessage } from "element-plus";
-import { DEVELOPING_PAGE_KEY, pageRegistry } from "@/config/page-registry";
+import {
+  DEVELOPING_PAGE_KEY,
+  listSelectablePageResources,
+  pageRegistry,
+  pageResourceOptionLabel,
+} from "@/config/page-registry";
 import { collectDescendantIds } from "@/features/menu-config/menu-tree";
 import {
   MAX_DIRECTORY_LEVEL,
@@ -183,17 +188,11 @@ const parentOptions = computed(() =>
   }),
 );
 const availablePages = computed(() => {
-  const usedPageKeys = new Set(
-    props.records
-      .filter((record) => record.id !== props.editingRecord?.id && record.pageKey)
-      .map((record) => record.pageKey),
-  );
-  return pageRegistry.filter(
-    (page) =>
-      page.selectable &&
-      page.tenantTypes.includes(props.tenant.type) &&
-      (page.allowDuplicateMenuBinding || !usedPageKeys.has(page.key)),
-  );
+  return listSelectablePageResources({
+    tenantType: props.tenant.type,
+    records: props.records,
+    editingRecordId: props.editingRecord?.id ?? null,
+  });
 });
 const defaultPageKey = computed(
   () =>

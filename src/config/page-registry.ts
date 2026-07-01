@@ -1,5 +1,8 @@
 import type { RouteComponent, RouteRecordRaw } from "vue-router";
+import type { MenuConfigRecord } from "@/features/menu-config/types";
 import type { TenantType } from "@/types/user";
+
+export type PageResourceStatus = "available" | "developing-placeholder";
 
 export interface PageRegistryItem {
   key: string;
@@ -7,6 +10,8 @@ export interface PageRegistryItem {
   path: string;
   component: RouteComponent;
   tenantTypes: TenantType[];
+  status: PageResourceStatus;
+  description: string;
   selectable: boolean;
   menuOwnerKey: string;
   requiresAdmin: boolean;
@@ -15,11 +20,19 @@ export interface PageRegistryItem {
 }
 
 interface PageOptions {
+  status?: PageResourceStatus;
+  description?: string;
   selectable?: boolean;
   menuOwnerKey?: string;
   requiresAdmin?: boolean;
   allowDuplicateMenuBinding?: boolean;
   menuRouteParam?: string;
+}
+
+interface SelectablePageResourceOptions {
+  tenantType: TenantType;
+  records: readonly MenuConfigRecord[];
+  editingRecordId?: string | null;
 }
 
 const school: TenantType[] = ["school"];
@@ -44,6 +57,8 @@ function page(
     path,
     tenantTypes,
     component,
+    status: options.status ?? "available",
+    description: options.description ?? "已开发页面资源，可被菜单关联为导航入口。",
     selectable: options.selectable ?? true,
     menuOwnerKey: options.menuOwnerKey ?? key,
     requiresAdmin: options.requiresAdmin ?? false,
@@ -63,11 +78,16 @@ export function resolvePagePathForMenu(
 export const pageRegistry: PageRegistryItem[] = [
   page(
     DEVELOPING_PAGE_KEY,
-    "缺省页",
+    "功能开发中缺省页",
     "/developing/:menuId",
     allTenantTypes,
     PlaceholderView,
-    { allowDuplicateMenuBinding: true, menuRouteParam: "menuId" },
+    {
+      status: "developing-placeholder",
+      description: "菜单先行配置时使用的统一占位页，后续可替换为真实页面资源。",
+      allowDuplicateMenuBinding: true,
+      menuRouteParam: "menuId",
+    },
   ),
 
   // 学校通用模块
@@ -198,6 +218,29 @@ export const pageRegistry: PageRegistryItem[] = [
 
 export const pageRegistryByKey = new Map(pageRegistry.map((item) => [item.key, item]));
 export const pageRegistryByPath = new Map(pageRegistry.map((item) => [item.path, item]));
+
+export function pageResourceOptionLabel(page: PageRegistryItem) {
+  return `${page.title} · ${page.path}`;
+}
+
+export function listSelectablePageResources({
+  tenantType,
+  records,
+  editingRecordId = null,
+}: SelectablePageResourceOptions) {
+  const usedPageKeys = new Set(
+    records
+      .filter((record) => record.id !== editingRecordId && record.pageKey)
+      .map((record) => record.pageKey),
+  );
+
+  return pageRegistry.filter(
+    (page) =>
+      page.selectable &&
+      page.tenantTypes.includes(tenantType) &&
+      (page.allowDuplicateMenuBinding || !usedPageKeys.has(page.key)),
+  );
+}
 
 export const pageRouteRecords: RouteRecordRaw[] = pageRegistry.map((item) => ({
   path: item.path.slice(1),
