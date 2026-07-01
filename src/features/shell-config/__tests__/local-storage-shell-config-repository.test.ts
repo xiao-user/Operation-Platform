@@ -31,15 +31,34 @@ describe("local storage shell config repository", () => {
     const repository = new LocalStorageTenantShellConfigRepository(localStorage);
     repository.replace(school, {
       version: 1,
-      workbench: { enabled: false, label: "首页", sort: 20 },
+      workbench: { enabled: false, label: "首页", icon: "House", sort: 20 },
     });
 
     expect(repository.list(school).config.workbench).toEqual({
       enabled: false,
       label: "首页",
+      icon: "House",
       sort: 20,
     });
     expect(repository.list({ ...school, id: "school-b" }).config.workbench.enabled).toBe(true);
+  });
+
+  it("normalizes legacy workbench config without icon", () => {
+    const repository = new LocalStorageTenantShellConfigRepository(localStorage);
+    localStorage.setItem(
+      tenantShellConfigStorageKey(school.id),
+      JSON.stringify({
+        version: 1,
+        workbench: { enabled: true, label: "首页", sort: 10 },
+      }),
+    );
+
+    expect(repository.list(school).config.workbench).toEqual({
+      enabled: true,
+      label: "首页",
+      icon: "LayoutGrid",
+      sort: 10,
+    });
   });
 
   it("backs up invalid config and restores defaults", () => {
@@ -55,4 +74,3 @@ describe("local storage shell config repository", () => {
     );
   });
 });
-

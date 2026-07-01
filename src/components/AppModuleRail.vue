@@ -7,10 +7,9 @@
       :title="workbenchConfig.label"
       @click="handleWorkbenchClick"
     >
-      <el-icon>
-        <component :is="resolveMenuIcon('grid')" />
-      </el-icon>
-      <span>{{ workbenchConfig.label }}</span>
+      <span class="module-rail-icon">
+        <component :is="resolveMenuIcon(workbenchConfig.icon)" />
+      </span>
     </button>
 
     <div v-if="workbenchConfig.enabled" class="module-rail-divider" />
@@ -24,10 +23,10 @@
       :title="module.name"
       @click="handleModuleClick(module)"
     >
-      <el-icon>
+      <span class="module-rail-icon">
         <component :is="resolveMenuIcon(moduleIcon(module))" />
-      </el-icon>
-      <span>{{ module.name }}</span>
+      </span>
+      <span class="module-rail-label">{{ module.name }}</span>
     </button>
   </aside>
 </template>
@@ -45,23 +44,30 @@ const navigationStore = useNavigationStore();
 const { activeModuleId, moduleRailNodes, workbenchConfig } = storeToRefs(navigationStore);
 
 const defaultModuleIcons: Record<string, MenuIconKey> = {
-  家校互动: "chat",
-  托管管理: "calendar",
-  教务管理: "notebook",
-  排课系统: "grid",
-  宿舍管理: "house",
-  校园办公: "office",
-  缴费管理: "money",
-  校园安全: "shield",
-  智慧操场: "grid",
-  托管学堂: "notebook",
-  组织管理: "office",
-  运营商管理: "user",
-  机构管理: "office",
-  结算中心: "coin",
-  课程课班管理: "notebook",
-  通知公告: "chat",
-  系统管理: "setting",
+  家校互动: "MessageSquareText",
+  家校共育: "MessageSquareText",
+  托管管理: "Calendar",
+  教务管理: "NotebookTabs",
+  教育教学: "BookOpen",
+  教育评价: "ChartNoAxesCombined",
+  教育管理: "BriefcaseBusiness",
+  排课系统: "LayoutGrid",
+  宿舍管理: "House",
+  校园办公: "Building2",
+  缴费管理: "CircleDollarSign",
+  校园安全: "Shield",
+  平安校园: "Shield",
+  智慧操场: "Activity",
+  文化生活: "Images",
+  数据中心: "Database",
+  托管学堂: "NotebookTabs",
+  组织管理: "Building2",
+  运营商管理: "User",
+  机构管理: "Building2",
+  结算中心: "Coins",
+  课程课班管理: "NotebookTabs",
+  通知公告: "Bell",
+  系统管理: "Settings",
 };
 
 function handleWorkbenchClick() {
@@ -82,10 +88,10 @@ function handleModuleClick(module: MenuTreeNode) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--spacing-8);
+  gap: var(--spacing-12);
   width: var(--module-rail-width);
   height: 100vh;
-  padding: var(--spacing-6) var(--spacing-6);
+  padding: var(--spacing-12) var(--spacing-8);
   background: var(--color-white);
   border-right: 1px solid var(--color-border);
   overflow-y: auto;
@@ -97,26 +103,50 @@ function handleModuleClick(module: MenuTreeNode) {
 
 .module-rail-button {
   display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-6);
+  width: 100%;
+  min-height: 58px;
+  padding: 0;
+  color: var(--color-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition:
+    color 0.2s;
+}
+
+.workbench-button {
+  min-height: 36px;
+}
+
+.module-rail-icon {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 36px;
   height: 36px;
-  color: var(--color-secondary);
+  color: inherit;
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  cursor: pointer;
+  border-radius: var(--radius-lg);
   transition:
     background-color 0.2s,
-    border-color 0.2s,
     color 0.2s;
 }
 
 .module-rail-button:hover,
-.module-rail-button.active {
+.module-rail-button.active,
+.module-rail-button:hover .module-rail-label,
+.module-rail-button.active .module-rail-label {
   color: var(--color-primary);
+}
+
+.module-rail-button:hover .module-rail-icon,
+.module-rail-button.active .module-rail-icon {
   background: var(--color-primary-light);
-  border-color: var(--color-primary-line-light);
 }
 
 .module-rail-divider {
@@ -127,16 +157,21 @@ function handleModuleClick(module: MenuTreeNode) {
   flex-shrink: 0;
 }
 
-.module-rail-button .el-icon {
-  font-size: 18px;
+.module-rail-icon :deep(svg) {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.9;
 }
 
-.module-rail-button span {
-  position: absolute;
-  width: 1px;
-  height: 1px;
+.module-rail-label {
+  width: 100%;
   overflow: hidden;
-  clip: rect(0 0 0 0);
+  color: var(--color-title);
+  font-size: var(--font-size-xs);
+  line-height: 16px;
+  text-align: center;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 0.2s;
 }
 </style>

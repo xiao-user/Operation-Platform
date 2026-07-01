@@ -48,7 +48,20 @@
       <div class="system-entry-row">
         <div class="entry-name">
           <strong>{{ shellConfig.workbench.label }}</strong>
-          <span>系统入口 · /workbench</span>
+          <span class="entry-icon-line">
+            <component :is="resolveMenuIcon(shellConfig.workbench.icon)" />
+            系统入口 · /workbench
+          </span>
+        </div>
+        <div class="entry-field entry-icon-field">
+          <label>入口图标</label>
+          <MenuIconSelect
+            v-model="workbenchIcon"
+            :disabled="!selectedTenant"
+            :clearable="false"
+            aria-label="工作台图标"
+            @change="handleWorkbenchIconChange"
+          />
         </div>
         <div class="entry-field">
           <label>入口名称</label>
@@ -248,25 +261,23 @@
                 </button>
               </div>
               <div class="menu-tree-cell icon-column">
-                <el-select
+                <MenuIconSelect
                   v-if="isInlineEditing(data)"
                   v-model="inlineDraft.icon"
-                  clearable
                   aria-label="菜单图标"
                   placeholder="图标"
                   @click.stop
-                >
-                  <el-option v-for="icon in iconOptions" :key="icon" :label="icon" :value="icon" />
-                </el-select>
+                />
                 <button
                   v-else
-                  class="inline-edit-trigger"
+                  class="inline-edit-trigger icon-edit-trigger"
                   type="button"
                   draggable="false"
                   title="点击编辑图标"
                   @click.stop="startInlineEdit(data)"
                 >
-                  {{ data.icon ?? "—" }}
+                  <component v-if="data.icon" :is="resolveMenuIcon(data.icon)" />
+                  <span>{{ data.icon ? menuIconLabel(data.icon) : "—" }}</span>
                 </button>
               </div>
               <div class="menu-tree-cell sort-column">
@@ -351,6 +362,8 @@ import {
   pageResourceOptionLabel,
   resolvePagePathForMenu,
 } from "@/config/page-registry";
+import MenuIconSelect from "@/components/MenuIconSelect.vue";
+import { menuIconLabel, resolveMenuIcon } from "@/components/menu-icons";
 import { collectDescendantIds } from "@/features/menu-config/menu-tree";
 import { MenuValidationError } from "@/features/menu-config/menu-validation";
 import type {
@@ -399,6 +412,7 @@ const selectedTenantId = ref(currentTenant.value.id);
 const keyword = ref("");
 const visibleFilter = ref<boolean | "">("");
 const workbenchLabel = ref("");
+const workbenchIcon = ref<MenuIconKey>("LayoutGrid");
 const workbenchSort = ref(0);
 const drawerVisible = ref(false);
 const editingRecord = ref<MenuConfigRecord | null>(null);
@@ -408,10 +422,6 @@ const inlineDraft = ref<MenuRecordInput>(emptyInlineDraft());
 const dropPreview = ref<{ targetId: string; type: TreeDropType } | null>(null);
 const expandedMenuIds = ref<string[]>([]);
 const menuTreeRef = ref<TreeInstanceLike | null>(null);
-const iconOptions: MenuIconKey[] = [
-  "grid", "notebook", "chat", "calendar", "house", "money", "shield", "setting",
-  "menu", "data", "document", "coin", "office", "user", "list",
-];
 const treeProps = {
   children: "children",
   label: "name",
@@ -448,6 +458,7 @@ watch(
   () => shellConfig.value.workbench,
   (workbench) => {
     workbenchLabel.value = workbench.label;
+    workbenchIcon.value = workbench.icon;
     workbenchSort.value = workbench.sort;
   },
   { immediate: true },
@@ -770,6 +781,7 @@ function updateWorkbench(input: Parameters<typeof menuConfigStore.updateWorkbenc
   try {
     const updated = menuConfigStore.updateWorkbench(input);
     workbenchLabel.value = updated.label;
+    workbenchIcon.value = updated.icon;
     workbenchSort.value = updated.sort;
     void navigationStore.ensureValidCurrentRoute(router);
     ElMessage.success("工作台配置已更新");
@@ -790,6 +802,12 @@ function handleWorkbenchLabelChange(value: string) {
     return;
   }
   updateWorkbench({ label });
+}
+
+function handleWorkbenchIconChange(value: string | number | boolean | null | undefined) {
+  const icon = typeof value === "string" && value ? value : shellConfig.value.workbench.icon;
+  workbenchIcon.value = icon;
+  updateWorkbench({ icon });
 }
 
 function handleWorkbenchSortChange(value: number | undefined) {
@@ -940,11 +958,31 @@ async function handleReset() {
   font-size: var(--font-size-sm);
 }
 
+.entry-icon-line {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-6);
+}
+
+.entry-icon-line svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2;
+}
+
 .entry-field {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-8);
   width: 220px;
+}
+
+.entry-field :deep(.el-select) {
+  width: 100%;
+}
+
+.entry-icon-field {
+  width: 240px;
 }
 
 .entry-sort {
@@ -1004,12 +1042,12 @@ async function handleReset() {
     minmax(280px, 1.1fr)
     100px
     minmax(280px, 1.2fr)
-    110px
+    140px
     80px
     70px
     190px;
   align-items: center;
-  min-width: 1110px;
+  min-width: 1140px;
 }
 
 .menu-tree-header {
@@ -1027,7 +1065,7 @@ async function handleReset() {
 }
 
 .menu-draggable-tree {
-  min-width: 1110px;
+  min-width: 1140px;
 }
 
 :deep(.menu-draggable-tree .el-tree-node__content) {
@@ -1232,6 +1270,19 @@ async function handleReset() {
   background: var(--color-primary-light);
   border-color: var(--color-primary-line-light);
   outline: none;
+}
+
+.icon-edit-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-6);
+}
+
+.icon-edit-trigger svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  stroke-width: 2;
 }
 
 .target-text {

@@ -102,7 +102,7 @@ export const useNavigationStore = defineStore("navigation", () => {
             id: "workbench",
             name: workbenchConfig.value.label,
             sort: workbenchConfig.value.sort,
-            icon: "grid",
+            icon: workbenchConfig.value.icon,
             path: "/workbench",
           },
         ]

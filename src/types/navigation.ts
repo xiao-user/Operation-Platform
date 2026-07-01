@@ -1,21 +1,6 @@
 import type { TenantType } from "@/types/user";
 
-export type MenuIconKey =
-  | "grid"
-  | "notebook"
-  | "chat"
-  | "calendar"
-  | "house"
-  | "money"
-  | "shield"
-  | "setting"
-  | "menu"
-  | "data"
-  | "document"
-  | "coin"
-  | "office"
-  | "user"
-  | "list";
+export type MenuIconKey = string;
 
 export interface NavTab {
   key: string;

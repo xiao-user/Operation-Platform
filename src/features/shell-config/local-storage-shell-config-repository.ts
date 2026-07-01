@@ -6,6 +6,7 @@ import type { TenantShellConfig, WorkbenchConfig } from "@/features/shell-config
 import type { TenantInfo } from "@/types/user";
 
 const SHELL_CONFIG_VERSION = 1;
+const DEFAULT_WORKBENCH_ICON = "LayoutGrid";
 
 export class ShellConfigPersistenceError extends Error {
   readonly cause?: unknown;
@@ -31,6 +32,7 @@ export function defaultTenantShellConfig(): TenantShellConfig {
     workbench: {
       enabled: true,
       label: "工作台",
+      icon: DEFAULT_WORKBENCH_ICON,
       sort: 0,
     },
   };
@@ -50,6 +52,7 @@ function isWorkbenchConfig(value: unknown): value is WorkbenchConfig {
     typeof item.enabled === "boolean" &&
     typeof item.label === "string" &&
     item.label.trim().length > 0 &&
+    (item.icon === undefined || typeof item.icon === "string") &&
     typeof item.sort === "number" &&
     Number.isFinite(item.sort)
   );
@@ -67,6 +70,7 @@ function normalizeConfig(config: TenantShellConfig): TenantShellConfig {
     workbench: {
       enabled: config.workbench.enabled,
       label: config.workbench.label.trim(),
+      icon: config.workbench.icon || DEFAULT_WORKBENCH_ICON,
       sort: config.workbench.sort,
     },
   };
@@ -136,4 +140,3 @@ export class LocalStorageTenantShellConfigRepository implements TenantShellConfi
 export const tenantShellConfigRepository = new LocalStorageTenantShellConfigRepository(
   window.localStorage,
 );
-

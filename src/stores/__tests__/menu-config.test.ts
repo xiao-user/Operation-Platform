@@ -133,10 +133,20 @@ describe("menu configuration store", () => {
     navigationStore.loadTenant(currentTenant);
     store.load(currentTenant);
 
-    store.updateWorkbench({ enabled: false, label: "首页", sort: 50 });
+    store.updateWorkbench({ enabled: false, label: "首页", icon: "House", sort: 50 });
 
-    expect(store.shellConfig.workbench).toEqual({ enabled: false, label: "首页", sort: 50 });
-    expect(navigationStore.workbenchConfig).toEqual({ enabled: false, label: "首页", sort: 50 });
+    expect(store.shellConfig.workbench).toEqual({
+      enabled: false,
+      label: "首页",
+      icon: "House",
+      sort: 50,
+    });
+    expect(navigationStore.workbenchConfig).toEqual({
+      enabled: false,
+      label: "首页",
+      icon: "House",
+      sort: 50,
+    });
     expect(navigationStore.topLevelNavItems.some((item) => item.kind === "workbench")).toBe(false);
   });
 

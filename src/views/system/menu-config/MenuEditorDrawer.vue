@@ -33,9 +33,7 @@
       </el-form-item>
 
       <el-form-item label="菜单图标">
-        <el-select v-model="form.icon" clearable placeholder="请选择图标">
-          <el-option v-for="icon in iconOptions" :key="icon" :label="icon" :value="icon" />
-        </el-select>
+        <MenuIconSelect v-model="form.icon" />
       </el-form-item>
 
       <div v-if="form.type === 'page'" data-field="page-key">
@@ -98,6 +96,7 @@ import {
   pageRegistry,
   pageResourceOptionLabel,
 } from "@/config/page-registry";
+import MenuIconSelect from "@/components/MenuIconSelect.vue";
 import { collectDescendantIds } from "@/features/menu-config/menu-tree";
 import {
   MAX_DIRECTORY_LEVEL,
@@ -110,7 +109,6 @@ import type {
   MenuItemType,
   MenuRecordInput,
 } from "@/features/menu-config/types";
-import type { MenuIconKey } from "@/types/navigation";
 import type { TenantInfo } from "@/types/user";
 
 const props = withDefaults(
@@ -128,24 +126,6 @@ const props = withDefaults(
 
 const emit = defineEmits<{ save: [input: MenuRecordInput] }>();
 const visible = defineModel<boolean>({ required: true });
-
-const iconOptions: MenuIconKey[] = [
-  "grid",
-  "notebook",
-  "chat",
-  "calendar",
-  "house",
-  "money",
-  "shield",
-  "setting",
-  "menu",
-  "data",
-  "document",
-  "coin",
-  "office",
-  "user",
-  "list",
-];
 
 const form = reactive<MenuRecordInput>({
   parentId: null,

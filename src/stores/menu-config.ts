@@ -120,11 +120,13 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
     const current = shellConfig.value.workbench;
     const label = input.label !== undefined ? input.label.trim() : current.label;
     const sort = input.sort !== undefined ? Number(input.sort) : current.sort;
+    const icon = input.icon ?? current.icon;
     return persistShellConfig({
       version: 1,
       workbench: {
         enabled: input.enabled ?? current.enabled,
         label,
+        icon,
         sort,
       },
     }).workbench;

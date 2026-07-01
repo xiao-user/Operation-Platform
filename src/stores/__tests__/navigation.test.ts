@@ -35,7 +35,11 @@ describe("navigation store", () => {
 
     expect(store.moduleNodes).toHaveLength(7);
     expect(store.moduleNodes.map((node) => node.name)).toContain("平安校园");
-    expect(store.topLevelNavItems[0]).toMatchObject({ kind: "workbench", name: "工作台" });
+    expect(store.topLevelNavItems[0]).toMatchObject({
+      kind: "workbench",
+      name: "工作台",
+      icon: "LayoutGrid",
+    });
     expect(store.currentMenus.every((node) => node.parentId === store.activeModuleId)).toBe(true);
   });
 
@@ -43,12 +47,18 @@ describe("navigation store", () => {
     const shellConfig = defaultTenantShellConfig();
     shellConfig.workbench.enabled = false;
     shellConfig.workbench.label = "首页";
+    shellConfig.workbench.icon = "House";
     tenantShellConfigRepository.replace(schoolA, shellConfig);
 
     const store = useNavigationStore();
     store.loadTenant(schoolA);
 
-    expect(store.workbenchConfig).toEqual({ enabled: false, label: "首页", sort: 0 });
+    expect(store.workbenchConfig).toEqual({
+      enabled: false,
+      label: "首页",
+      icon: "House",
+      sort: 0,
+    });
     expect(store.topLevelNavItems.some((item) => item.kind === "workbench")).toBe(false);
     expect(store.moduleNodes.map((node) => node.name)).toContain("平安校园");
   });
