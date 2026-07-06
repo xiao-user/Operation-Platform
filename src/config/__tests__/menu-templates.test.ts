@@ -93,9 +93,12 @@ describe("tenant menu templates", () => {
   it("binds menu configuration to the operation platform template", () => {
     expect(tenantMenuTemplates.platform).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({ type: "page", name: "组织管理", pageKey: "system-organization-management" }),
+        expect.objectContaining({ type: "page", name: "角色管理", pageKey: "system-role-management" }),
         expect.objectContaining({ type: "page", name: "菜单配置", pageKey: "system-menu-config" }),
       ]),
     );
+    expect(tenantMenuTemplates.platform.some((item) => item.name === "权限管理")).toBe(false);
   });
 
   it("references only registered pages", () => {

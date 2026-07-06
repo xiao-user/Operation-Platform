@@ -78,6 +78,27 @@
           </div>
         </el-form-item>
       </div>
+
+      <el-form-item label="可见角色">
+        <el-select
+          v-model="selectedVisibleRoleIds"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+          :disabled="!roleOptions.length"
+          placeholder="请选择可见角色"
+        >
+          <el-option
+            v-for="role in roleOptions"
+            :key="role.id"
+            :label="role.name"
+            :value="role.id"
+          />
+        </el-select>
+        <p class="field-help">
+          管理员固定可见。模块/目录会批量应用到下级页面；页面是最终访问权限点。
+        </p>
+      </el-form-item>
     </el-form>
 
     <template #footer>
@@ -88,7 +109,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import {
   DEVELOPING_PAGE_KEY,
@@ -111,20 +132,30 @@ import type {
 } from "@/features/menu-config/types";
 import type { TenantInfo } from "@/types/user";
 
+export interface RoleVisibilityOption {
+  id: string;
+  name: string;
+  builtIn: boolean;
+}
+
 const props = withDefaults(
   defineProps<{
     tenant: TenantInfo;
     records: MenuConfigRecord[];
     editingRecord?: MenuConfigRecord | null;
     defaultParentId?: string | null;
+    roleOptions?: RoleVisibilityOption[];
+    visibleRoleIds?: string[];
   }>(),
   {
     editingRecord: null,
     defaultParentId: null,
+    roleOptions: () => [],
+    visibleRoleIds: () => [],
   },
 );
 
-const emit = defineEmits<{ save: [input: MenuRecordInput] }>();
+const emit = defineEmits<{ save: [input: MenuRecordInput, visibleRoleIds: string[]] }>();
 const visible = defineModel<boolean>({ required: true });
 
 const form = reactive<MenuRecordInput>({
@@ -138,6 +169,7 @@ const form = reactive<MenuRecordInput>({
   sort: 10,
   visible: true,
 });
+const selectedVisibleRoleIds = ref<string[]>([]);
 
 const selectedParent = computed(() =>
   props.records.find((record) => record.id === form.parentId),
@@ -292,6 +324,9 @@ function resetForm() {
   form.externalOpenMode = source?.externalOpenMode ?? null;
   form.sort = source?.sort ?? 10;
   form.visible = source?.visible ?? true;
+  selectedVisibleRoleIds.value = source
+    ? [...props.visibleRoleIds]
+    : props.roleOptions.map((role) => role.id);
   handleTypeChange(form.type);
 }
 
@@ -346,7 +381,7 @@ function handleSubmit() {
     ElMessage.warning(messages[errors[0]!] ?? "菜单配置不符合规则");
     return;
   }
-  emit("save", { ...form });
+  emit("save", { ...form }, [...selectedVisibleRoleIds.value]);
 }
 </script>
 

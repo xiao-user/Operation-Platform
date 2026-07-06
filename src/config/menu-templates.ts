@@ -1,8 +1,8 @@
 import {
-  moduleDefaultPaths,
-  moduleMenus,
-  topNavTabs,
-} from "@/config/navigation";
+  menuTemplateChildrenByModule,
+  menuTemplateDefaultPageByModule,
+  menuTemplateModules,
+} from "@/config/menu-template-definitions";
 import { DEVELOPING_PAGE_KEY, pageRegistryByPath } from "@/config/page-registry";
 import {
   schoolMenuOutline,
@@ -143,7 +143,7 @@ function convertMenuItems(
 }
 
 function buildTemplate(tenantType: TenantType): MenuConfigRecord[] {
-  return topNavTabs
+  return menuTemplateModules
     .filter((tab) => tab.tenantTypes?.includes(tenantType))
     .flatMap((tab, index) => {
       const moduleId = `template:${tenantType}:module:${tab.key}`;
@@ -155,7 +155,7 @@ function buildTemplate(tenantType: TenantType): MenuConfigRecord[] {
         (index + 1) * 10,
         { icon: tab.icon ?? null },
       );
-      const configuredMenus = moduleMenus[tab.key] ?? [];
+      const configuredMenus = menuTemplateChildrenByModule[tab.key] ?? [];
 
       if (configuredMenus.length) {
         return [
@@ -164,7 +164,7 @@ function buildTemplate(tenantType: TenantType): MenuConfigRecord[] {
         ];
       }
 
-      const defaultPath = moduleDefaultPaths[tab.key];
+      const defaultPath = menuTemplateDefaultPageByModule[tab.key];
       if (!defaultPath) return [moduleRecord];
       return [
         moduleRecord,

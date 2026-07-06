@@ -1,9 +1,9 @@
 import type { NavTab, SideMenuItem } from "@/types/navigation";
 
 // ==========================================
-// 顶部导航 Tab（tenantTypes 限定可见租户类型）
+// 默认菜单模板定义（仅用于首次初始化，不参与运行时导航）
 // ==========================================
-export const topNavTabs: NavTab[] = [
+export const menuTemplateModules: NavTab[] = [
   // 学校专属
   {
     key: "family-interaction",
@@ -42,7 +42,7 @@ export const topNavTabs: NavTab[] = [
 // ==========================================
 // 各模块侧边菜单
 // ==========================================
-export const moduleMenus: Record<string, SideMenuItem[]> = {
+export const menuTemplateChildrenByModule: Record<string, SideMenuItem[]> = {
   // ---------- 学校模块 ----------
   security: [
     {
@@ -268,6 +268,8 @@ export const moduleMenus: Record<string, SideMenuItem[]> = {
 
   // ---------- 运营平台 · 系统管理 ----------
   "platform-system": [
+    { key: "organization-management", label: "组织管理", icon: "Building2", path: "/system/organization" },
+    { key: "role-management", label: "角色管理", icon: "Users", path: "/system/roles" },
     { key: "menu-config", label: "菜单配置", icon: "setting", path: "/system/menu-config" },
   ],
 };
@@ -276,7 +278,7 @@ export const moduleMenus: Record<string, SideMenuItem[]> = {
 // 各模块默认落地路径
 // 注意：与 router 的 redirect 保持一致
 // ==========================================
-export const moduleDefaultPaths: Record<string, string> = {
+export const menuTemplateDefaultPageByModule: Record<string, string> = {
   // 学校
   "family-interaction": "/family-interaction/notice",
   "care-management": "/care-management",
@@ -297,54 +299,5 @@ export const moduleDefaultPaths: Record<string, string> = {
   "org-course": "/org/course/list",
   "org-notice": "/org/notice/list",
   // 运营平台
-  "platform-system": "/system/menu-config",
+  "platform-system": "/system/organization",
 };
-
-export function getModuleDefaultPath(moduleKey: string): string {
-  return moduleDefaultPaths[moduleKey] ?? "/security/new-gate/device-list";
-}
-
-// ==========================================
-// 页面子 Tab
-// ==========================================
-export const pageSubTabs: Record<string, NavTab[]> = {
-  "new-gate": [
-    { key: "device-list", label: "设备列表", path: "/security/new-gate/device-list" },
-    { key: "person-group", label: "人员分组", path: "/security/new-gate/person-group" },
-    { key: "special-date", label: "特殊日期", path: "/security/new-gate/special-date" },
-    { key: "temp-auth", label: "临时授权", path: "/security/new-gate/temp-auth" },
-    { key: "settings", label: "设置", path: "/security/new-gate/settings" },
-  ],
-};
-
-// ==========================================
-// 工具函数
-// ==========================================
-function isRouteInMenuPath(routePath: string, menuPath: string): boolean {
-  return routePath === menuPath || routePath.startsWith(`${menuPath}/`);
-}
-
-export function findMenuTrailByPath(menus: SideMenuItem[], routePath: string): SideMenuItem[] {
-  let bestTrail: SideMenuItem[] = [];
-  let bestMatchedPathLength = -1;
-
-  const walk = (items: SideMenuItem[], trail: SideMenuItem[] = []) => {
-    for (const item of items) {
-      const nextTrail = [...trail, item];
-
-      if (item.path && isRouteInMenuPath(routePath, item.path)) {
-        if (item.path.length > bestMatchedPathLength) {
-          bestTrail = nextTrail;
-          bestMatchedPathLength = item.path.length;
-        }
-      }
-
-      if (item.children?.length) {
-        walk(item.children, nextTrail);
-      }
-    }
-  };
-
-  walk(menus);
-  return bestTrail;
-}

@@ -32,7 +32,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { InfoFilled } from '@element-plus/icons-vue'
-import { pageSubTabs } from '@/config/navigation'
+import { pageSubTabs } from '@/config/page-tabs'
 
 interface Props {
   activeTab: string
