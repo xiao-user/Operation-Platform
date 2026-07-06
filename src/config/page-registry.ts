@@ -48,17 +48,22 @@ function page(
   title: string,
   path: string,
   tenantTypes: TenantType[],
-  component: RouteComponent = PlaceholderView,
+  component?: RouteComponent,
   options: PageOptions = {},
 ): PageRegistryItem {
+  const status = options.status ?? (component ? "available" : "developing-placeholder");
   return {
     key,
     title,
     path,
     tenantTypes,
-    component,
-    status: options.status ?? "available",
-    description: options.description ?? "已开发页面资源，可被菜单关联为导航入口。",
+    component: component ?? PlaceholderView,
+    status,
+    description: options.description ?? (
+      status === "available"
+        ? "已开发页面资源，可被菜单关联为导航入口。"
+        : "已注册但尚未实现真实业务界面，当前使用开发中占位页。"
+    ),
     selectable: options.selectable ?? true,
     menuOwnerKey: options.menuOwnerKey ?? key,
     requiresAdmin: options.requiresAdmin ?? false,
@@ -207,6 +212,22 @@ export const pageRegistry: PageRegistryItem[] = [
 
   // 运营平台
   page(
+    "system-organization-management",
+    "组织管理",
+    "/system/organization",
+    platform,
+    () => import("@/views/system/organization/OrganizationManagementView.vue"),
+    { requiresAdmin: true },
+  ),
+  page(
+    "system-role-management",
+    "角色管理",
+    "/system/roles",
+    platform,
+    () => import("@/views/system/roles/RoleManagementView.vue"),
+    { requiresAdmin: true },
+  ),
+  page(
     "system-menu-config",
     "菜单配置",
     "/system/menu-config",
@@ -220,7 +241,8 @@ export const pageRegistryByKey = new Map(pageRegistry.map((item) => [item.key, i
 export const pageRegistryByPath = new Map(pageRegistry.map((item) => [item.path, item]));
 
 export function pageResourceOptionLabel(page: PageRegistryItem) {
-  return `${page.title} · ${page.path}`;
+  const statusLabel = page.status === "available" ? "已开发" : "开发中";
+  return `[${statusLabel}] ${page.title} · ${page.path}`;
 }
 
 export function listSelectablePageResources({

@@ -1,0 +1,204 @@
+import { computed, ref } from "vue";
+import { defineStore } from "pinia";
+import {
+  createDefaultRoles,
+} from "@/features/access-control/local-storage-role-repository";
+import { ADMIN_ROLE_ID, type RoleInput, type RoleRecord } from "@/features/access-control/types";
+import { buildMenuTree } from "@/features/menu-config/menu-tree";
+import type { MenuConfigRecord, MenuTreeNode } from "@/features/menu-config/types";
+import type { TenantShellConfig } from "@/features/shell-config/types";
+import { tenantConfigurationRepository } from "@/features/tenant-config/local-storage-tenant-configuration-repository";
+import { useNavigationStore } from "@/stores/navigation";
+import { useUserStore } from "@/stores/user";
+import type { TenantInfo } from "@/types/user";
+
+function sortRoles(roles: RoleRecord[]) {
+  return [...roles].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name, "zh-CN"));
+}
+
+function defaultRoleInput(): RoleInput {
+  return {
+    name: "",
+    description: "",
+    enabled: true,
+    sort: 100,
+    menuIds: [],
+  };
+}
+
+export interface PermissionTreeNode extends MenuTreeNode {
+  disabled: boolean;
+  children: PermissionTreeNode[];
+}
+
+export const useAccessControlStore = defineStore("access-control", () => {
+  const selectedTenant = ref<TenantInfo | null>(null);
+  const records = ref<MenuConfigRecord[]>([]);
+  const roles = ref<RoleRecord[]>([]);
+  const shellConfig = ref<TenantShellConfig | null>(null);
+  const recoveryNotice = ref<string | null>(null);
+
+  const roleOptions = computed(() =>
+    sortRoles(roles.value).map((role) => ({
+      value: role.id,
+      label: role.name,
+      disabled: !role.enabled,
+    })),
+  );
+  const menuTree = computed(() => buildMenuTree(records.value));
+  const leafMenuIds = computed(() =>
+    records.value
+      .filter((record) => record.visible && (record.type === "page" || record.type === "external"))
+      .map((record) => record.id),
+  );
+  const permissionTree = computed<PermissionTreeNode[]>(() => {
+    const convert = (nodes: MenuTreeNode[]): PermissionTreeNode[] =>
+      nodes
+        .filter((node) => node.visible)
+        .map((node) => ({
+          ...node,
+          disabled: node.type !== "page" && node.type !== "external",
+          children: convert(node.children),
+        }))
+        .filter((node) => !node.disabled || node.children.length);
+    return convert(menuTree.value);
+  });
+
+  function requireTenant() {
+    if (!selectedTenant.value) throw new Error("Access control tenant is not loaded");
+    return selectedTenant.value;
+  }
+
+  function persist(nextRoles: RoleRecord[]) {
+    const tenant = requireTenant();
+    if (!shellConfig.value) throw new Error("租户配置尚未加载");
+    roles.value = tenantConfigurationRepository.replace(tenant, {
+      version: 1,
+      menuRecords: records.value,
+      shellConfig: shellConfig.value,
+      roles: nextRoles,
+    }).roles;
+    recoveryNotice.value = null;
+    refreshRuntimeIfCurrent(tenant);
+  }
+
+  function refreshRuntimeIfCurrent(tenant: TenantInfo) {
+    const userStore = useUserStore();
+    if (userStore.currentTenant.id === tenant.id) {
+      useNavigationStore().loadTenant(tenant);
+    }
+  }
+
+  function load(tenant: TenantInfo) {
+    const result = tenantConfigurationRepository.list(tenant);
+    selectedTenant.value = { ...tenant };
+    records.value = result.configuration.menuRecords;
+    roles.value = result.configuration.roles;
+    shellConfig.value = result.configuration.shellConfig;
+    recoveryNotice.value = result.recoveryNotice;
+  }
+
+  function createRole(input: RoleInput = defaultRoleInput()) {
+    const tenant = requireTenant();
+    const name = input.name.trim();
+    if (roles.value.some((role) => role.name === name)) {
+      throw new Error("角色名称不能重复");
+    }
+    const role: RoleRecord = {
+      id: `role-${crypto.randomUUID()}`,
+      tenantId: tenant.id,
+      name,
+      description: input.description.trim(),
+      builtIn: false,
+      enabled: input.enabled,
+      sort: input.sort,
+      menuIds: input.menuIds,
+    };
+    persist([...roles.value, role]);
+    return role;
+  }
+
+  function updateRole(roleId: string, input: RoleInput) {
+    const name = input.name.trim();
+    if (roles.value.some((role) => role.id !== roleId && role.name === name)) {
+      throw new Error("角色名称不能重复");
+    }
+    persist(
+      roles.value.map((role) =>
+        role.id === roleId
+          ? {
+              ...role,
+              name: role.builtIn ? role.name : name,
+              description: input.description.trim(),
+              enabled: role.id === ADMIN_ROLE_ID ? true : input.enabled,
+              sort: input.sort,
+              menuIds: input.menuIds,
+            }
+          : role,
+      ),
+    );
+  }
+
+  function setRoleEnabled(roleId: string, enabled: boolean) {
+    persist(
+      roles.value.map((role) =>
+        role.id === roleId
+          ? {
+              ...role,
+              enabled: role.id === ADMIN_ROLE_ID ? true : enabled,
+            }
+          : role,
+      ),
+    );
+  }
+
+  function removeRole(roleId: string) {
+    const target = roles.value.find((role) => role.id === roleId);
+    if (!target || target.builtIn) return;
+    persist(roles.value.filter((role) => role.id !== roleId));
+  }
+
+  function updateRoleMenuIds(roleId: string, menuIds: string[]) {
+    persist(
+      roles.value.map((role) =>
+        role.id === roleId
+          ? {
+              ...role,
+              menuIds: role.id === ADMIN_ROLE_ID ? leafMenuIds.value : menuIds,
+            }
+          : role,
+      ),
+    );
+  }
+
+  function resetRoles() {
+    const tenant = requireTenant();
+    if (!shellConfig.value) throw new Error("租户配置尚未加载");
+    roles.value = tenantConfigurationRepository.replace(tenant, {
+      version: 1,
+      menuRecords: records.value,
+      shellConfig: shellConfig.value,
+      roles: createDefaultRoles(tenant, records.value),
+    }).roles;
+    recoveryNotice.value = null;
+    refreshRuntimeIfCurrent(tenant);
+  }
+
+  return {
+    selectedTenant,
+    records,
+    roles,
+    roleOptions,
+    menuTree,
+    leafMenuIds,
+    permissionTree,
+    recoveryNotice,
+    load,
+    createRole,
+    updateRole,
+    setRoleEnabled,
+    removeRole,
+    updateRoleMenuIds,
+    resetRoles,
+  };
+});

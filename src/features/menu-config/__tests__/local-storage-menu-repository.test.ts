@@ -18,6 +18,12 @@ const schoolB: TenantInfo = {
   shortName: "学校 B",
   type: "school",
 };
+const platform: TenantInfo = {
+  id: "platform-a",
+  name: "运营平台",
+  shortName: "运营平台",
+  type: "platform",
+};
 
 describe("LocalStorageTenantMenuRepository", () => {
   beforeEach(() => localStorage.clear());
@@ -38,7 +44,7 @@ describe("LocalStorageTenantMenuRepository", () => {
   it("isolates records for tenants of the same type", () => {
     const repository = new LocalStorageTenantMenuRepository(localStorage);
     const first = repository.list(schoolA).records;
-    const second = repository.list(schoolB).records;
+    repository.list(schoolB);
 
     first[0]!.name = "学校 A 专属菜单";
     repository.replace(schoolA, first);
@@ -87,6 +93,54 @@ describe("LocalStorageTenantMenuRepository", () => {
 
     expect(repository.list(schoolA).recoveryNotice).toContain("已恢复默认菜单");
     expect(localStorage.getItem(`operation-platform:tenant-menu:invalid:${schoolA.id}:99`)).toBe(raw);
+  });
+
+  it("migrates cached platform menus with newly required system management pages", () => {
+    localStorage.setItem(
+      tenantMenuStorageKey(platform.id),
+      JSON.stringify({
+        version: 1,
+        records: [
+          {
+            id: "platform-system",
+            tenantId: platform.id,
+            parentId: null,
+            type: "module",
+            name: "系统管理",
+            icon: "setting",
+            pageKey: null,
+            externalUrl: null,
+            externalOpenMode: null,
+            sort: 10,
+            visible: true,
+          },
+          {
+            id: "platform-menu-config",
+            tenantId: platform.id,
+            parentId: "platform-system",
+            type: "page",
+            name: "菜单配置",
+            icon: "setting",
+            pageKey: "system-menu-config",
+            externalUrl: null,
+            externalOpenMode: null,
+            sort: 10,
+            visible: true,
+          },
+        ],
+      }),
+    );
+    const repository = new LocalStorageTenantMenuRepository(localStorage);
+
+    const result = repository.list(platform);
+
+    expect(result.records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ pageKey: "system-organization-management" }),
+        expect.objectContaining({ pageKey: "system-role-management" }),
+        expect.objectContaining({ pageKey: "system-menu-config" }),
+      ]),
+    );
   });
 
   it("throws a typed error when persistence fails", () => {

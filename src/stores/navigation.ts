@@ -2,12 +2,11 @@ import { computed, ref } from "vue";
 import type { RouteLocationNormalizedLoaded, Router } from "vue-router";
 import { defineStore } from "pinia";
 import { pageRegistryByKey } from "@/config/page-registry";
-import { tenantMenuRepository } from "@/features/menu-config/local-storage-menu-repository";
+import { resolveAccessRole, filterMenuTreeByRole } from "@/features/access-control/menu-permissions";
+import type { RoleRecord } from "@/features/access-control/types";
 import { buildMenuTree, resolveFirstTarget } from "@/features/menu-config/menu-tree";
-import {
-  defaultTenantShellConfig,
-  tenantShellConfigRepository,
-} from "@/features/shell-config/local-storage-shell-config-repository";
+import { defaultTenantShellConfig } from "@/features/shell-config/local-storage-shell-config-repository";
+import { tenantConfigurationRepository } from "@/features/tenant-config/local-storage-tenant-configuration-repository";
 import {
   resolveFirstTenantInternalPath,
   resolveTenantRouteAccess,
@@ -79,6 +78,7 @@ function routeParamValue(value: unknown) {
 export const useNavigationStore = defineStore("navigation", () => {
   const userStore = useUserStore();
   const records = ref<MenuConfigRecord[]>([]);
+  const roles = ref<RoleRecord[]>([]);
   const shellConfig = ref<TenantShellConfig>(defaultTenantShellConfig());
   const currentTenant = ref<TenantInfo | null>(null);
   const activeModuleId = ref("");
@@ -88,14 +88,25 @@ export const useNavigationStore = defineStore("navigation", () => {
 
   const workbenchConfig = computed(() => shellConfig.value.workbench);
   const isWorkbenchRoute = computed(() => currentPath.value === "/workbench");
-  const tree = computed(() => filterVisibleTree(buildMenuTree(records.value), userStore.isAdmin));
+  const authenticatedRoleId = computed(() =>
+    currentTenant.value ? userStore.roleForTenant(currentTenant.value.id) : null,
+  );
+  const activeRoleRecord = computed(() =>
+    resolveAccessRole(authenticatedRoleId.value, roles.value, records.value),
+  );
+  const tree = computed(() =>
+    filterVisibleTree(
+      filterMenuTreeByRole(buildMenuTree(records.value), activeRoleRecord.value),
+      activeRoleRecord.value?.id === "admin",
+    ),
+  );
   const moduleNodes = computed(() =>
     tree.value.filter(
       (node) => node.type === "module" && resolveFirstTarget(node, pageRegistryByKey) !== null,
     ),
   );
   const topLevelNavItems = computed<TopLevelNavItem[]>(() => {
-    const workbenchItems: TopLevelNavItem[] = workbenchConfig.value.enabled
+    const workbenchItems: TopLevelNavItem[] = workbenchConfig.value.enabled && activeRoleRecord.value
       ? [
           {
             kind: "workbench",
@@ -139,36 +150,26 @@ export const useNavigationStore = defineStore("navigation", () => {
     activeMenuTrail.value.filter((node) => node.children.length > 0).map((node) => node.id),
   );
   const firstInternalPath = computed(() =>
-    resolveFirstTenantInternalPath(records.value, userStore.role),
+    resolveFirstTenantInternalPath(records.value, authenticatedRoleId.value, roles.value),
   );
-  const defaultEntryPath = computed(() =>
-    workbenchConfig.value.enabled ? "/workbench" : firstInternalPath.value ?? "/menu-unavailable",
-  );
+  const defaultEntryPath = computed(() => {
+    if (!activeRoleRecord.value) return "/menu-unavailable";
+    return workbenchConfig.value.enabled ? "/workbench" : firstInternalPath.value ?? "/menu-unavailable";
+  });
 
   function loadTenant(tenant: TenantInfo) {
-    const menuResult = tenantMenuRepository.list(tenant);
-    const shellResult = tenantShellConfigRepository.list(tenant);
+    const result = tenantConfigurationRepository.list(tenant);
+    const configuration = result.configuration;
     currentTenant.value = { ...tenant };
-    records.value = menuResult.records;
-    shellConfig.value = shellResult.config;
-    recoveryNotice.value = [menuResult.recoveryNotice, shellResult.recoveryNotice]
-      .filter(Boolean)
-      .join("；") || null;
+    records.value = configuration.menuRecords;
+    roles.value = configuration.roles;
+    shellConfig.value = configuration.shellConfig;
+    recoveryNotice.value = result.recoveryNotice;
 
     if (!moduleNodes.value.some((node) => node.id === activeModuleId.value)) {
       activeModuleId.value = moduleNodes.value[0]?.id ?? "";
       activeMenuId.value = "";
     }
-  }
-
-  function setActiveModule(moduleId: string) {
-    if (!moduleNodes.value.some((node) => node.id === moduleId)) return;
-    activeModuleId.value = moduleId;
-    activeMenuId.value = "";
-  }
-
-  function setActiveMenu(menuId: string) {
-    activeMenuId.value = menuId;
   }
 
   function rootModuleIdFor(record: MenuConfigRecord) {
@@ -242,11 +243,11 @@ export const useNavigationStore = defineStore("navigation", () => {
   async function navigateToMenu(menuId: string, router: Router) {
     const node = findNode(tree.value, menuId);
     if (!node) return;
+    if (node.type === "module" && activeModuleId.value === node.id && activeMenuId.value) {
+      return;
+    }
     const target = resolveFirstTarget(node, pageRegistryByKey);
     if (!target) return;
-
-    if (node.type === "module") setActiveModule(node.id);
-    else setActiveMenu(node.id);
 
     if (target.kind === "internal") {
       await router.push(target.path);
@@ -265,9 +266,10 @@ export const useNavigationStore = defineStore("navigation", () => {
     const route = router.currentRoute.value;
     const result = resolveTenantRouteAccess(
       { path: route.path, meta: route.meta },
-      userStore.role,
+      authenticatedRoleId.value,
       records.value,
       shellConfig.value,
+      roles.value,
     );
     if (result.kind === "redirect" && result.path !== route.path) {
       await router.push(result.path);
@@ -278,7 +280,9 @@ export const useNavigationStore = defineStore("navigation", () => {
 
   return {
     records,
+    roles,
     shellConfig,
+    activeRoleRecord,
     currentTenant,
     activeModuleId,
     activeMenuId,
@@ -301,8 +305,6 @@ export const useNavigationStore = defineStore("navigation", () => {
     firstInternalPath,
     defaultEntryPath,
     loadTenant,
-    setActiveModule,
-    setActiveMenu,
     syncByRoute,
     navigateToWorkbench,
     navigateToDefault,

@@ -21,6 +21,8 @@ describe("page registry", () => {
     expect(pageRegistryByKey.get("bureau-org-review-detail")?.path).toBe(
       "/bureau/custody/org/review/:id",
     );
+    expect(pageRegistryByKey.get("device-list")?.status).toBe("available");
+    expect(pageRegistryByKey.get("family-notice")?.status).toBe("developing-placeholder");
   });
 
   it("declares at least one tenant type for every page", () => {
@@ -28,11 +30,22 @@ describe("page registry", () => {
   });
 
   it("registers menu configuration as an operation platform admin page", () => {
+    expect(pageRegistryByKey.get("system-organization-management")).toMatchObject({
+      path: "/system/organization",
+      tenantTypes: ["platform"],
+      requiresAdmin: true,
+    });
+    expect(pageRegistryByKey.get("system-role-management")).toMatchObject({
+      path: "/system/roles",
+      tenantTypes: ["platform"],
+      requiresAdmin: true,
+    });
     expect(pageRegistryByKey.get("system-menu-config")).toMatchObject({
       path: "/system/menu-config",
       tenantTypes: ["platform"],
       requiresAdmin: true,
     });
+    expect(pageRegistryByKey.has("system-permission-management")).toBe(false);
   });
 
   it("registers a reusable menu-scoped developing placeholder page", () => {
@@ -85,6 +98,6 @@ describe("page registry", () => {
   it("uses page resource labels that expose both page name and route", () => {
     const page = pageRegistryByKey.get("device-list")!;
 
-    expect(pageResourceOptionLabel(page)).toBe("设备列表 · /security/new-gate/device-list");
+    expect(pageResourceOptionLabel(page)).toBe("[已开发] 设备列表 · /security/new-gate/device-list");
   });
 });

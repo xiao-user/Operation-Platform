@@ -6,6 +6,7 @@ import {
   pageRegistryByKey,
 } from "@/config/page-registry";
 import { defaultTenantShellConfig } from "@/features/shell-config/local-storage-shell-config-repository";
+import { STAFF_ROLE_ID } from "@/features/access-control/types";
 import { MenuValidationError } from "@/features/menu-config/menu-validation";
 import { useMenuConfigStore } from "@/stores/menu-config";
 import { useNavigationStore } from "@/stores/navigation";
@@ -275,6 +276,48 @@ describe("menu configuration store", () => {
     expect(
       store.records.filter((record) => record.pageKey === DEVELOPING_PAGE_KEY),
     ).toHaveLength(existingPlaceholderCount + 2);
+  });
+
+  it("configures role visibility from menu configuration and applies parent nodes in batch", () => {
+    const store = useMenuConfigStore();
+    store.load(schoolA);
+    const familyModule = store.records.find((record) => record.name === "家校共育")!;
+    const existingPage = store.records.find((record) => record.type === "page")!;
+
+    expect(store.roleIdsForRecord(existingPage.id)).toContain(STAFF_ROLE_ID);
+
+    store.setRecordRoleVisibility(existingPage.id, []);
+    expect(store.roleIdsForRecord(existingPage.id)).not.toContain(STAFF_ROLE_ID);
+
+    store.setRecordRoleVisibility(familyModule.id, []);
+    const created = store.create({
+      parentId: familyModule.id,
+      type: "page",
+      name: "继承权限页面",
+      icon: null,
+      pageKey: DEVELOPING_PAGE_KEY,
+      externalUrl: null,
+      externalOpenMode: null,
+      sort: 995,
+      visible: true,
+    });
+
+    expect(store.roleIdsForRecord(created.id)).not.toContain(STAFF_ROLE_ID);
+
+    store.setRecordRoleVisibility(familyModule.id, [STAFF_ROLE_ID]);
+    expect(store.roleIdsForRecord(created.id)).toContain(STAFF_ROLE_ID);
+  });
+
+  it("keeps custom roles but resets menu grants when restoring the default template", () => {
+    const store = useMenuConfigStore();
+    store.load(schoolA);
+    const page = store.records.find((record) => record.type === "page")!;
+    store.setRecordRoleVisibility(page.id, []);
+
+    store.reset();
+
+    const firstPageAfterReset = store.records.find((record) => record.type === "page")!;
+    expect(store.roleIdsForRecord(firstPageAfterReset.id)).toContain(STAFF_ROLE_ID);
   });
 
   it("keeps page resources after deleting a menu so they can be rebound later", () => {

@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { DEVELOPING_PAGE_KEY } from "@/config/page-registry";
 import { useNavigationStore } from "@/stores/navigation";
+import { useUserStore } from "@/stores/user";
 import { tenantMenuRepository } from "@/features/menu-config/local-storage-menu-repository";
+import { tenantRoleRepository } from "@/features/access-control/local-storage-role-repository";
+import { ADMIN_ROLE_ID, STAFF_ROLE_ID } from "@/features/access-control/types";
 import {
   defaultTenantShellConfig,
   tenantShellConfigRepository,
@@ -126,6 +129,49 @@ describe("navigation store", () => {
     expect(push).toHaveBeenCalledWith(`/developing/${deviceMenu.id}`);
   });
 
+  it("keeps the current menu selected when clicking the active first-level module again", async () => {
+    const store = useNavigationStore();
+    store.loadTenant(schoolA);
+    const deviceMenu = store.records.find((record) => record.name === "班牌列表")!;
+    store.syncByRoute({
+      path: `/developing/${deviceMenu.id}`,
+      fullPath: `/developing/${deviceMenu.id}`,
+      params: { menuId: deviceMenu.id },
+      meta: { pageKey: DEVELOPING_PAGE_KEY },
+    } as never);
+    const activeModuleId = store.activeModuleId;
+    const push = vi.fn().mockResolvedValue(undefined);
+
+    await store.navigateToMenu(activeModuleId, { push } as never);
+
+    expect(store.activeMenuId).toBe(deviceMenu.id);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("keeps the existing deep menu mounted until the next module route is confirmed", async () => {
+    const store = useNavigationStore();
+    store.loadTenant(schoolA);
+    const currentMenu = store.records.find((record) => record.name === "班牌列表")!;
+    store.syncByRoute({
+      path: `/developing/${currentMenu.id}`,
+      fullPath: `/developing/${currentMenu.id}`,
+      params: { menuId: currentMenu.id },
+      meta: { pageKey: DEVELOPING_PAGE_KEY },
+    } as never);
+    const previousModuleId = store.activeModuleId;
+    const previousMenuId = store.activeMenuId;
+    const previousDeepMenuIds = store.deepMenus.map((node) => node.id);
+    const nextModule = store.moduleNodes.find((node) => node.id !== previousModuleId)!;
+    const push = vi.fn().mockResolvedValue(undefined);
+
+    await store.navigateToMenu(nextModule.id, { push } as never);
+
+    expect(push).toHaveBeenCalledOnce();
+    expect(store.activeModuleId).toBe(previousModuleId);
+    expect(store.activeMenuId).toBe(previousMenuId);
+    expect(store.deepMenus.map((node) => node.id)).toEqual(previousDeepMenuIds);
+  });
+
   it("supports four-level navigation with second-level tabs and recursive sidebar menus", async () => {
     const records = tenantMenuRepository.list(schoolA).records;
     const securityModule = records.find(
@@ -199,5 +245,54 @@ describe("navigation store", () => {
     const push = vi.fn().mockResolvedValue(undefined);
     await store.navigateToMenu(fourthLevel.id, { push } as never);
     expect(push).toHaveBeenCalledWith("/developing/custom-fourth-level");
+  });
+
+  it("filters modules, second-level tabs and deep menus by the current role grants", () => {
+    const records = tenantMenuRepository.list(schoolA).records;
+    const page = records.find((record) => record.name === "班牌列表")!;
+    const leafIds = records
+      .filter((record) => record.type === "page" || record.type === "external")
+      .map((record) => record.id);
+    tenantRoleRepository.replace(schoolA, [
+      {
+        id: ADMIN_ROLE_ID,
+        tenantId: schoolA.id,
+        name: "管理员",
+        description: "",
+        builtIn: true,
+        enabled: true,
+        sort: 10,
+        menuIds: leafIds,
+      },
+      {
+        id: STAFF_ROLE_ID,
+        tenantId: schoolA.id,
+        name: "老师",
+        description: "",
+        builtIn: true,
+        enabled: true,
+        sort: 20,
+        menuIds: [page.id],
+      },
+    ]);
+
+    const userStore = useUserStore();
+    userStore.applyAuthenticatedSession({
+      ...userStore.userInfo,
+      platformAdmin: false,
+      tenantRoleIds: { [schoolA.id]: STAFF_ROLE_ID },
+    });
+    const store = useNavigationStore();
+    store.loadTenant(schoolA);
+    store.syncByRoute({
+      path: `/developing/${page.id}`,
+      fullPath: `/developing/${page.id}`,
+      params: { menuId: page.id },
+      meta: { pageKey: DEVELOPING_PAGE_KEY },
+    } as never);
+
+    expect(store.moduleNodes.map((node) => node.name)).toEqual(["平安校园"]);
+    expect(store.secondLevelTabs.map((node) => node.name)).toEqual(["班牌管理"]);
+    expect(store.deepMenus.map((node) => node.name)).toEqual(["班牌列表"]);
   });
 });

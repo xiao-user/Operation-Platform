@@ -1,8 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
 import AppLayout from "@/layouts/AppLayout.vue";
-import PlaceholderView from "@/views/PlaceholderView.vue";
-import { pageRouteRecords } from "@/config/page-registry";
+import { pageRegistryByKey, pageRouteRecords } from "@/config/page-registry";
 import { resolveTenantRouteAccess } from "@/router/tenant-route-access";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
@@ -46,7 +45,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: ":pathMatch(.*)*",
         name: "not-found",
-        component: PlaceholderView,
+        component: () => import("@/views/PlaceholderView.vue"),
         meta: { title: "页面未找到" },
       },
     ],
@@ -61,6 +60,20 @@ const router = createRouter({
 router.beforeEach((to) => {
   const userStore = useUserStore();
   const navigationStore = useNavigationStore();
+  const pageKey = typeof to.meta.pageKey === "string" ? to.meta.pageKey : "";
+  const page = pageKey ? pageRegistryByKey.get(pageKey) : null;
+  const platformTenant = userStore.availableTenants.find((tenant) => tenant.type === "platform");
+
+  if (
+    page?.tenantTypes.length === 1 &&
+    page.tenantTypes[0] === "platform" &&
+    userStore.isAdmin &&
+    platformTenant &&
+    userStore.currentTenant.type !== "platform"
+  ) {
+    userStore.switchTenant(platformTenant.id);
+  }
+
   if (navigationStore.currentTenant?.id !== userStore.currentTenant.id) {
     navigationStore.loadTenant(userStore.currentTenant);
   }
@@ -70,6 +83,7 @@ router.beforeEach((to) => {
     userStore.role,
     navigationStore.records,
     navigationStore.shellConfig,
+    navigationStore.roles,
   );
   if (result.kind === "allow") return true;
   if (result.kind === "empty") {

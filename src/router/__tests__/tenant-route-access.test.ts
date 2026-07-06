@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEVELOPING_PAGE_KEY } from "@/config/page-registry";
 import { cloneTenantTemplate } from "@/config/menu-templates";
 import { defaultTenantShellConfig } from "@/features/shell-config/local-storage-shell-config-repository";
+import { ADMIN_ROLE_ID, STAFF_ROLE_ID, type RoleRecord } from "@/features/access-control/types";
 import {
   resolveFirstTenantInternalPath,
   resolveTenantRouteAccess,
@@ -40,16 +41,51 @@ function addDeviceMenu(records: ReturnType<typeof cloneTenantTemplate>) {
   return deviceMenu;
 }
 
+function accessRoles(
+  tenant: TenantInfo,
+  records: readonly ReturnType<typeof cloneTenantTemplate>[number][],
+  teacherMenuIds: string[] = [],
+): RoleRecord[] {
+  const leafIds = records
+    .filter((record) => record.type === "page" || record.type === "external")
+    .map((record) => record.id);
+  return [
+    {
+      id: ADMIN_ROLE_ID,
+      tenantId: tenant.id,
+      name: "管理员",
+      description: "",
+      builtIn: true,
+      enabled: true,
+      sort: 10,
+      menuIds: leafIds,
+    },
+    {
+      id: STAFF_ROLE_ID,
+      tenantId: tenant.id,
+      name: tenant.type === "school" ? "老师" : "职员",
+      description: "",
+      builtIn: true,
+      enabled: true,
+      sort: 20,
+      menuIds: teacherMenuIds,
+    },
+  ];
+}
+
 describe("tenant route access", () => {
   it("allows a visible page owned by the tenant menu", () => {
     const records = cloneTenantTemplate(school);
     addDeviceMenu(records);
+    const roles = accessRoles(school, records);
 
     expect(
       resolveTenantRouteAccess(
         { path: "/security/new-gate/device-list", meta: { pageKey: "device-list", menuOwnerKey: "device-list" } },
         "admin",
         records,
+        defaultTenantShellConfig(),
+        roles,
       ),
     ).toEqual({ kind: "allow" });
   });
@@ -57,12 +93,15 @@ describe("tenant route access", () => {
   it("allows a static subpage when its owner menu is visible", () => {
     const records = cloneTenantTemplate(school);
     addDeviceMenu(records);
+    const roles = accessRoles(school, records);
 
     expect(
       resolveTenantRouteAccess(
         { path: "/security/new-gate/person-group", meta: { pageKey: "person-group", menuOwnerKey: "device-list" } },
         "admin",
         records,
+        defaultTenantShellConfig(),
+        roles,
       ),
     ).toEqual({ kind: "allow" });
   });
@@ -83,6 +122,7 @@ describe("tenant route access", () => {
       sort: 999,
       visible: true,
     });
+    const roles = accessRoles(school, records);
 
     expect(
       resolveTenantRouteAccess(
@@ -93,6 +133,8 @@ describe("tenant route access", () => {
         },
         "admin",
         records,
+        defaultTenantShellConfig(),
+        roles,
       ),
     ).toEqual({ kind: "allow" });
   });
@@ -127,19 +169,24 @@ describe("tenant route access", () => {
       },
     ] as const;
 
-    expect(resolveFirstTenantInternalPath(records, "admin")).toBe("/developing/placeholder-page");
+    expect(resolveFirstTenantInternalPath(records, "admin", accessRoles(school, records))).toBe(
+      "/developing/placeholder-page",
+    );
   });
 
   it("redirects a hidden page to the first visible internal page", () => {
     const records = cloneTenantTemplate(school);
     const deviceMenu = addDeviceMenu(records);
     deviceMenu.visible = false;
-    const fallbackPath = resolveFirstTenantInternalPath(records, "admin");
+    const roles = accessRoles(school, records);
+    const fallbackPath = resolveFirstTenantInternalPath(records, "admin", roles);
 
     const result = resolveTenantRouteAccess(
       { path: "/security/new-gate/device-list", meta: { pageKey: "device-list", menuOwnerKey: "device-list" } },
       "admin",
       records,
+      defaultTenantShellConfig(),
+      roles,
     );
 
     expect(result.kind).toBe("redirect");
@@ -147,22 +194,27 @@ describe("tenant route access", () => {
   });
 
   it("allows admins to access the platform-owned configuration route", () => {
+    const records = cloneTenantTemplate(platform);
     expect(
       resolveTenantRouteAccess(
         { path: "/system/menu-config", meta: { pageKey: "system-menu-config", requiresAdmin: true } },
         "admin",
-        cloneTenantTemplate(platform),
+        records,
+        defaultTenantShellConfig(),
+        accessRoles(platform, records),
       ),
     ).toEqual({ kind: "allow" });
   });
 
   it("allows workbench when the tenant shell config enables it", () => {
+    const records = cloneTenantTemplate(school);
     expect(
       resolveTenantRouteAccess(
         { path: "/workbench", meta: { fixedWorkbench: true } },
         "admin",
-        cloneTenantTemplate(school),
+        records,
         defaultTenantShellConfig(),
+        accessRoles(school, records),
       ),
     ).toEqual({ kind: "allow" });
   });
@@ -171,7 +223,8 @@ describe("tenant route access", () => {
     const shellConfig = defaultTenantShellConfig();
     shellConfig.workbench.enabled = false;
     const records = cloneTenantTemplate(school);
-    const fallbackPath = resolveFirstTenantInternalPath(records, "admin");
+    const roles = accessRoles(school, records);
+    const fallbackPath = resolveFirstTenantInternalPath(records, "admin", roles);
 
     expect(
       resolveTenantRouteAccess(
@@ -179,6 +232,7 @@ describe("tenant route access", () => {
         "admin",
         records,
         shellConfig,
+        roles,
       ),
     ).toEqual({ kind: "redirect", path: fallbackPath });
   });
@@ -193,28 +247,35 @@ describe("tenant route access", () => {
         "admin",
         [],
         shellConfig,
+        accessRoles(school, []),
       ),
     ).toEqual({ kind: "empty" });
   });
 
   it("redirects school tenants away from the platform-owned configuration route", () => {
     const records = cloneTenantTemplate(school);
-    const fallbackPath = resolveFirstTenantInternalPath(records, "admin");
+    const roles = accessRoles(school, records);
+    const fallbackPath = resolveFirstTenantInternalPath(records, "admin", roles);
     expect(
       resolveTenantRouteAccess(
         { path: "/system/menu-config", meta: { pageKey: "system-menu-config", requiresAdmin: true } },
         "admin",
         records,
+        defaultTenantShellConfig(),
+        roles,
       ),
     ).toEqual({ kind: "redirect", path: fallbackPath });
   });
 
   it("blocks teachers from the platform-owned configuration route", () => {
+    const records = cloneTenantTemplate(platform);
     expect(
       resolveTenantRouteAccess(
         { path: "/system/menu-config", meta: { pageKey: "system-menu-config", requiresAdmin: true } },
         "teacher",
-        cloneTenantTemplate(platform),
+        records,
+        defaultTenantShellConfig(),
+        accessRoles(platform, records),
       ),
     ).toEqual({ kind: "empty" });
   });
@@ -225,6 +286,71 @@ describe("tenant route access", () => {
         { path: "/security/new-gate/device-list", meta: { pageKey: "device-list" } },
         "admin",
         [],
+        defaultTenantShellConfig(),
+        accessRoles(school, []),
+      ),
+    ).toEqual({ kind: "empty" });
+  });
+
+  it("redirects a role away from a menu page that has not been granted", () => {
+    const records = cloneTenantTemplate(school);
+    const deviceMenu = addDeviceMenu(records);
+    const fallbackMenu = records.find(
+      (record) => record.type === "page" && record.id !== deviceMenu.id,
+    )!;
+    const roles = accessRoles(school, records, [fallbackMenu.id]);
+    const fallbackPath = resolveFirstTenantInternalPath(records, STAFF_ROLE_ID, roles);
+
+    expect(
+      resolveTenantRouteAccess(
+        { path: "/security/new-gate/device-list", meta: { pageKey: "device-list", menuOwnerKey: "device-list" } },
+        STAFF_ROLE_ID,
+        records,
+        defaultTenantShellConfig(),
+        roles,
+      ),
+    ).toEqual({ kind: "redirect", path: fallbackPath });
+  });
+
+  it("blocks hidden menus even when a role still has the menu id", () => {
+    const records = cloneTenantTemplate(school);
+    const deviceMenu = addDeviceMenu(records);
+    deviceMenu.visible = false;
+    const roles = accessRoles(school, records, [deviceMenu.id]);
+
+    expect(
+      resolveTenantRouteAccess(
+        { path: "/security/new-gate/device-list", meta: { pageKey: "device-list", menuOwnerKey: "device-list" } },
+        STAFF_ROLE_ID,
+        records,
+        defaultTenantShellConfig(),
+        roles,
+      ),
+    ).toEqual({ kind: "empty" });
+  });
+
+  it("fails closed when the authenticated role is missing or disabled", () => {
+    const records = cloneTenantTemplate(school);
+    const roles = accessRoles(school, records).map((role) =>
+      role.id === STAFF_ROLE_ID ? { ...role, enabled: false } : role,
+    );
+
+    expect(
+      resolveTenantRouteAccess(
+        { path: "/workbench", meta: { fixedWorkbench: true } },
+        STAFF_ROLE_ID,
+        records,
+        defaultTenantShellConfig(),
+        roles,
+      ),
+    ).toEqual({ kind: "empty" });
+    expect(
+      resolveTenantRouteAccess(
+        { path: "/workbench", meta: { fixedWorkbench: true } },
+        "unknown-role",
+        records,
+        defaultTenantShellConfig(),
+        roles,
       ),
     ).toEqual({ kind: "empty" });
   });
