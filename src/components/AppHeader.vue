@@ -29,132 +29,60 @@
           />
         </svg>
       </div>
-      <span class="brand-name">{{ currentTenant.shortName }}</span>
+      <span class="brand-name">{{ currentTenant.name }}</span>
     </div>
 
     <div class="header-shell">
-      <nav v-if="isWorkbenchRoute" class="header-nav">
-        <button
-          v-for="tab in topLevelNavItems"
-          :key="tab.id"
-          class="nav-tab"
-          :class="{ active: isTopLevelActive(tab) }"
-          type="button"
-          @click="handleTopLevelClick(tab)"
-        >
-          <span class="nav-tab-label">{{ tab.name }}</span>
-          <div class="nav-tab-indicator" />
-        </button>
+      <nav class="header-nav">
+        <template v-for="tab in headerTabs" :key="tab.id">
+          <RouterLink
+            v-if="tab.target.kind === 'internal'"
+            :to="tab.target.path"
+            class="nav-tab"
+            :class="{ active: tab.active }"
+            :aria-current="tab.active ? 'page' : undefined"
+          >
+            <span class="nav-tab-label">{{ tab.name }}</span>
+            <div class="nav-tab-indicator" />
+          </RouterLink>
+          <a
+            v-else
+            class="nav-tab"
+            :class="{ active: tab.active }"
+            :href="tab.target.url"
+            :target="externalTarget(tab.target)"
+            :rel="externalRel(tab.target)"
+            :aria-current="tab.active ? 'page' : undefined"
+          >
+            <span class="nav-tab-label">{{ tab.name }}</span>
+            <div class="nav-tab-indicator" />
+          </a>
+        </template>
       </nav>
 
-      <nav v-else class="header-nav">
-        <button
-          v-for="tab in secondLevelTabs"
-          :key="tab.id"
-          class="nav-tab"
-          :class="{ active: activeSecondLevelNode?.id === tab.id }"
-          type="button"
-          @click="handleSecondLevelClick(tab)"
-        >
-          <span class="nav-tab-label">{{ tab.name }}</span>
-          <div class="nav-tab-indicator" />
-        </button>
-      </nav>
-
-      <div class="header-right">
-        <!-- 租户切换 -->
-        <el-dropdown trigger="click" @command="handleTenantSwitch">
-          <div class="tenant-switch">
-            <el-tag
-              :type="TENANT_TAG_TYPE[currentTenant.type]"
-              size="small"
-              class="tenant-type-tag"
-            >
-              {{ TENANT_TYPE_LABEL[currentTenant.type] }}
-            </el-tag>
-            <span class="tenant-name">{{ currentTenant.name }}</span>
-            <el-icon class="tenant-arrow"><ArrowDown /></el-icon>
-          </div>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <template v-for="(group, type) in groupedTenants" :key="type">
-                <el-dropdown-item disabled class="tenant-group-label">
-                  {{ TENANT_TYPE_LABEL[type as TenantType] }}
-                </el-dropdown-item>
-                <el-dropdown-item
-                  v-for="tenant in group"
-                  :key="tenant.id"
-                  :command="tenant.id"
-                  :class="{ 'is-active': currentTenant.id === tenant.id }"
-                >
-                  {{ tenant.name }}
-                </el-dropdown-item>
-              </template>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-
-        <button class="notification-btn" type="button" @click="handleNotification">
-          <el-icon><Bell /></el-icon>
-        </button>
-
-        <!-- 角色切换 -->
-        <el-dropdown trigger="click" @command="handleRoleCommand">
-          <div class="role-switch">
-            <el-tag :type="currentRole === 'admin' ? 'primary' : 'success'" size="small">
-              {{ ROLE_LABEL[currentRole] }}
-            </el-tag>
-            <el-icon class="role-arrow"><ArrowDown /></el-icon>
-          </div>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                v-for="option in ROLE_OPTIONS"
-                :key="option.value"
-                :command="option.value"
-                :class="{ 'is-active': currentRole === option.value }"
-              >
-                {{ option.label }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-
-        <!-- 用户菜单 -->
-        <el-dropdown trigger="click" @command="handleUserCommand">
-          <div class="user-info">
-            <el-avatar :size="32" class="user-avatar">{{ userInfo.initials }}</el-avatar>
-            <span class="user-name">{{ userInfo.name }}</span>
-            <el-icon class="user-arrow"><ArrowDown /></el-icon>
-          </div>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item v-if="isAdmin" command="menu-config">菜单配置</el-dropdown-item>
-              <el-dropdown-item command="profile">个人信息</el-dropdown-item>
-              <el-dropdown-item command="password">修改密码</el-dropdown-item>
-              <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </div>
+      <AppHeaderActions />
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
-import { Bell, ArrowDown } from "@element-plus/icons-vue";
-import { TENANT_TAG_TYPE, TENANT_TYPE_LABEL } from "@/config/tenant";
-import { ROLE_OPTIONS, ROLE_LABEL } from "@/config/user";
+import AppHeaderActions from "@/components/AppHeaderActions.vue";
+import { pageRegistryByKey } from "@/config/page-registry";
+import { resolveFirstTarget } from "@/features/menu-config/menu-tree";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
-import type { MenuTreeNode } from "@/features/menu-config/types";
+import type { MenuTarget } from "@/features/menu-config/types";
 import type { TopLevelNavItem } from "@/stores/navigation";
-import type { UserRole, TenantType } from "@/types/user";
 
-const router = useRouter();
+interface HeaderTab {
+  id: string;
+  name: string;
+  active: boolean;
+  target: MenuTarget;
+}
+
 const navigationStore = useNavigationStore();
 const userStore = useUserStore();
 
@@ -165,16 +93,36 @@ const {
   secondLevelTabs,
   topLevelNavItems,
 } = storeToRefs(navigationStore);
-const { role: currentRole, userInfo, currentTenant, tenantList, isAdmin } = storeToRefs(userStore);
+const { currentTenant } = storeToRefs(userStore);
 
-// 按类型分组租户，用于下拉分组展示
-const groupedTenants = computed(() => {
-  const groups: Partial<Record<TenantType, typeof tenantList.value>> = {};
-  for (const tenant of tenantList.value) {
-    if (!groups[tenant.type]) groups[tenant.type] = [];
-    groups[tenant.type]!.push(tenant);
+const headerTabs = computed<HeaderTab[]>(() => {
+  if (isWorkbenchRoute.value) {
+    return topLevelNavItems.value.flatMap((tab) => {
+      const target: MenuTarget | null =
+        tab.kind === "workbench"
+          ? { kind: "internal", path: "/workbench", pageKey: "workbench" }
+          : resolveFirstTarget(tab.node, pageRegistryByKey);
+      return target
+        ? [{
+            id: `top:${tab.id}`,
+            name: tab.name,
+            active: isTopLevelActive(tab),
+            target,
+          }]
+        : [];
+    });
   }
-  return groups;
+  return secondLevelTabs.value.flatMap((tab) => {
+    const target = resolveFirstTarget(tab, pageRegistryByKey);
+    return target
+      ? [{
+          id: `second:${tab.id}`,
+          name: tab.name,
+          active: activeSecondLevelNode.value?.id === tab.id,
+          target,
+        }]
+      : [];
+  });
 });
 
 function isTopLevelActive(tab: TopLevelNavItem) {
@@ -182,49 +130,14 @@ function isTopLevelActive(tab: TopLevelNavItem) {
   return !isWorkbenchRoute.value && activeModuleId.value === tab.id;
 }
 
-function handleTopLevelClick(tab: TopLevelNavItem) {
-  if (tab.kind === "workbench") {
-    navigationStore.navigateToWorkbench(router);
-    return;
-  }
-  navigationStore.navigateToMenu(tab.id, router);
+function externalTarget(target: Extract<MenuTarget, { kind: "external" }>) {
+  return target.openMode === "new-tab" ? "_blank" : undefined;
 }
 
-function handleSecondLevelClick(tab: MenuTreeNode) {
-  navigationStore.navigateToMenu(tab.id, router);
+function externalRel(target: Extract<MenuTarget, { kind: "external" }>) {
+  return target.openMode === "new-tab" ? "noopener noreferrer" : undefined;
 }
 
-async function handleTenantSwitch(tenantId: string) {
-  const tenant = tenantList.value.find((t) => t.id === tenantId);
-  if (!tenant || tenant.id === currentTenant.value.id) return;
-  userStore.switchTenant(tenantId);
-  navigationStore.loadTenant(tenant);
-  await navigationStore.navigateToDefault(router);
-}
-
-function handleNotification() {
-  // TODO: 通知面板
-}
-
-function handleRoleCommand(role: UserRole) {
-  userStore.setRole(role);
-  void navigationStore.ensureValidCurrentRoute(router);
-}
-
-function handleUserCommand(command: string) {
-  if (command === "menu-config") {
-    const platformTenant = tenantList.value.find((tenant) => tenant.type === "platform");
-    if (platformTenant && currentTenant.value.id !== platformTenant.id) {
-      userStore.switchTenant(platformTenant.id);
-      navigationStore.loadTenant(platformTenant);
-    }
-    router.push("/system/menu-config");
-    return;
-  }
-  if (command === "logout") {
-    // TODO: 退出登录
-  }
-}
 </script>
 
 <style scoped>
@@ -244,7 +157,7 @@ function handleUserCommand(command: string) {
   align-items: center;
   gap: var(--spacing-12);
   height: 100%;
-  padding: var(--spacing-12) var(--spacing-24);
+  padding: var(--spacing-12) var(--spacing-16);
   width: var(--sidebar-width);
   flex-shrink: 0;
   border-right: 1px solid var(--color-border);
@@ -308,8 +221,16 @@ function handleUserCommand(command: string) {
   justify-content: space-between;
   padding: 0;
   font: inherit;
+  color: inherit;
+  text-decoration: none;
   background: transparent;
   border: 0;
+}
+
+.nav-tab:focus-visible {
+  outline: 2px solid var(--color-primary-line-light);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
 }
 
 .nav-tab-label {
@@ -338,110 +259,4 @@ function handleUserCommand(command: string) {
   background-color: var(--color-primary);
 }
 
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-24);
-  flex-shrink: 0;
-  height: 100%;
-}
-
-/* 租户切换 */
-.tenant-switch {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-6);
-  cursor: pointer;
-  outline: none;
-  border: none;
-}
-
-.tenant-type-tag {
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.tenant-name {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-title);
-  line-height: var(--line-height-md);
-  white-space: nowrap;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.tenant-arrow {
-  font-size: var(--font-size-xs);
-  color: var(--color-title);
-  flex-shrink: 0;
-}
-
-:deep(.tenant-group-label) {
-  font-size: var(--font-size-xs);
-  color: var(--color-secondary);
-  cursor: default;
-  padding: var(--spacing-6) var(--spacing-16) var(--spacing-2);
-}
-
-/* 通知按钮 */
-.notification-btn {
-  width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-white);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  color: var(--color-body);
-  cursor: pointer;
-}
-.notification-btn:hover {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-}
-
-/* 角色切换 */
-.role-switch {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-4);
-  cursor: pointer;
-  outline: none;
-  border: none;
-}
-
-.role-arrow,
-.user-arrow {
-  font-size: var(--font-size-xs);
-  color: var(--color-title);
-}
-
-/* 用户信息 */
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-6);
-  cursor: pointer;
-  height: 100%;
-  outline: none;
-  border: none;
-}
-
-.user-avatar {
-  background-color: var(--color-primary) !important;
-  color: var(--color-white);
-  font-size: var(--font-size-xs);
-  flex-shrink: 0;
-}
-
-.user-name {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-title);
-  line-height: var(--line-height-md);
-  white-space: nowrap;
-}
 </style>

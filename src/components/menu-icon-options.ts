@@ -1,12 +1,13 @@
-import type { Component } from "vue";
-import { icons as lucideIcons } from "@lucide/vue";
-import { toReadableMenuIconLabel } from "@/components/menu-icons";
+import {
+  resolveMenuIcon,
+  toReadableMenuIconLabel,
+} from "@/components/menu-icons";
+import { availableLucideIconKeys } from "@/components/lucide-icon-loader";
 import type { MenuIconKey } from "@/types/navigation";
 
 export interface MenuIconOption {
   key: MenuIconKey;
   label: string;
-  component: Component;
 }
 
 const preferredIconOrder = [
@@ -52,13 +53,13 @@ function compareIconOptions(a: MenuIconOption, b: MenuIconOption) {
   return a.label.localeCompare(b.label, "en-US");
 }
 
-export const menuIconOptions: MenuIconOption[] = Object.entries(
-  lucideIcons as Record<string, Component>,
-)
-  .filter(([, component]) => typeof component === "function")
-  .map(([key, component]) => ({
+export const menuIconOptions: MenuIconOption[] = availableLucideIconKeys
+  .map((key) => ({
     key,
     label: toReadableMenuIconLabel(key),
-    component,
   }))
   .sort(compareIconOptions);
+
+export function menuIconComponent(key: MenuIconKey) {
+  return resolveMenuIcon(key);
+}

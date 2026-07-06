@@ -59,7 +59,9 @@ const emit = defineEmits<{
 const hasChildren = computed(() => Boolean(props.item.children?.length));
 const isActive = computed(() => props.activeKey === props.item.id);
 const isExpanded = computed(() => props.expandedKeys.includes(props.item.id));
-const isActiveBranch = computed(() => hasChildren.value && isExpanded.value);
+const isActiveBranch = computed(() =>
+  hasChildren.value && Boolean(props.activeKey) && containsActiveKey(props.item),
+);
 const resolvedIcon = computed(() => (props.item.icon ? resolveMenuIcon(props.item.icon) : null));
 const depthStyle = computed(() => {
   const indent = props.depth === 0 ? 20 : 50 + (props.depth - 1) * 20;
@@ -76,6 +78,11 @@ const buttonClassName = computed(() => ({
   "is-group": hasChildren.value,
   "is-leaf": !hasChildren.value,
 }));
+
+function containsActiveKey(item: MenuTreeNode): boolean {
+  if (item.id === props.activeKey) return true;
+  return item.children.some((child) => containsActiveKey(child));
+}
 
 function handleClick() {
   if (hasChildren.value) {

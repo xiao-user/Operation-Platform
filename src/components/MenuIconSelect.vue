@@ -1,29 +1,26 @@
 <template>
-  <el-select
+  <el-select-v2
     v-model="model"
     :aria-label="ariaLabel"
     :clearable="clearable"
     :disabled="disabled"
     filterable
+    :options="menuIconOptions"
+    :props="optionProps"
     :placeholder="placeholder"
   >
-    <el-option
-      v-for="option in menuIconOptions"
-      :key="option.key"
-      :label="option.label"
-      :value="option.key"
-    >
+    <template #default="{ item: option }">
       <span class="icon-option">
-        <component :is="option.component" class="icon-option-svg" />
+        <component :is="menuIconComponent(option.key)" class="icon-option-svg" />
         <span class="icon-option-name">{{ option.label }}</span>
         <span class="icon-option-key">{{ option.key }}</span>
       </span>
-    </el-option>
-  </el-select>
+    </template>
+  </el-select-v2>
 </template>
 
 <script setup lang="ts">
-import { menuIconOptions } from "@/components/menu-icon-options";
+import { menuIconComponent, menuIconOptions } from "@/components/menu-icon-options";
 import type { MenuIconKey } from "@/types/navigation";
 
 withDefaults(
@@ -42,6 +39,7 @@ withDefaults(
 );
 
 const model = defineModel<MenuIconKey | null>({ required: true });
+const optionProps = { label: "label", value: "key" } as const;
 </script>
 
 <style scoped>

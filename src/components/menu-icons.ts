@@ -107,9 +107,8 @@ export function resolveMenuIcon(icon: MenuIconKey | null | undefined) {
 
   const asyncIcon = defineAsyncComponent({
     loader: async () => {
-      const module = await import("@lucide/vue");
-      const icons = module.icons as Record<string, Component>;
-      return icons[normalized] ?? Menu;
+      const { loadLucideIcon } = await import("@/components/lucide-icon-loader");
+      return (await loadLucideIcon(normalized)) ?? Menu;
     },
   });
   asyncIconCache.set(normalized, asyncIcon);

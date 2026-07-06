@@ -88,8 +88,8 @@ function handleModuleClick(module: MenuTreeNode) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--spacing-12);
-  width: var(--module-rail-width);
+  gap: var(--spacing-8);
+  width: max-content;
   height: 100vh;
   padding: var(--spacing-12) var(--spacing-8);
   background: var(--color-white);
@@ -110,7 +110,7 @@ function handleModuleClick(module: MenuTreeNode) {
   width: 100%;
   min-height: 58px;
   padding: 0;
-  color: var(--color-secondary);
+  color: var(--color-title);
   background: transparent;
   border: 0;
   border-radius: var(--radius-lg);
@@ -120,27 +120,25 @@ function handleModuleClick(module: MenuTreeNode) {
 }
 
 .workbench-button {
-  min-height: 36px;
+  min-height: 32px;
 }
 
 .module-rail-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   color: inherit;
   background: transparent;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   transition:
     background-color 0.2s,
     color 0.2s;
 }
 
 .module-rail-button:hover,
-.module-rail-button.active,
-.module-rail-button:hover .module-rail-label,
-.module-rail-button.active .module-rail-label {
+.module-rail-button.active {
   color: var(--color-primary);
 }
 
@@ -158,16 +156,16 @@ function handleModuleClick(module: MenuTreeNode) {
 }
 
 .module-rail-icon :deep(svg) {
-  width: 20px;
-  height: 20px;
-  stroke-width: 1.9;
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.5;
 }
 
 .module-rail-label {
   width: 100%;
   overflow: hidden;
   color: var(--color-title);
-  font-size: var(--font-size-xs);
+  font-size: 10px;
   line-height: 16px;
   text-align: center;
   text-overflow: ellipsis;

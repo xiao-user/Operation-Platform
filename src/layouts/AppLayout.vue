@@ -1,12 +1,18 @@
 <template>
   <div class="app-layout">
-    <AppModuleRail v-if="!isWorkbenchRoute" />
+    <Transition name="module-rail-slide" appear>
+      <div v-if="!isWorkbenchRoute" class="module-rail-slot">
+        <AppModuleRail />
+      </div>
+    </Transition>
 
     <div class="app-shell">
       <AppHeader />
 
       <div class="app-body" :class="{ 'is-workbench': isWorkbenchRoute }">
-        <AppSidebar v-if="!isWorkbenchRoute && deepMenus.length" />
+        <div v-if="!isWorkbenchRoute && deepMenus.length" class="app-sidebar-slot">
+          <AppSidebar />
+        </div>
         <main class="app-content">
           <div class="app-content-inner">
             <RouterView />
@@ -84,5 +90,81 @@ watch(
 
 .app-body.is-workbench .app-content-inner {
   padding: var(--spacing-16) var(--spacing-24);
+}
+
+.module-rail-slot,
+.app-sidebar-slot {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.module-rail-slot {
+  max-width: 96px;
+}
+
+.app-sidebar-slot {
+  width: var(--sidebar-width);
+}
+
+.module-rail-slide-enter-active :deep(.module-rail) {
+  transition:
+    opacity 160ms ease-out,
+    transform 180ms ease-out;
+  will-change: opacity, transform;
+}
+
+.module-rail-slide-enter-active,
+.module-rail-slide-leave-active {
+  max-width: 96px;
+  overflow: hidden;
+  will-change: max-width;
+}
+
+.module-rail-slide-enter-active {
+  transition: max-width 180ms ease-out;
+}
+
+.module-rail-slide-leave-active {
+  transition: max-width 140ms ease-in;
+}
+
+.module-rail-slide-leave-active :deep(.module-rail) {
+  transition:
+    opacity 120ms ease-in,
+    transform 140ms ease-in;
+  will-change: opacity, transform;
+}
+
+.module-rail-slide-enter-from,
+.module-rail-slide-leave-to {
+  max-width: 0;
+}
+
+.module-rail-slide-enter-from :deep(.module-rail),
+.module-rail-slide-leave-to :deep(.module-rail) {
+  opacity: 0;
+  transform: translateX(-16px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .module-rail-slide-enter-active,
+  .module-rail-slide-leave-active,
+  .module-rail-slide-enter-active :deep(.module-rail),
+  .module-rail-slide-leave-active :deep(.module-rail) {
+    transition: none;
+  }
+
+  .module-rail-slide-enter-from,
+  .module-rail-slide-leave-to {
+    max-width: none;
+  }
+
+  .module-rail-slide-enter-from :deep(.module-rail),
+  .module-rail-slide-leave-to :deep(.module-rail) {
+    opacity: 1;
+    transform: none;
+  }
 }
 </style>
