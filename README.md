@@ -41,7 +41,7 @@ AppLayout
         └── RouterView：业务页面
 ```
 
-内部导航使用 Vue Router 的 `RouterLink`，顶部 Header 不随业务子路由重新挂载；模块栏、侧边栏和页面内容分别承担自己的过渡动画。
+内部导航使用 Vue Router 的 `RouterLink`，顶部 Header 不随业务子路由重新挂载。当前只保留一级模块栏进入、退出时的短促过渡，侧边栏和业务页面切换不增加动画。
 
 ### 菜单与页面的关系
 
@@ -218,6 +218,7 @@ src/
 
 ## 设计资料
 
+- [开发协作与 Agent 约束](AGENTS.md)
 - [租户菜单配置设计](docs/superpowers/specs/2026-06-30-tenant-menu-configuration-design.md)
 - [租户菜单配置实施计划](docs/superpowers/plans/2026-06-30-tenant-menu-configuration.md)
 
