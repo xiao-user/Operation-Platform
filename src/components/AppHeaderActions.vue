@@ -27,11 +27,35 @@
       </template>
     </el-dropdown>
 
-    <el-tag :type="isAdmin ? 'primary' : 'success'" size="small">
-      {{ isAdmin ? "管理员" : "普通成员" }}
+    <el-dropdown
+      v-if="availableRoleRecords.length > 1"
+      trigger="click"
+      @command="handleRoleSwitch"
+    >
+      <button class="role-switch" type="button" aria-label="切换当前角色">
+        <el-tag class="role-tag" :type="isAdmin ? 'primary' : 'success'" size="small">
+          {{ activeRoleLabel }}
+        </el-tag>
+        <el-icon class="action-arrow"><ArrowDown /></el-icon>
+      </button>
+      <template #dropdown>
+        <el-dropdown-menu>
+          <el-dropdown-item
+            v-for="role in availableRoleRecords"
+            :key="role.id"
+            :command="role.id"
+            :class="{ 'is-active': activeRoleRecord?.id === role.id }"
+          >
+            {{ role.name }}
+          </el-dropdown-item>
+        </el-dropdown-menu>
+      </template>
+    </el-dropdown>
+    <el-tag v-else class="role-tag" :type="isAdmin ? 'primary' : 'success'" size="small">
+      {{ activeRoleLabel }}
     </el-tag>
 
-    <el-dropdown v-if="isAdmin" trigger="click" @command="handleUserCommand">
+    <el-dropdown v-if="canOpenPlatformConfig" trigger="click" @command="handleUserCommand">
       <button class="user-info" type="button">
         <el-avatar :size="32" class="user-avatar">{{ userInfo.initials }}</el-avatar>
         <span class="user-name">{{ userInfo.name }}</span>
@@ -54,16 +78,20 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
+import { ElMessageBox } from "element-plus";
 import { ArrowDown } from "@element-plus/icons-vue";
 import { TENANT_TAG_TYPE, TENANT_TYPE_LABEL } from "@/config/tenant";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
+import { useWorkbenchStore } from "@/stores/workbench";
 import type { TenantType } from "@/types/user";
 
 const router = useRouter();
 const navigationStore = useNavigationStore();
 const userStore = useUserStore();
-const { userInfo, currentTenant, tenantList, availableTenants, isAdmin } = storeToRefs(userStore);
+const workbenchStore = useWorkbenchStore();
+const { userInfo, currentTenant, availableTenants, isAdmin } = storeToRefs(userStore);
+const { activeRoleRecord, availableRoleRecords } = storeToRefs(navigationStore);
 
 const groupedTenants = computed(() => {
   const groups: Partial<Record<TenantType, typeof availableTenants.value>> = {};
@@ -74,22 +102,63 @@ const groupedTenants = computed(() => {
   return groups;
 });
 
+const activeRoleLabel = computed(() => {
+  return activeRoleRecord.value?.name ?? "暂无角色";
+});
+
+const platformAdminTenant = computed(() =>
+  availableTenants.value.find(
+    (tenant) => tenant.type === "platform" && userStore.hasAdminRoleForTenant(tenant.id),
+  ) ?? null,
+);
+
+const canOpenPlatformConfig = computed(() => isAdmin.value && Boolean(platformAdminTenant.value));
+
 async function handleTenantSwitch(tenantId: string) {
-  const tenant = tenantList.value.find((item) => item.id === tenantId);
+  const tenant = availableTenants.value.find((item) => item.id === tenantId);
   if (!tenant || tenant.id === currentTenant.value.id) return;
+  if (!(await confirmDiscardWorkbenchChanges())) return;
   userStore.switchTenant(tenantId);
   navigationStore.loadTenant(tenant);
   await navigationStore.navigateToDefault(router);
 }
 
+async function handleRoleSwitch(roleId: string) {
+  if (roleId === activeRoleRecord.value?.id) return;
+  if (!(await confirmDiscardWorkbenchChanges())) return;
+  userStore.setActiveRoleForTenant(currentTenant.value.id, roleId);
+  if (router.currentRoute.value.name === "menu-unavailable") {
+    await navigationStore.navigateToDefault(router);
+    return;
+  }
+  await navigationStore.ensureValidCurrentRoute(router);
+}
+
 async function handleUserCommand(command: string) {
   if (command !== "menu-config") return;
-  const platformTenant = tenantList.value.find((tenant) => tenant.type === "platform");
+  if (!(await confirmDiscardWorkbenchChanges())) return;
+  const platformTenant = platformAdminTenant.value;
+  if (!platformTenant) return;
   if (platformTenant && currentTenant.value.id !== platformTenant.id) {
     userStore.switchTenant(platformTenant.id);
     navigationStore.loadTenant(platformTenant);
   }
   await router.push("/system/menu-config");
+}
+
+async function confirmDiscardWorkbenchChanges() {
+  if (!workbenchStore.hasUnsavedChanges) return true;
+  try {
+    await ElMessageBox.confirm("切换后尚未保存的工作台调整将丢失。", "切换组织", {
+      type: "warning",
+      confirmButtonText: "放弃并切换",
+      cancelButtonText: "继续调整",
+    });
+    workbenchStore.cancelEditing();
+    return true;
+  } catch {
+    return false;
+  }
 }
 </script>
 
@@ -103,6 +172,7 @@ async function handleUserCommand(command: string) {
 }
 
 .tenant-switch,
+.role-switch,
 .user-info {
   display: flex;
   align-items: center;
@@ -116,11 +186,13 @@ async function handleUserCommand(command: string) {
 }
 
 .tenant-switch,
+.role-switch,
 .user-info:not(.is-static) {
   cursor: pointer;
 }
 
 .tenant-switch:focus-visible,
+.role-switch:focus-visible,
 .user-info:focus-visible {
   outline: 2px solid var(--color-primary-line-light);
   outline-offset: 2px;
@@ -169,5 +241,22 @@ async function handleUserCommand(command: string) {
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-md);
   white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .header-actions {
+    gap: var(--spacing-8);
+  }
+
+  .role-tag,
+  .role-switch,
+  .user-info {
+    display: none;
+  }
+
+  .tenant-name {
+    max-width: 112px;
+    font-size: var(--font-size-sm);
+  }
 }
 </style>

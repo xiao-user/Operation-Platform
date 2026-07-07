@@ -150,8 +150,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from "vue";
+import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
+import { storeToRefs } from "pinia";
 import { Search, Edit } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import PageFilterBar from "@/components/PageFilterBar.vue";
@@ -161,34 +162,21 @@ import ReviewDialog from "./ReviewDialog.vue";
 import DownloadAbnormalDialog from "./DownloadAbnormalDialog.vue";
 import EditSettingsDialog from "./EditSettingsDialog.vue";
 import {
-  fetchOrgReviewList,
-  updateOrgReviewStatus,
   SEMESTER_OPTIONS,
   REVIEW_STATUS_MAP,
   type OrgReviewRow,
-  type OrgReviewFilter,
   type ReviewStatus,
-} from "@/mock/bureau/custody/orgReview";
+} from "@/features/org-review/org-review-repository";
+import { useOrgReviewStore } from "@/stores/org-review";
 
 // ==========================================
 // 状态
 // ==========================================
 const router = useRouter();
-const loading = ref(false);
-const tableData = ref<OrgReviewRow[]>([]);
-
-const filterForm = reactive<OrgReviewFilter>({
-  reviewStatus: "",
-  orgName: "",
-  semester: "2025-2026-1",
-  inLibrary: "",
-});
-
-const pagination = reactive({
-  currentPage: 1,
-  pageSize: 10,
-  total: 0,
-});
+const orgReviewStore = useOrgReviewStore();
+const { loading, tableData } = storeToRefs(orgReviewStore);
+const filterForm = orgReviewStore.filterForm;
+const pagination = orgReviewStore.pagination;
 
 // 批量提醒弹窗可见状态
 const batchRemindVisible = ref(false);
@@ -206,49 +194,23 @@ const editSettingsVisible = ref(false);
 // ==========================================
 // 数据加载
 // ==========================================
-async function loadData() {
-  loading.value = true;
-  try {
-    const { list, total } = await fetchOrgReviewList(
-      { ...filterForm },
-      pagination.currentPage,
-      pagination.pageSize,
-    );
-    tableData.value = list;
-    pagination.total = total;
-  } finally {
-    loading.value = false;
-  }
-}
-
-onMounted(loadData);
-
-// 筛选条件变化时自动重新查询
-watch(
-  () => ({ ...filterForm }),
-  () => {
-    pagination.currentPage = 1;
-    loadData();
-  },
-);
+onMounted(() => {
+  void orgReviewStore.loadList();
+});
 
 // ==========================================
 // 事件处理
 // ==========================================
 function handleSearch() {
-  pagination.currentPage = 1;
-  loadData();
+  void orgReviewStore.search();
 }
 
 function handleSizeChange(size: number) {
-  pagination.pageSize = size;
-  pagination.currentPage = 1;
-  loadData();
+  void orgReviewStore.setPageSize(size);
 }
 
 function handlePageChange(page: number) {
-  pagination.currentPage = page;
-  loadData();
+  void orgReviewStore.setPage(page);
 }
 
 function handleBatchRemind() {
@@ -282,16 +244,14 @@ function openReviewDialog(row: OrgReviewRow) {
 
 async function handleReviewApprove(remark: string) {
   if (currentReviewRow.value) {
-    await updateOrgReviewStatus(currentReviewRow.value.id, "approved", remark || undefined);
-    await loadData();
+    await orgReviewStore.updateStatus(currentReviewRow.value.id, "approved", remark || undefined);
   }
   currentReviewRow.value = null;
 }
 
 async function handleReviewReject(remark: string) {
   if (currentReviewRow.value) {
-    await updateOrgReviewStatus(currentReviewRow.value.id, "rejected", remark);
-    await loadData();
+    await orgReviewStore.updateStatus(currentReviewRow.value.id, "rejected", remark);
   }
   currentReviewRow.value = null;
 }

@@ -25,7 +25,7 @@
 
 <script setup lang="ts">
 import { watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import AppHeader from "@/components/AppHeader.vue";
 import AppModuleRail from "@/components/AppModuleRail.vue";
@@ -34,10 +34,11 @@ import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
 
 const route = useRoute();
+const router = useRouter();
 const navigationStore = useNavigationStore();
 const userStore = useUserStore();
-const { currentTenant } = storeToRefs(userStore);
-const { deepMenus, isWorkbenchRoute } = storeToRefs(navigationStore);
+const { currentTenant, roleIds } = storeToRefs(userStore);
+const { activeRoleRecords, deepMenus, isWorkbenchRoute } = storeToRefs(navigationStore);
 
 watch(
   () => currentTenant.value.id,
@@ -49,6 +50,23 @@ watch(
   () => route.fullPath,
   () => navigationStore.syncByRoute(route),
   { immediate: true },
+);
+
+watch(
+  () => ({
+    tenantId: currentTenant.value.id,
+    accessSignature: [
+      roleIds.value.join("|"),
+      activeRoleRecords.value
+        .map((role) => `${role.id}:${role.enabled}:${role.menuIds.join(",")}`)
+        .join(";"),
+    ].join("::"),
+  }),
+  (current, previous) => {
+    if (!previous || current.tenantId !== previous.tenantId) return;
+    void navigationStore.ensureValidCurrentRoute(router);
+  },
+  { flush: "post" },
 );
 </script>
 
@@ -165,6 +183,12 @@ watch(
   .module-rail-slide-leave-to :deep(.module-rail) {
     opacity: 1;
     transform: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-body.is-workbench .app-content-inner {
+    padding: var(--spacing-12);
   }
 }
 </style>

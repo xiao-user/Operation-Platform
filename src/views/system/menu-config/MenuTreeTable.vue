@@ -175,7 +175,7 @@
           </div>
           <div class="menu-tree-cell visible-column">
             <el-switch
-              :model-value="data.visible"
+              :model-value="isInlineEditing(data) ? inlineDraft.visible : data.visible"
               @change="handleVisibleChange(data, $event)"
             />
           </div>
@@ -402,7 +402,10 @@ function saveInlineEdit(row: MenuConfigRecord) {
 function handleVisibleChange(row: MenuConfigRecord, value: boolean | string | number) {
   try {
     const visible = Boolean(value);
-    if (isInlineEditing(row)) inlineDraft.value.visible = visible;
+    if (isInlineEditing(row)) {
+      inlineDraft.value.visible = visible;
+      return;
+    }
     menuConfigStore.setVisible(row.id, visible);
     void navigationStore.ensureValidCurrentRoute(router);
     ElMessage.success(visible ? "菜单已显示" : "菜单已隐藏");

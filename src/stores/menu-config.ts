@@ -87,6 +87,70 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
       .map((record) => record.id);
   }
 
+  function leafMenuRecords(source = records.value) {
+    return source.filter((record) => record.type === "page" || record.type === "external");
+  }
+
+  function recordPathKey(record: MenuConfigRecord, source: readonly MenuConfigRecord[]) {
+    const recordsById = new Map(source.map((item) => [item.id, item]));
+    const parts = [`${record.type}:${record.name}`];
+    let parentId = record.parentId;
+    while (parentId) {
+      const parent = recordsById.get(parentId);
+      if (!parent) break;
+      parts.unshift(`${parent.type}:${parent.name}`);
+      parentId = parent.parentId;
+    }
+    return parts.join("/");
+  }
+
+  function grantKeyForRecord(record: MenuConfigRecord, source: readonly MenuConfigRecord[] = records.value) {
+    if (record.type === "page" && record.pageKey) {
+      const duplicatePageResource = source.some(
+        (item) => item.id !== record.id && item.type === "page" && item.pageKey === record.pageKey,
+      );
+      return duplicatePageResource
+        ? `page:${record.pageKey}:${recordPathKey(record, source)}`
+        : `page:${record.pageKey}`;
+    }
+    if (record.type === "external" && record.externalUrl) {
+      return `external:${record.externalUrl.trim().toLowerCase()}`;
+    }
+    return null;
+  }
+
+  function grantedLeafKeys(role: RoleRecord, source = records.value) {
+    const recordsById = new Map(source.map((record) => [record.id, record]));
+    return new Set(
+      role.menuIds.flatMap((menuId) => {
+        const record = recordsById.get(menuId);
+        const key = record ? grantKeyForRecord(record, source) : null;
+        return key ? [key] : [];
+      }),
+    );
+  }
+
+  function rolesForDefaultMenu(defaultRecords: MenuConfigRecord[]) {
+    const defaultLeafRecords = leafMenuRecords(defaultRecords);
+    const defaultLeafIds = defaultLeafRecords.map((record) => record.id);
+    const defaultIdsByGrantKey = new Map(
+      defaultLeafRecords.flatMap((record) => {
+        const key = grantKeyForRecord(record, defaultRecords);
+        return key ? [[key, record.id] as const] : [];
+      }),
+    );
+
+    return roles.value.map((role) => {
+      if (role.id === ADMIN_ROLE_ID) return { ...role, menuIds: [...defaultLeafIds] };
+      const previousKeys = grantedLeafKeys(role);
+      const nextMenuIds = [...previousKeys].flatMap((key) => {
+        const id = defaultIdsByGrantKey.get(key);
+        return id ? [id] : [];
+      });
+      return { ...role, menuIds: Array.from(new Set(nextMenuIds)) };
+    });
+  }
+
   function leafMenuIdsForRecord(recordId: string, source = records.value) {
     const target = source.find((record) => record.id === recordId);
     if (!target) return [];
@@ -308,10 +372,9 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
   function reset() {
     const tenant = requireTenant();
     const defaults = createDefaultTenantConfiguration(tenant);
-    const nextMenuIds = allLeafMenuIds(defaults.menuRecords);
     persist(
       defaults.menuRecords,
-      roles.value.map((role) => ({ ...role, menuIds: [...nextMenuIds] })),
+      rolesForDefaultMenu(defaults.menuRecords),
       defaults.shellConfig,
     );
     recoveryNotice.value = null;

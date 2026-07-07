@@ -3,7 +3,7 @@
     <div class="system-entry-heading">
       <div>
         <h2>系统入口配置</h2>
-        <p>工作台是固定系统入口，不参与普通菜单层级拖拽。</p>
+        <p>工作台是固定系统入口；组件内容和个人布局在工作台内调整。</p>
       </div>
       <el-tag type="primary" effect="plain">租户独立配置</el-tag>
     </div>

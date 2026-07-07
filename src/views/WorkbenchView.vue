@@ -1,248 +1,384 @@
 <template>
   <div class="workbench-page">
-    <section class="workbench-hero">
-      <div>
-        <p class="eyebrow">{{ tenantTypeLabel }}工作台</p>
-        <h1>{{ currentTenant.name }}</h1>
-        <span>聚合关键运营数据、待办事项和常用入口，后续可按租户类型接入真实业务指标。</span>
+    <section v-if="!isEditing" class="workbench-actions" aria-label="工作台操作">
+      <el-button
+        :icon="Edit"
+        :disabled="!canEdit"
+        @click="startEditing"
+      >
+        调整工作台
+      </el-button>
+    </section>
+
+    <el-alert
+      v-if="recoveryNotice"
+      :title="recoveryNotice"
+      type="warning"
+      show-icon
+      :closable="false"
+    />
+
+    <section v-if="isEditing" class="editor-toolbar" aria-label="工作台编辑工具栏">
+      <div class="editor-summary">
+        <strong>正在调整工作台</strong>
+        <span>拖动标题调整位置，拖动右下角调整大小。</span>
       </div>
-      <el-button type="primary">查看今日概览</el-button>
+      <div class="editor-actions">
+        <el-button @click="managerVisible = true">
+          组件管理（显示 {{ visibleCount }}/{{ totalCount }}）
+        </el-button>
+        <el-button :icon="RefreshLeft" @click="restoreDefault">恢复默认</el-button>
+        <el-button @click="cancelEditing">取消</el-button>
+        <el-button type="primary" :disabled="!hasUnsavedChanges" @click="saveEditing">
+          保存
+        </el-button>
+      </div>
     </section>
 
-    <section class="metric-grid">
-      <article v-for="metric in metrics" :key="metric.label" class="metric-card">
-        <span>{{ metric.label }}</span>
-        <strong>{{ metric.value }}</strong>
-        <small>{{ metric.trend }}</small>
-      </article>
+    <section v-if="visibleItems.length" class="workbench-canvas">
+      <WorkbenchGrid
+        :key="gridRenderKey"
+        :items="visibleItems"
+        :editable="isEditing && canEdit"
+        @positions-change="handlePositionsChange"
+        @widget-action="handleWidgetAction"
+        @open-settings="openSettings"
+      />
     </section>
 
-    <section class="content-grid">
-      <article class="panel-card panel-card-large">
-        <div class="panel-heading">
-          <strong>数据趋势</strong>
-          <span>近 7 日</span>
-        </div>
-        <div class="chart-placeholder">
-          <span v-for="bar in chartBars" :key="bar" :style="{ height: `${bar}%` }" />
-        </div>
-      </article>
-
-      <article class="panel-card">
-        <div class="panel-heading">
-          <strong>待办提醒</strong>
-          <span>{{ todos.length }} 项</span>
-        </div>
-        <ul class="todo-list">
-          <li v-for="todo in todos" :key="todo">
-            <span />
-            {{ todo }}
-          </li>
-        </ul>
-      </article>
-
-      <article class="panel-card panel-card-large">
-        <div class="panel-heading">
-          <strong>常用功能</strong>
-          <span>快捷入口</span>
-        </div>
-        <div class="shortcut-grid">
-          <button v-for="shortcut in shortcuts" :key="shortcut" type="button">
-            {{ shortcut }}
-          </button>
-        </div>
-      </article>
+    <section v-else class="workbench-empty">
+      <el-empty description="当前工作台组件均已隐藏">
+        <el-button v-if="isEditing" type="primary" @click="managerVisible = true">
+          打开组件管理
+        </el-button>
+        <el-button v-else type="primary" :disabled="!canEdit" @click="startEditing">
+          调整工作台
+        </el-button>
+      </el-empty>
     </section>
+
+    <p v-if="!canEdit && !isEditing" class="desktop-edit-hint">
+      当前宽度下工作台自动适配为只读布局；请在桌面端调整组件。
+    </p>
+
+    <WorkbenchWidgetManager
+      v-if="draftLayout"
+      v-model="managerVisible"
+      :items="draftLayout.items"
+      @visibility-change="handleVisibilityChange"
+    />
+
+    <WorkbenchWidgetSettingsDialog
+      v-model="settingsVisible"
+      :item="settingsItem"
+      :definition="settingsDefinition"
+      :quick-links="quickLinks"
+      @save="saveWidgetSettings"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeRouteLeave } from "vue-router";
 import { storeToRefs } from "pinia";
-import { TENANT_TYPE_LABEL } from "@/config/tenant";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { Edit, RefreshLeft } from "@element-plus/icons-vue";
+import WorkbenchGrid, {
+  type WorkbenchWidgetAction,
+} from "@/features/workbench/components/WorkbenchGrid.vue";
+import WorkbenchWidgetManager from "@/features/workbench/components/WorkbenchWidgetManager.vue";
+import WorkbenchWidgetSettingsDialog from "@/features/workbench/components/WorkbenchWidgetSettingsDialog.vue";
+import type {
+  WorkbenchLayoutItem,
+  WorkbenchWidgetSettings,
+  WorkbenchWidgetSizePreset,
+} from "@/features/workbench/types";
+import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
+import { useWorkbenchStore } from "@/stores/workbench";
 
 const userStore = useUserStore();
-const { currentTenant } = storeToRefs(userStore);
+const navigationStore = useNavigationStore();
+const workbenchStore = useWorkbenchStore();
+const { currentTenant, role, userInfo } = storeToRefs(userStore);
+const { tree } = storeToRefs(navigationStore);
+const {
+  draftLayout,
+  visibleItems,
+  visibleCount,
+  totalCount,
+  recoveryNotice,
+  isEditing,
+  hasUnsavedChanges,
+  quickLinks,
+} = storeToRefs(workbenchStore);
 
-const tenantTypeLabel = computed(() => TENANT_TYPE_LABEL[currentTenant.value.type]);
+const managerVisible = ref(false);
+const settingsVisible = ref(false);
+const settingsWidgetKey = ref("");
+const viewportWidth = ref(window.innerWidth);
+const gridRenderVersion = ref(0);
+const canEdit = computed(() => viewportWidth.value >= 1200);
+const gridRenderKey = computed(() =>
+  `${currentTenant.value.id}:${workbenchStore.profile}:${gridRenderVersion.value}`,
+);
+const settingsItem = computed(() =>
+  draftLayout.value?.items.find((item) => item.widgetKey === settingsWidgetKey.value) ?? null,
+);
+const settingsDefinition = computed(() =>
+  settingsItem.value ? workbenchStore.definitionFor(settingsItem.value.widgetKey) : null,
+);
 
-const metrics = [
-  { label: "今日访问", value: "12,846", trend: "较昨日 +8.2%" },
-  { label: "待处理事项", value: "28", trend: "高优先级 6 项" },
-  { label: "本周新增", value: "436", trend: "持续增长" },
-  { label: "服务完成率", value: "96.8%", trend: "稳定运行" },
-];
-const chartBars = [42, 58, 46, 72, 66, 84, 78, 90, 62, 74, 88, 70];
-const todos = ["审核待处理", "菜单配置需确认", "本周数据报表", "服务异常巡检"];
-const shortcuts = ["数据看板", "人员管理", "课程管理", "通知公告", "结算中心", "系统设置"];
+function loadWorkbench() {
+  if (navigationStore.currentTenant?.id !== currentTenant.value.id) {
+    navigationStore.loadTenant(currentTenant.value);
+  }
+  workbenchStore.load(
+    currentTenant.value,
+    userInfo.value.id,
+    role.value,
+    navigationStore.tree,
+  );
+  gridRenderVersion.value += 1;
+}
+
+watch(
+  () => [currentTenant.value.id, userInfo.value.id, role.value] as const,
+  loadWorkbench,
+  { immediate: true },
+);
+
+watch(
+  tree,
+  (nextTree) => workbenchStore.updateQuickLinks(nextTree),
+  { deep: true },
+);
+
+watch(canEdit, (editable) => {
+  if (!editable && isEditing.value) {
+    workbenchStore.cancelEditing();
+    managerVisible.value = false;
+    settingsVisible.value = false;
+    gridRenderVersion.value += 1;
+    ElMessage.warning("窗口宽度不足，已退出工作台编辑模式");
+  }
+});
+
+function startEditing() {
+  if (!canEdit.value) return;
+  workbenchStore.beginEditing();
+  gridRenderVersion.value += 1;
+}
+
+async function cancelEditing() {
+  if (hasUnsavedChanges.value) {
+    try {
+      await ElMessageBox.confirm("尚未保存的工作台调整将被放弃。", "取消调整", {
+        type: "warning",
+        confirmButtonText: "放弃修改",
+        cancelButtonText: "继续调整",
+      });
+    } catch {
+      return;
+    }
+  }
+  workbenchStore.cancelEditing();
+  managerVisible.value = false;
+  settingsVisible.value = false;
+  gridRenderVersion.value += 1;
+}
+
+function saveEditing() {
+  try {
+    workbenchStore.saveEditing();
+    managerVisible.value = false;
+    settingsVisible.value = false;
+    gridRenderVersion.value += 1;
+    ElMessage.success("工作台布局已保存");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "工作台布局保存失败");
+  }
+}
+
+async function restoreDefault() {
+  try {
+    await ElMessageBox.confirm(
+      "将恢复当前组织和角色的默认组件显隐、位置、尺寸及设置，保存后生效。",
+      "恢复默认工作台",
+      {
+        type: "warning",
+        confirmButtonText: "恢复默认",
+        cancelButtonText: "取消",
+      },
+    );
+  } catch {
+    return;
+  }
+  workbenchStore.restoreDefaultDraft();
+  gridRenderVersion.value += 1;
+  ElMessage.success("已恢复默认草稿，请保存后生效");
+}
+
+function handlePositionsChange(
+  changes: Array<Pick<WorkbenchLayoutItem, "widgetKey" | "x" | "y" | "w" | "h">>,
+) {
+  workbenchStore.updatePositions(changes);
+}
+
+function handleVisibilityChange(widgetKey: string, visible: boolean) {
+  workbenchStore.setVisible(widgetKey, visible);
+  gridRenderVersion.value += 1;
+}
+
+function openSettings(widgetKey: string) {
+  settingsWidgetKey.value = widgetKey;
+  settingsVisible.value = true;
+}
+
+function saveWidgetSettings(settings: WorkbenchWidgetSettings) {
+  if (!settingsWidgetKey.value) return;
+  workbenchStore.updateSettings(settingsWidgetKey.value, settings);
+  ElMessage.success("组件设置已更新");
+}
+
+function handleWidgetAction(widgetKey: string, action: WorkbenchWidgetAction) {
+  if (action === "hide") {
+    handleVisibilityChange(widgetKey, false);
+    return;
+  }
+  const moveMap: Partial<Record<WorkbenchWidgetAction, [number, number]>> = {
+    "move-left": [-1, 0],
+    "move-right": [1, 0],
+    "move-up": [0, -1],
+    "move-down": [0, 1],
+  };
+  const move = moveMap[action];
+  if (move) {
+    if (!workbenchStore.moveWidget(widgetKey, move[0], move[1])) {
+      ElMessage.warning("目标位置不可用");
+      return;
+    }
+    gridRenderVersion.value += 1;
+    return;
+  }
+  const preset = action.replace("size-", "") as WorkbenchWidgetSizePreset;
+  if (workbenchStore.resizeWidget(widgetKey, preset)) gridRenderVersion.value += 1;
+}
+
+function updateViewportWidth() {
+  viewportWidth.value = window.innerWidth;
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (!hasUnsavedChanges.value) return;
+  event.preventDefault();
+  event.returnValue = "";
+}
+
+onBeforeRouteLeave(async () => {
+  if (!hasUnsavedChanges.value) return true;
+  try {
+    await ElMessageBox.confirm("离开后尚未保存的工作台调整将丢失。", "离开工作台", {
+      type: "warning",
+      confirmButtonText: "离开",
+      cancelButtonText: "继续调整",
+    });
+    workbenchStore.cancelEditing();
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+onMounted(() => {
+  window.addEventListener("resize", updateViewportWidth);
+  window.addEventListener("beforeunload", handleBeforeUnload);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", updateViewportWidth);
+  window.removeEventListener("beforeunload", handleBeforeUnload);
+});
 </script>
 
 <style scoped>
 .workbench-page {
+  width: min(100%, 1440px);
+  min-height: 100%;
+  margin: 0 auto;
+}
+
+.workbench-actions {
   display: flex;
-  flex-direction: column;
-  gap: var(--spacing-16);
+  justify-content: flex-end;
+  margin-bottom: var(--spacing-12);
 }
 
-.workbench-hero,
-.metric-card,
-.panel-card {
-  background: var(--color-white);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-s);
-}
-
-.workbench-hero {
+.editor-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 8;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-24);
-  padding: var(--spacing-24);
-}
-
-.eyebrow {
-  margin: 0 0 var(--spacing-8);
-  color: var(--color-primary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.workbench-hero h1 {
-  margin: 0;
-  color: var(--color-title);
-  font-size: 24px;
-  line-height: 32px;
-}
-
-.workbench-hero span {
-  display: inline-block;
-  margin-top: var(--spacing-8);
-  color: var(--color-secondary);
-  font-size: var(--font-size-md);
-}
-
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--spacing-16);
-}
-
-.metric-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-8);
-  padding: var(--spacing-20);
-}
-
-.metric-card span,
-.panel-heading span,
-.metric-card small {
-  color: var(--color-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.metric-card strong {
-  color: var(--color-title);
-  font-size: 28px;
-  line-height: 36px;
-}
-
-.content-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: var(--spacing-16);
-}
-
-.panel-card {
-  min-height: 260px;
-  padding: var(--spacing-20);
-}
-
-.panel-card-large {
-  grid-column: span 1;
-}
-
-.panel-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--spacing-20);
-}
-
-.panel-heading strong {
-  color: var(--color-title);
-  font-size: var(--font-size-lg);
-}
-
-.chart-placeholder {
-  display: flex;
-  align-items: end;
-  gap: var(--spacing-12);
-  height: 188px;
-  padding: var(--spacing-16);
-  background: linear-gradient(180deg, var(--color-bg-page), var(--color-white));
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-}
-
-.chart-placeholder span {
-  flex: 1;
-  min-width: 10px;
-  background: linear-gradient(180deg, var(--color-primary), var(--color-primary-line-light));
-  border-radius: var(--radius-full) var(--radius-full) 0 0;
-}
-
-.todo-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-12);
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.todo-list li {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-10);
-  color: var(--color-body);
-  font-size: var(--font-size-md);
-}
-
-.todo-list li span {
-  width: 8px;
-  height: 8px;
-  background: var(--color-primary);
-  border-radius: var(--radius-full);
-}
-
-.shortcut-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--spacing-12);
-}
-
-.shortcut-grid button {
   min-height: 64px;
-  color: var(--color-body);
-  background: var(--color-bg-page);
+  padding: var(--spacing-12) var(--spacing-16);
+  margin: var(--spacing-16) 0;
+  background: color-mix(in srgb, var(--color-white) 94%, transparent);
+  border: 1px solid var(--color-primary-line-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-m);
+  backdrop-filter: blur(10px);
+}
+
+.editor-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.editor-summary strong {
+  color: var(--color-title);
+  font-size: var(--font-size-md);
+}
+
+.editor-summary span {
+  color: var(--color-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+}
+
+.workbench-canvas {
+  min-height: 300px;
+}
+
+.workbench-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 420px;
+  background: var(--color-white);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  cursor: pointer;
 }
 
-.shortcut-grid button:hover {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
+.desktop-edit-hint {
+  margin: var(--spacing-12) 0 0;
+  color: var(--color-secondary);
+  font-size: var(--font-size-xs);
+  text-align: center;
 }
 
-@media (max-width: 1200px) {
-  .metric-grid,
-  .content-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+@media (max-width: 1199px) {
+  .workbench-actions {
+    margin-bottom: var(--spacing-8);
   }
 }
 </style>
-

@@ -1,6 +1,10 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { tenantRepository } from "@/features/tenant/local-storage-tenant-repository";
+import {
+  createCurrentUserAdminMember,
+  tenantMemberRepository,
+} from "@/features/tenant-members/local-storage-tenant-member-repository";
 import { tenantConfigurationRepository } from "@/features/tenant-config/local-storage-tenant-configuration-repository";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
@@ -43,7 +47,19 @@ export const useTenantAdminStore = defineStore("tenant-admin", () => {
       type: input.type,
       enabled: input.enabled !== false,
     };
-    persist([...tenants.value, tenant]);
+    const previousTenants = tenants.value.map((item) => ({ ...item }));
+    const savedTenants = tenantRepository.replace([...tenants.value, tenant]);
+    try {
+      const userStore = useUserStore();
+      tenantMemberRepository.replace(tenant, [
+        createCurrentUserAdminMember(tenant, userStore.userInfo),
+      ]);
+    } catch (error) {
+      tenantRepository.replace(previousTenants);
+      throw error;
+    }
+    tenants.value = savedTenants;
+    syncRuntimeStores();
     return tenant;
   }
 

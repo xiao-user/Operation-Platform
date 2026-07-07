@@ -308,16 +308,29 @@ describe("menu configuration store", () => {
     expect(store.roleIdsForRecord(created.id)).toContain(STAFF_ROLE_ID);
   });
 
-  it("keeps custom roles but resets menu grants when restoring the default template", () => {
+  it("keeps custom roles without expanding grants when restoring the default template", () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
-    const page = store.records.find((record) => record.type === "page")!;
-    store.setRecordRoleVisibility(page.id, []);
+    const deniedPage = store.records.find((record) => record.type === "page")!;
+    const allowedPage = store.records.find(
+      (record) => record.type === "page" && record.id !== deniedPage.id,
+    )!;
+    store.setRecordRoleVisibility(deniedPage.id, []);
 
     store.reset();
 
-    const firstPageAfterReset = store.records.find((record) => record.type === "page")!;
-    expect(store.roleIdsForRecord(firstPageAfterReset.id)).toContain(STAFF_ROLE_ID);
+    const deniedPageAfterReset = store.records.find(
+      (record) => record.type === "page" &&
+        record.name === deniedPage.name &&
+        record.pageKey === deniedPage.pageKey,
+    )!;
+    const allowedPageAfterReset = store.records.find(
+      (record) => record.type === "page" &&
+        record.name === allowedPage.name &&
+        record.pageKey === allowedPage.pageKey,
+    )!;
+    expect(store.roleIdsForRecord(deniedPageAfterReset.id)).not.toContain(STAFF_ROLE_ID);
+    expect(store.roleIdsForRecord(allowedPageAfterReset.id)).toContain(STAFF_ROLE_ID);
   });
 
   it("keeps page resources after deleting a menu so they can be rebound later", () => {

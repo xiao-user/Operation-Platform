@@ -4,11 +4,18 @@ import type { TenantInfo, UserInfo } from "@/types/user";
 // 虚拟用户数据（对接登录接口后替换）
 // ==========================================
 export const MOCK_USER_INFO: UserInfo = {
-  id: "user-platform-admin",
+  id: "user-demo",
   name: "罗吾航",
   initials: "吾航",
-  platformAdmin: true,
-  tenantRoleIds: {},
+  platformAdmin: false,
+  tenantRoleIds: {
+    "school-001": "admin",
+    "school-002": "teacher",
+    "bureau-001": "teacher",
+    "org-001": "admin",
+    "org-002": "teacher",
+    "platform-001": "admin",
+  },
 };
 
 // ==========================================

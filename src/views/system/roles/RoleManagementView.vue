@@ -58,6 +58,11 @@
             {{ row.id === ADMIN_ROLE_ID ? "全部" : `${row.menuIds.length} 项` }}
           </template>
         </el-table-column>
+        <el-table-column label="成员数" width="100">
+          <template #default="{ row }">
+            {{ accessControlStore.memberCountForRole(row.id) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="sort" label="排序" width="100" />
         <el-table-column label="状态" width="120">
           <template #default="{ row }">

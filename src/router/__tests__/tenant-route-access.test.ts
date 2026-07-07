@@ -312,6 +312,52 @@ describe("tenant route access", () => {
     ).toEqual({ kind: "redirect", path: fallbackPath });
   });
 
+  it("allows a page granted by any authenticated role", () => {
+    const records = cloneTenantTemplate(school);
+    const deviceMenu = addDeviceMenu(records);
+    const fallbackMenu = records.find(
+      (record) => record.type === "page" && record.id !== deviceMenu.id,
+    )!;
+    const extraRole: RoleRecord = {
+      id: "custom-device-role",
+      tenantId: school.id,
+      name: "设备角色",
+      description: "",
+      builtIn: false,
+      enabled: true,
+      sort: 30,
+      menuIds: [deviceMenu.id],
+    };
+    const roles = [...accessRoles(school, records, [fallbackMenu.id]), extraRole];
+
+    expect(
+      resolveTenantRouteAccess(
+        {
+          path: "/security/new-gate/device-list",
+          meta: { pageKey: "device-list", menuOwnerKey: "device-list" },
+        },
+        [STAFF_ROLE_ID, extraRole.id],
+        records,
+        defaultTenantShellConfig(),
+        roles,
+      ),
+    ).toEqual({ kind: "allow" });
+  });
+
+  it("treats any authenticated admin role as administrator access", () => {
+    const records = cloneTenantTemplate(platform);
+
+    expect(
+      resolveTenantRouteAccess(
+        { path: "/system/menu-config", meta: { pageKey: "system-menu-config", requiresAdmin: true } },
+        [STAFF_ROLE_ID, ADMIN_ROLE_ID],
+        records,
+        defaultTenantShellConfig(),
+        accessRoles(platform, records),
+      ),
+    ).toEqual({ kind: "allow" });
+  });
+
   it("blocks hidden menus even when a role still has the menu id", () => {
     const records = cloneTenantTemplate(school);
     const deviceMenu = addDeviceMenu(records);

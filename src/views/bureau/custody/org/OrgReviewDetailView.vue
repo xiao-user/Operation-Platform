@@ -172,7 +172,7 @@ import { ref, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { WarningFilled, Close, Check } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { fetchOrgDetail, updateOrgReviewStatus } from "@/mock/bureau/custody/orgReview";
+import { orgReviewRepository } from "@/features/org-review/org-review-repository";
 
 const router = useRouter();
 const route = useRoute();
@@ -216,7 +216,7 @@ const detail = ref({
 });
 
 onMounted(async () => {
-  const row = await fetchOrgDetail(orgId);
+  const row = await orgReviewRepository.detail(orgId);
   if (row) {
     detail.value.id = row.id;
     detail.value.orgFullName = row.orgName;
@@ -238,7 +238,7 @@ function handleReject() {
     inputType: "textarea",
   })
     .then(async ({ value }) => {
-      await updateOrgReviewStatus(orgId, "rejected", value);
+      await orgReviewRepository.updateStatus(orgId, "rejected", value);
       ElMessage.info("已拒绝");
       router.push("/bureau/custody/org/review");
     })
@@ -252,7 +252,7 @@ function handleApprove() {
     type: "success",
   })
     .then(async () => {
-      await updateOrgReviewStatus(orgId, "approved");
+      await orgReviewRepository.updateStatus(orgId, "approved");
       ElMessage.success("审核通过");
       router.push("/bureau/custody/org/review");
     })

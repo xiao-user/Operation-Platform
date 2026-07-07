@@ -259,4 +259,31 @@ function externalRel(target: Extract<MenuTarget, { kind: "external" }>) {
   background-color: var(--color-primary);
 }
 
+@media (max-width: 767px) {
+  .header-brand {
+    width: 56px;
+    padding: var(--spacing-12);
+  }
+
+  .brand-name,
+  .nav-tab:not(.active) {
+    display: none;
+  }
+
+  .header-shell {
+    gap: var(--spacing-8);
+    padding: 0 var(--spacing-12);
+  }
+
+  .header-nav {
+    flex: 0 0 auto;
+    gap: 0;
+    padding: 0;
+  }
+
+  .nav-tab-label {
+    font-size: var(--font-size-md);
+  }
+}
+
 </style>

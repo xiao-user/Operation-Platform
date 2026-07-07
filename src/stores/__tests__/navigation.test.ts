@@ -10,6 +10,10 @@ import {
   defaultTenantShellConfig,
   tenantShellConfigRepository,
 } from "@/features/shell-config/local-storage-shell-config-repository";
+import {
+  createCurrentUserAdminMember,
+  tenantMemberRepository,
+} from "@/features/tenant-members/local-storage-tenant-member-repository";
 import type { TenantInfo } from "@/types/user";
 
 const schoolA: TenantInfo = {
@@ -29,6 +33,15 @@ describe("navigation store", () => {
   beforeEach(() => {
     localStorage.clear();
     setActivePinia(createPinia());
+    const userStore = useUserStore();
+    userStore.applyAuthenticatedSession({
+      ...userStore.userInfo,
+      platformAdmin: false,
+      tenantRoleIds: {
+        [schoolA.id]: ADMIN_ROLE_ID,
+        [schoolB.id]: ADMIN_ROLE_ID,
+      },
+    });
   });
 
   it("loads modules from a concrete tenant configuration", () => {
@@ -294,5 +307,56 @@ describe("navigation store", () => {
     expect(store.moduleNodes.map((node) => node.name)).toEqual(["平安校园"]);
     expect(store.secondLevelTabs.map((node) => node.name)).toEqual(["班牌管理"]);
     expect(store.deepMenus.map((node) => node.name)).toEqual(["班牌列表"]);
+  });
+
+  it("uses the selected active role instead of merging all member roles", () => {
+    const records = tenantMenuRepository.list(schoolA).records;
+    const page = records.find((record) => record.name === "班牌列表")!;
+    const leafIds = records
+      .filter((record) => record.type === "page" || record.type === "external")
+      .map((record) => record.id);
+    tenantRoleRepository.replace(schoolA, [
+      {
+        id: ADMIN_ROLE_ID,
+        tenantId: schoolA.id,
+        name: "管理员",
+        description: "",
+        builtIn: true,
+        enabled: true,
+        sort: 10,
+        menuIds: leafIds,
+      },
+      {
+        id: STAFF_ROLE_ID,
+        tenantId: schoolA.id,
+        name: "老师",
+        description: "",
+        builtIn: true,
+        enabled: true,
+        sort: 20,
+        menuIds: [page.id],
+      },
+    ]);
+
+    const userStore = useUserStore();
+    userStore.replaceTenants([schoolA, ...userStore.tenantList]);
+    tenantMemberRepository.replace(schoolA, [
+      {
+        ...createCurrentUserAdminMember(schoolA, userStore.userInfo),
+        roleIds: [ADMIN_ROLE_ID, STAFF_ROLE_ID],
+      },
+    ]);
+    userStore.refreshMemberRoles();
+    userStore.switchTenant(schoolA.id);
+    const store = useNavigationStore();
+    store.loadTenant(schoolA);
+
+    expect(store.activeRoleRecord?.id).toBe(ADMIN_ROLE_ID);
+    expect(store.moduleNodes.length).toBeGreaterThan(1);
+
+    userStore.setActiveRoleForTenant(schoolA.id, STAFF_ROLE_ID);
+
+    expect(store.activeRoleRecord?.id).toBe(STAFF_ROLE_ID);
+    expect(store.moduleNodes.map((node) => node.name)).toEqual(["平安校园"]);
   });
 });

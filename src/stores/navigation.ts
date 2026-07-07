@@ -2,7 +2,12 @@ import { computed, ref } from "vue";
 import type { RouteLocationNormalizedLoaded, Router } from "vue-router";
 import { defineStore } from "pinia";
 import { pageRegistryByKey } from "@/config/page-registry";
-import { resolveAccessRole, filterMenuTreeByRole } from "@/features/access-control/menu-permissions";
+import {
+  filterMenuTreeByRole,
+  isAdminAccess,
+  resolveAccessRole,
+  resolveAccessRoles,
+} from "@/features/access-control/menu-permissions";
 import type { RoleRecord } from "@/features/access-control/types";
 import { buildMenuTree, resolveFirstTarget } from "@/features/menu-config/menu-tree";
 import { defaultTenantShellConfig } from "@/features/shell-config/local-storage-shell-config-repository";
@@ -88,16 +93,25 @@ export const useNavigationStore = defineStore("navigation", () => {
 
   const workbenchConfig = computed(() => shellConfig.value.workbench);
   const isWorkbenchRoute = computed(() => currentPath.value === "/workbench");
-  const authenticatedRoleId = computed(() =>
-    currentTenant.value ? userStore.roleForTenant(currentTenant.value.id) : null,
+  const authenticatedRoleIds = computed(() =>
+    currentTenant.value ? userStore.roleIdsForTenant(currentTenant.value.id) : [],
+  );
+  const activeRoleId = computed(() =>
+    currentTenant.value ? userStore.activeRoleIdForTenant(currentTenant.value.id) : null,
+  );
+  const availableRoleRecords = computed(() =>
+    resolveAccessRoles(authenticatedRoleIds.value, roles.value, records.value),
   );
   const activeRoleRecord = computed(() =>
-    resolveAccessRole(authenticatedRoleId.value, roles.value, records.value),
+    resolveAccessRole(activeRoleId.value, roles.value, records.value),
+  );
+  const activeRoleRecords = computed(() =>
+    activeRoleRecord.value ? [activeRoleRecord.value] : [],
   );
   const tree = computed(() =>
     filterVisibleTree(
       filterMenuTreeByRole(buildMenuTree(records.value), activeRoleRecord.value),
-      activeRoleRecord.value?.id === "admin",
+      isAdminAccess(activeRoleRecord.value),
     ),
   );
   const moduleNodes = computed(() =>
@@ -150,7 +164,7 @@ export const useNavigationStore = defineStore("navigation", () => {
     activeMenuTrail.value.filter((node) => node.children.length > 0).map((node) => node.id),
   );
   const firstInternalPath = computed(() =>
-    resolveFirstTenantInternalPath(records.value, authenticatedRoleId.value, roles.value),
+    resolveFirstTenantInternalPath(records.value, activeRoleId.value, roles.value),
   );
   const defaultEntryPath = computed(() => {
     if (!activeRoleRecord.value) return "/menu-unavailable";
@@ -266,15 +280,18 @@ export const useNavigationStore = defineStore("navigation", () => {
     const route = router.currentRoute.value;
     const result = resolveTenantRouteAccess(
       { path: route.path, meta: route.meta },
-      authenticatedRoleId.value,
+      activeRoleId.value,
       records.value,
       shellConfig.value,
       roles.value,
     );
+    const shouldUseDefaultEntry =
+      route.meta.requiresAdmin === true && defaultEntryPath.value !== "/menu-unavailable";
+    const defaultEntry = shouldUseDefaultEntry ? defaultEntryPath.value : null;
     if (result.kind === "redirect" && result.path !== route.path) {
-      await router.push(result.path);
+      await router.push(defaultEntry ?? result.path);
     } else if (result.kind === "empty" && route.name !== "menu-unavailable") {
-      await router.push({ name: "menu-unavailable" });
+      await router.push(defaultEntry ?? { name: "menu-unavailable" });
     }
   }
 
@@ -282,6 +299,9 @@ export const useNavigationStore = defineStore("navigation", () => {
     records,
     roles,
     shellConfig,
+    activeRoleId,
+    availableRoleRecords,
+    activeRoleRecords,
     activeRoleRecord,
     currentTenant,
     activeModuleId,

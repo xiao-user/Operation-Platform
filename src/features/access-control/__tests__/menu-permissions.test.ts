@@ -109,6 +109,22 @@ describe("menu permissions", () => {
     expect(resolveFirstPermittedInternalPath(records, role(["page-d"]))).toBe("/developing/page-d");
   });
 
+  it("merges menu permissions from multiple roles", () => {
+    const extraPage: MenuConfigRecord = {
+      ...records[3]!,
+      id: "page-extra",
+      name: "额外页面",
+      sort: 20,
+    };
+    const filtered = filterMenuTreeByRole(buildMenuTree([...records, extraPage]), [
+      role(["page-d"]),
+      { ...role(["page-extra"]), id: "role-extra", name: "额外角色" },
+    ]);
+
+    const leafNames = filtered[0]!.children[0]!.children[0]!.children.map((node) => node.name);
+    expect(leafNames).toEqual(["四级页面", "额外页面"]);
+  });
+
   it("keeps admin pages admin-only regardless of custom role menu ids", () => {
     const systemPage: MenuConfigRecord = {
       ...records[3]!,
@@ -124,7 +140,7 @@ describe("menu permissions", () => {
       isRecordPermittedWithAncestors(
         systemPage,
         [records[0]!, records[1]!, records[2]!, systemPage],
-        { ...role([]), id: ADMIN_ROLE_ID, name: "管理员", menuIds: [] },
+        [{ ...role([]), id: ADMIN_ROLE_ID, name: "管理员", menuIds: [] }],
       ),
     ).toBe(true);
   });

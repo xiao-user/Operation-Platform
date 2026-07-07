@@ -19,6 +19,9 @@ import type {
   TenantConfigurationLoadResult,
 } from "@/features/tenant-config/types";
 import type { TenantInfo } from "@/types/user";
+import { workbenchLayoutStorageKeysForTenant } from "@/features/workbench/local-storage-workbench-layout-repository";
+import { tenantMemberStorageKey } from "@/features/tenant-members/local-storage-tenant-member-repository";
+import { activeRoleStorageKeysForTenant } from "@/features/access-control/local-storage-active-role-repository";
 
 const CONFIGURATION_VERSION = 1;
 
@@ -99,13 +102,22 @@ export class LocalStorageTenantConfigurationRepository {
   }
 
   remove(tenantId: string) {
-    const keys = [
-      tenantConfigurationStorageKey(tenantId),
-      tenantMenuStorageKey(tenantId),
-      tenantShellConfigStorageKey(tenantId),
-      tenantRoleStorageKey(tenantId),
-    ];
-    const previousValues = new Map(keys.map((key) => [key, this.storage.getItem(key)]));
+    let keys: string[];
+    let previousValues: Map<string, string | null>;
+    try {
+      keys = [
+        tenantConfigurationStorageKey(tenantId),
+        tenantMenuStorageKey(tenantId),
+        tenantShellConfigStorageKey(tenantId),
+        tenantRoleStorageKey(tenantId),
+        tenantMemberStorageKey(tenantId),
+        ...activeRoleStorageKeysForTenant(this.storage, tenantId),
+        ...workbenchLayoutStorageKeysForTenant(this.storage, tenantId),
+      ];
+      previousValues = new Map(keys.map((key) => [key, this.storage.getItem(key)]));
+    } catch (error) {
+      throw new TenantConfigurationPersistenceError("租户配置清理失败，无法读取清理前状态", error);
+    }
     try {
       for (const key of keys) this.storage.removeItem(key);
     } catch (error) {

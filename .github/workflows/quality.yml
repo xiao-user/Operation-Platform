@@ -23,5 +23,18 @@ jobs:
         run: npm ci
       - name: Verify source, tests, and production build
         run: npm run check
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Run browser end-to-end tests
+        run: npm run test:e2e
+      - name: Upload Playwright diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diagnostics
+          path: |
+            output/playwright/report
+            output/playwright/test-results
+          retention-days: 7
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high

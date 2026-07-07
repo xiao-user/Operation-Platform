@@ -62,8 +62,9 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" align="right">
+        <el-table-column label="操作" width="210" align="right">
           <template #default="{ row }">
+            <el-button link type="primary" @click="openMembers(row)">成员</el-button>
             <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button
               link
@@ -105,6 +106,8 @@
         <el-button type="primary" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
+
+    <TenantMemberDrawer v-model="memberDrawerVisible" :tenant="memberTenant" />
   </div>
 </template>
 
@@ -115,6 +118,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { Plus } from "@element-plus/icons-vue";
 import { TENANT_TAG_TYPE, TENANT_TYPE_LABEL, TENANT_TYPE_OPTIONS } from "@/config/tenant";
 import { useTenantAdminStore, type TenantDraft } from "@/stores/tenant-admin";
+import TenantMemberDrawer from "@/views/system/organization/TenantMemberDrawer.vue";
 import type { TenantInfo, TenantType } from "@/types/user";
 
 const tenantAdminStore = useTenantAdminStore();
@@ -124,6 +128,8 @@ const keyword = ref("");
 const typeFilter = ref<TenantType | "">("");
 const dialogVisible = ref(false);
 const editingId = ref<string | null>(null);
+const memberDrawerVisible = ref(false);
+const memberTenant = ref<TenantInfo | null>(null);
 const draft = reactive<TenantDraft>({
   name: "",
   shortName: "",
@@ -162,6 +168,11 @@ function openEdit(tenant: TenantInfo) {
   editingId.value = tenant.id;
   assignDraft(tenant);
   dialogVisible.value = true;
+}
+
+function openMembers(tenant: TenantInfo) {
+  memberTenant.value = { ...tenant };
+  memberDrawerVisible.value = true;
 }
 
 function validateDraft() {

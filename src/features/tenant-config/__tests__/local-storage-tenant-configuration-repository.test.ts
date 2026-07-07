@@ -8,6 +8,21 @@ import {
   tenantConfigurationStorageKey,
 } from "@/features/tenant-config/local-storage-tenant-configuration-repository";
 import type { TenantInfo } from "@/types/user";
+import {
+  getWorkbenchTemplate,
+} from "@/features/workbench/workbench-templates";
+import {
+  createDefaultWorkbenchLayout,
+} from "@/features/workbench/workbench-layout";
+import {
+  workbenchLayoutStorageKey,
+} from "@/features/workbench/local-storage-workbench-layout-repository";
+import {
+  tenantMemberStorageKey,
+} from "@/features/tenant-members/local-storage-tenant-member-repository";
+import {
+  activeRoleStorageKey,
+} from "@/features/access-control/local-storage-active-role-repository";
 
 const school: TenantInfo = {
   id: "school-aggregate",
@@ -75,6 +90,22 @@ describe("tenant configuration repository", () => {
     localStorage.setItem(tenantMenuStorageKey(school.id), "legacy-menu");
     localStorage.setItem(tenantShellConfigStorageKey(school.id), "legacy-shell");
     localStorage.setItem(tenantRoleStorageKey(school.id), "legacy-roles");
+    localStorage.setItem(tenantMemberStorageKey(school.id), "tenant-members");
+    localStorage.setItem(
+      activeRoleStorageKey({ tenantId: school.id, userId: "user-a" }),
+      "admin",
+    );
+    const workbenchContext = { tenant: school, userId: "user-a", profile: "admin" } as const;
+    const workbenchKey = workbenchLayoutStorageKey(workbenchContext);
+    localStorage.setItem(
+      workbenchKey,
+      JSON.stringify(
+        createDefaultWorkbenchLayout(
+          workbenchContext,
+          getWorkbenchTemplate(school.type, "admin"),
+        ),
+      ),
+    );
 
     repository.remove(school.id);
 
@@ -82,6 +113,11 @@ describe("tenant configuration repository", () => {
     expect(localStorage.getItem(tenantMenuStorageKey(school.id))).toBeNull();
     expect(localStorage.getItem(tenantShellConfigStorageKey(school.id))).toBeNull();
     expect(localStorage.getItem(tenantRoleStorageKey(school.id))).toBeNull();
+    expect(localStorage.getItem(tenantMemberStorageKey(school.id))).toBeNull();
+    expect(
+      localStorage.getItem(activeRoleStorageKey({ tenantId: school.id, userId: "user-a" })),
+    ).toBeNull();
+    expect(localStorage.getItem(workbenchKey)).toBeNull();
   });
 
   it("rolls back every configuration key when tenant cleanup fails", () => {
@@ -90,11 +126,30 @@ describe("tenant configuration repository", () => {
     localStorage.setItem(tenantMenuStorageKey(school.id), "legacy-menu");
     localStorage.setItem(tenantShellConfigStorageKey(school.id), "legacy-shell");
     localStorage.setItem(tenantRoleStorageKey(school.id), "legacy-roles");
+    localStorage.setItem(tenantMemberStorageKey(school.id), "tenant-members");
+    localStorage.setItem(
+      activeRoleStorageKey({ tenantId: school.id, userId: "user-a" }),
+      "admin",
+    );
+    const workbenchContext = { tenant: school, userId: "user-a", profile: "admin" } as const;
+    const workbenchKey = workbenchLayoutStorageKey(workbenchContext);
+    localStorage.setItem(
+      workbenchKey,
+      JSON.stringify(
+        createDefaultWorkbenchLayout(
+          workbenchContext,
+          getWorkbenchTemplate(school.type, "admin"),
+        ),
+      ),
+    );
     const keys = [
       tenantConfigurationStorageKey(school.id),
       tenantMenuStorageKey(school.id),
       tenantShellConfigStorageKey(school.id),
       tenantRoleStorageKey(school.id),
+      tenantMemberStorageKey(school.id),
+      activeRoleStorageKey({ tenantId: school.id, userId: "user-a" }),
+      workbenchKey,
     ];
     const previous = new Map(keys.map((key) => [key, localStorage.getItem(key)]));
     let failed = false;

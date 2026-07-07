@@ -63,11 +63,14 @@ router.beforeEach((to) => {
   const pageKey = typeof to.meta.pageKey === "string" ? to.meta.pageKey : "";
   const page = pageKey ? pageRegistryByKey.get(pageKey) : null;
   const platformTenant = userStore.availableTenants.find((tenant) => tenant.type === "platform");
+  const hasPlatformAdminRole = platformTenant
+    ? userStore.hasAdminRoleForTenant(platformTenant.id)
+    : false;
 
   if (
     page?.tenantTypes.length === 1 &&
     page.tenantTypes[0] === "platform" &&
-    userStore.isAdmin &&
+    hasPlatformAdminRole &&
     platformTenant &&
     userStore.currentTenant.type !== "platform"
   ) {
