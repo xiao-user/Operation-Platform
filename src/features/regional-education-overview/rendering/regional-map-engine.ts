@@ -29,8 +29,6 @@ import { RegionalContextLayer } from "./regional-context-layer";
 import {
   cloneMapVisualTuning,
   defaultMapVisualTuning,
-  energyTowerTuningChanged,
-  mapCameraTuningChanged,
   mapCameraViewFromTuning,
   mapVisualTuningWithCameraView,
 } from "./map-visual-tuning";
@@ -52,14 +50,6 @@ const minimumMapPolarAngle = THREE.MathUtils.degToRad(20);
 const maximumMapPolarAngle = THREE.MathUtils.degToRad(75);
 const districtMinimumCameraDistance = 480;
 const townshipMinimumCameraDistance = 280;
-const mapPresentationViewKeys = [
-  "offsetX",
-  "offsetY",
-  "scale",
-  "rotationZ",
-  "autoRotationSpeed",
-  "autoRotationResumeDelaySeconds",
-] as const;
 export const defaultRegionalMapCameraView: MapCameraView = {
   ...mapCameraViewFromTuning(defaultMapVisualTuning),
 };
@@ -68,7 +58,6 @@ interface RegionalMapEngineEvents {
   locationSelect: (location: EducationLocation) => void;
   featureSelect: (feature: GeoFeature) => void;
   scopeBack: () => void;
-  visualTuningChange: (tuning: MapVisualTuning) => void;
 }
 
 interface MapViewport {
@@ -805,18 +794,11 @@ export class RegionalMapEngine {
     this.alignOrbitPivot(true);
   }
 
-  applyCameraView(view: MapCameraView) {
-    this.pauseAutoRotation();
-    this.applyCameraViewInternal(view);
-    this.syncVisualTuningFromCamera();
-  }
-
   private syncVisualTuningFromCamera() {
     this.visualTuning = mapVisualTuningWithCameraView(
       this.visualTuning,
       this.cameraTransition.getView(),
     );
-    this.events.visualTuningChange(cloneMapVisualTuning(this.visualTuning));
   }
 
   private applyMapTransform() {
@@ -855,78 +837,6 @@ export class RegionalMapEngine {
     }
     this.controls.target.copy(pivot);
     this.controls.update();
-  }
-
-  setVisualTuning(tuning: MapVisualTuning) {
-    this.cameraTransition.cancel();
-    const cameraChanged = mapCameraTuningChanged(this.visualTuning, tuning);
-    const viewConfigurationChanged = cameraChanged || mapPresentationViewKeys.some(
-      (key) => this.visualTuning[key] !== tuning[key],
-    );
-    const townshipCameraZChanged = (
-      this.visualTuning.townshipCameraPositionZ !== tuning.townshipCameraPositionZ
-    );
-    const townshipEnergyTargetZChanged = (
-      this.visualTuning.townshipEnergyTowerTargetZ !== tuning.townshipEnergyTowerTargetZ
-    );
-    const energyTowerChanged = energyTowerTuningChanged(this.visualTuning, tuning);
-    if (viewConfigurationChanged) {
-      this.pauseAutoRotation(tuning.autoRotationResumeDelaySeconds);
-    }
-    this.visualTuning = cloneMapVisualTuning(tuning);
-    this.controls.autoRotateSpeed = tuning.autoRotationSpeed;
-    this.applyMapTransform();
-    this.alignOrbitPivot(true);
-    const framing = mapScreenFraming(this.mapState, this.visualTuning);
-    this.applyCameraFraming(framing);
-    if (cameraChanged) {
-      this.cameraTransition.apply(mapCameraViewFromTuning(tuning), framing);
-      this.alignOrbitPivot(true);
-    }
-    const applyTownshipCameraAdjustment = this.mapState.scope === "township" && (
-      townshipCameraZChanged
-      || (townshipEnergyTargetZChanged && this.dataLayerMode === "energy-towers")
-    );
-    if (applyTownshipCameraAdjustment) {
-      const currentView = this.cameraTransition.getView();
-      this.cameraTransition.apply({
-        ...currentView,
-        position: [
-          currentView.position[0],
-          currentView.position[1],
-          townshipCameraZChanged
-            ? tuning.townshipCameraPositionZ
-            : currentView.position[2],
-        ],
-        target: [
-          currentView.target[0],
-          currentView.target[1],
-          townshipEnergyTargetZChanged && this.dataLayerMode === "energy-towers"
-            ? tuning.townshipEnergyTowerTargetZ
-            : currentView.target[2],
-        ],
-      }, framing);
-      this.syncVisualTuningFromCamera();
-    }
-    this.contextLayer?.applyTheme(this.theme, tuning);
-    this.regionLayer?.setTuning(tuning);
-    this.effectsLayer?.applyTheme(this.theme, tuning);
-    this.institutionLayer?.applyTheme(this.theme, tuning);
-    this.connectionLayer?.applyTheme(this.theme, tuning);
-    this.ambientLight.intensity = tuning.ambientLightIntensity;
-    this.directionLight.intensity = tuning.directionalLightIntensity;
-    if (energyTowerChanged && this.dataLayerMode === "energy-towers") {
-      this.energyTowerLayer?.dispose();
-      this.energyTowerLayer = undefined;
-      this.buildDynamicLayers()?.settle(true);
-    } else {
-      this.energyTowerLayer?.applyTuning(this.theme, tuning);
-    }
-    for (const layer of this.exitingEnergyTowerLayers) layer.applyTheme(this.theme, tuning);
-    if (!this.motionEnabled) this.regionLayer?.settle();
-    this.syncSurfaceLayers();
-    this.updateRegionLabelPositions();
-    this.requestRender();
   }
 
   focusFeature(featureCode: string, applyTownshipDefaults: boolean): Promise<void> {

@@ -14,13 +14,10 @@
     <div ref="canvasHost" class="map-canvas-host" />
 
     <div class="map-camera-control" aria-label="地图视角与点位控制">
-      <span>{{ scopeLabel }}</span>
       <div class="map-layer-switch" role="group" aria-label="地图数据图层">
         <button type="button" :class="{ 'is-active': dataLayerMode === 'institutions' }" :aria-pressed="dataLayerMode === 'institutions'" @click="emit('update:dataLayerMode', 'institutions')">学校网络</button>
         <button type="button" :class="{ 'is-active': dataLayerMode === 'energy-towers' }" :aria-pressed="dataLayerMode === 'energy-towers'" @click="emit('update:dataLayerMode', 'energy-towers')">能量锥峰</button>
       </div>
-      <button type="button" @click="saveCameraView">保存视角</button>
-      <button type="button" @click="restoreSavedCameraView">恢复视角</button>
       <button type="button" @click="resetCameraView">重置视角</button>
     </div>
 
@@ -28,16 +25,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { createCameraViewStorage } from "../camera-view-storage";
-import type { CameraViewStorage } from "../camera-view-storage";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { MapState } from "../map-data-adapter";
 import type { DigitalTwinMapTheme } from "../map-themes";
 import {
   defaultRegionalMapCameraView,
   RegionalMapEngine,
 } from "../rendering/regional-map-engine";
-import type { MapVisualTuning } from "../rendering/map-visual-tuning";
 import type {
   EducationLocation,
   MapDataLayerMode,
@@ -49,51 +43,24 @@ const props = defineProps<{
   theme: DigitalTwinMapTheme;
   locations: readonly EducationLocation[];
   selectedLocationId?: string;
-  visualTuning: MapVisualTuning;
   dataLayerMode: MapDataLayerMode;
 }>();
 const emit = defineEmits<{
   select: [location: EducationLocation];
   featureSelect: [feature: MapState["geoData"]["features"][number]];
   scopeBack: [];
-  "update:visualTuning": [tuning: MapVisualTuning];
   "update:dataLayerMode": [mode: MapDataLayerMode];
 }>();
 const canvasHost = ref<HTMLElement>();
-const cameraStorageKey = "regional-education-overview:camera-view:v4";
-const scopeLabel = computed(
-  () => `${props.mapState.scope === "district" ? "区县" : "镇街"} / ${props.mapState.regionName}`,
-);
 let engine: RegionalMapEngine | undefined;
 let renderedScopeCode = props.mapState.code;
-let cameraViewStorage: CameraViewStorage | undefined;
-
-function resolveCameraViewStorage() {
-  try {
-    return createCameraViewStorage(window.localStorage, cameraStorageKey);
-  } catch {
-    return undefined;
-  }
-}
-
-function saveCameraView() {
-  const view = engine?.getCameraView();
-  if (!view) return;
-  cameraViewStorage?.save(view);
-}
-
-function restoreSavedCameraView() {
-  engine?.applyCameraView(cameraViewStorage?.read() ?? defaultRegionalMapCameraView);
-}
 
 function resetCameraView() {
-  cameraViewStorage?.clear();
-  engine?.applyCameraView(defaultRegionalMapCameraView);
+  void engine?.animateCameraView(defaultRegionalMapCameraView);
 }
 
 onMounted(() => {
   if (!canvasHost.value) return;
-  cameraViewStorage = resolveCameraViewStorage();
   engine = new RegionalMapEngine(
     canvasHost.value,
     props.mapState,
@@ -105,12 +72,8 @@ onMounted(() => {
       locationSelect: (location) => emit("select", location),
       featureSelect: (feature) => emit("featureSelect", feature),
       scopeBack: () => emit("scopeBack"),
-      visualTuningChange: (tuning) => emit("update:visualTuning", tuning),
     },
   );
-  engine.setVisualTuning(props.visualTuning);
-  const savedCamera = cameraViewStorage?.read();
-  if (savedCamera) engine.applyCameraView(savedCamera);
 });
 
 watch(
@@ -125,7 +88,6 @@ watch(
   },
   { flush: "post" },
 );
-watch(() => props.visualTuning, (tuning) => engine?.setVisualTuning(tuning), { deep: true });
 watch(() => props.theme, (theme) => engine?.setTheme(theme));
 watch(() => props.dataLayerMode, (mode) => engine?.setDataLayerMode(mode));
 watch(
@@ -200,8 +162,6 @@ onBeforeUnmount(() => {
   line-height: var(--dt-line-height-tight);
   text-shadow: 0 0 10px var(--map-label-glow);
 }
-
-.map-camera-control > span { margin: 0 var(--dt-space-2); white-space: nowrap; }
 
 .map-camera-control button {
   box-sizing: border-box;
@@ -309,7 +269,6 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1180px) {
   .map-camera-control { left: var(--dt-space-6); }
-  .map-camera-control > span { display: none; }
 }
 
 </style>

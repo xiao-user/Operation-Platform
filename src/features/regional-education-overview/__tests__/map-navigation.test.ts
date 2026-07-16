@@ -6,6 +6,7 @@ import {
   initialMapState,
   loadMapLevel,
   regionalContextGeoData,
+  townshipMapStateForCoordinate,
 } from "../map-data-adapter";
 import { digitalTwinMapThemes, getDigitalTwinMapTheme } from "../map-themes";
 
@@ -47,6 +48,19 @@ describe("regional education map navigation", () => {
     expect(township.geoData).toBe(initialMapState.geoData);
     expect(locations.length).toBeGreaterThan(0);
     expect(locations.length).toBeLessThan(rongchengEducationLocations.length);
+  });
+
+  it("resolves the township containing a selected school coordinate", () => {
+    const school = rongchengEducationLocations.find((location) => location.type !== "bureau");
+    expect(school).toBeDefined();
+    const township = townshipMapStateForCoordinate(school!.coordinate);
+
+    expect(township).toMatchObject({
+      scope: "township",
+      terminal: true,
+    });
+    expect(filterLocationsForMapState([school!], township!)).toEqual([school]);
+    expect(townshipMapStateForCoordinate([0, 0])).toBeUndefined();
   });
 
   it("rejects unknown township codes without pretending local lookup is asynchronous", () => {

@@ -143,7 +143,7 @@ export const defaultMapVisualTuning: Readonly<MapVisualTuning> = Object.freeze({
   cameraTargetX: -16,
   cameraTargetY: -42,
   cameraTargetZ: 8,
-  districtFramingOffsetX: -48,
+  districtFramingOffsetX: -160,
   contextFillOpacity: 0.07,
   contextLineOpacity: 0.18,
   ambientLightIntensity: 1.35,
@@ -165,8 +165,8 @@ export const defaultMapVisualTuning: Readonly<MapVisualTuning> = Object.freeze({
   townshipFocusDistance: 470,
   townshipCameraPositionZ: 80,
   townshipEnergyTowerTargetZ: 32,
-  townshipFocusFramingOffsetX: 60,
-  townshipFocusFramingOffsetY: -40,
+  townshipFocusFramingOffsetX: -100,
+  townshipFocusFramingOffsetY: 30,
   townshipFocusThickness: 16,
   townshipFocusHoverThickness: 20,
   townshipFocusLift: 0,
@@ -227,9 +227,11 @@ export const defaultMapVisualTuning: Readonly<MapVisualTuning> = Object.freeze({
   boundarySpeed: 0.055,
   boundaryTailLength: 0.09,
   colorOverrides: Object.freeze({
+    contextFill: "#8A8A8A",
+    contextLine: "#ABABAB",
     inactiveRegion: "#0F131F",
     institutionDefault: "#FFFFFF",
-    internalLine: "#363A44",
+    internalLine: "#2B2D31",
     outline: "#363A44",
   }),
 });
@@ -285,33 +287,4 @@ export function mapVisualTuningWithCameraView(
     cameraTargetY: view.target[1],
     cameraTargetZ: view.target[2],
   };
-}
-
-export function mapCameraTuningChanged(
-  previous: Readonly<MapVisualTuning>,
-  next: Readonly<MapVisualTuning>,
-) {
-  return cameraTuningKeys.some((key) => previous[key] !== next[key]);
-}
-
-const energyTowerGeometryTuningKeys = [
-  "energyTowerDistrictMinimumHeight",
-  "energyTowerDistrictMaximumHeight",
-  "energyTowerDistrictRadius",
-  "energyTowerTownshipMinimumHeight",
-  "energyTowerTownshipMaximumHeight",
-  "energyTowerTownshipRadius",
-  "energyTowerTownshipGridCellSizeDegrees",
-  "energyTowerHeightExponent",
-  "energyTowerCurveFactor",
-  "energyTowerGlowRadiusScale",
-  "energyTowerGlowMidpoint",
-  "energyTowerGlowMidAlpha",
-] as const;
-
-export function energyTowerTuningChanged(
-  previous: Readonly<MapVisualTuning>,
-  next: Readonly<MapVisualTuning>,
-) {
-  return energyTowerGeometryTuningKeys.some((key) => previous[key] !== next[key]);
 }

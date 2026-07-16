@@ -4,7 +4,6 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import DigitalTwinStatusBar from "@/features/regional-education-overview/components/DigitalTwinStatusBar.vue";
 import DigitalTwinTopbar from "@/features/regional-education-overview/components/DigitalTwinTopbar.vue";
 import LocationProfilePanel from "@/features/regional-education-overview/components/LocationProfilePanel.vue";
-import MapVisualTuningPanel from "@/features/regional-education-overview/components/MapVisualTuningPanel.vue";
 import RegionalMapStage from "@/features/regional-education-overview/components/RegionalMapStage.vue";
 import RegionalOverviewPanel from "@/features/regional-education-overview/components/RegionalOverviewPanel.vue";
 import { rongchengEducationLocations } from "@/features/regional-education-overview/education-locations";
@@ -21,10 +20,6 @@ import type {
   MapDataLayerMode,
 } from "@/features/regional-education-overview/types";
 import { digitalTwinMotion } from "@/features/regional-education-overview/motion";
-import {
-  cloneMapVisualTuning,
-  defaultMapVisualTuning,
-} from "@/features/regional-education-overview/rendering/map-visual-tuning";
 import { useUserStore } from "@/stores/user";
 import "@/styles/digital-twin-design-system.css";
 
@@ -35,7 +30,6 @@ const mapStage = ref<InstanceType<typeof RegionalMapStage>>();
 const selectedLocation = ref<EducationLocation | undefined>(rongchengEducationLocations[0]);
 const activeLocations = ref<EducationLocation[]>([...rongchengEducationLocations]);
 const activeMapState = ref<MapState>(initialMapState);
-const mapVisualTuning = ref(cloneMapVisualTuning(defaultMapVisualTuning));
 const dataLayerMode = ref<MapDataLayerMode>("institutions");
 const now = ref(new Date());
 const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
@@ -89,6 +83,10 @@ function selectLocation(location: EducationLocation) {
   selectedLocation.value = location;
 }
 
+function navigateToSchool(location: EducationLocation) {
+  void mapStage.value?.focusLocation(location);
+}
+
 function selectFirstLocationOfTypes(types: readonly EducationLocationType[]) {
   const location = activeLocations.value.find((item) => types.includes(item.type));
   if (location) selectLocation(location);
@@ -133,7 +131,6 @@ onMounted(() => {
         ".spatial-trail",
         ".right-panel",
         ".map-camera-control",
-        ".map-tuning-panel",
         ".bottom-navigation",
       ].join(",")));
       const entranceTween = gsap.from(targets, {
@@ -173,11 +170,9 @@ onBeforeUnmount(() => {
       :locations="rongchengEducationLocations"
       :selected-location-id="selectedLocation?.id"
       :theme="activeTheme"
-      :visual-tuning="mapVisualTuning"
       :data-layer-mode="dataLayerMode"
       @select="selectLocation"
       @scope-change="handleScopeChange"
-      @update:visual-tuning="mapVisualTuning = $event"
       @update:data-layer-mode="dataLayerMode = $event"
     />
 
@@ -205,15 +200,11 @@ onBeforeUnmount(() => {
         <LocationProfilePanel
           :location="selectedLocation"
           :scope-name="activeMapState.regionName"
-          :can-drill="!activeMapState.terminal"
           :formatted-date="formattedDate"
-          :entity-count="activeLocations.length"
           :locations="activeLocations"
-          :data-layer-mode="dataLayerMode"
           @location-select="selectLocation"
+          @school-navigate="navigateToSchool"
         />
-
-        <MapVisualTuningPanel v-model="mapVisualTuning" :theme="activeTheme" />
       </div>
 
       <DigitalTwinStatusBar

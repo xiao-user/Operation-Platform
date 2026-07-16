@@ -84,50 +84,31 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   ).toBeVisible({ timeout: 20_000 });
   await expect(overviewPage.getByLabel("选择教育机构")).toHaveCount(0);
   await expect(overviewPage.getByLabel("选择镇街下钻")).toHaveCount(0);
-  expect(await overviewPage.locator(".pagination-item").count()).toBeGreaterThan(3);
-  await overviewPage.getByText("地图调试", { exact: true }).click();
-  await expect(overviewPage.getByText("区级锥峰", { exact: true })).toBeVisible();
-  await expect(overviewPage.getByText("子级锥峰", { exact: true })).toBeVisible();
-  await expect(overviewPage.getByText("锥峰材质与动画", { exact: true })).toBeVisible();
-  await expect(overviewPage.getByText("地表与灯光材质", { exact: true })).toBeVisible();
-  await expect(overviewPage.getByText("学校点位材质", { exact: true })).toBeVisible();
-  await expect(overviewPage.getByText("飞线材质", { exact: true })).toBeVisible();
-  await overviewPage.getByText("地表与灯光材质", { exact: true }).click();
-  await expect(overviewPage.getByRole("slider", { name: "地表透明度" })).toHaveValue("1");
-  await expect(overviewPage.getByRole("slider", { name: "地表金属度" })).toHaveValue("0.8");
-  await expect(overviewPage.getByRole("slider", { name: "顶部轮廓透明度" })).toHaveValue("0.7");
-  const terrainRoughness = overviewPage.getByRole("slider", { name: "地表粗糙度" });
-  await expect(terrainRoughness).toHaveValue("0.94");
-  await terrainRoughness.press("ArrowLeft");
-  await expect(terrainRoughness).toHaveValue("0.93");
-  await overviewPage.getByText("学校点位材质", { exact: true }).click();
-  await expect(overviewPage.getByRole("slider", { name: "普通点位尺寸" })).toHaveValue("20");
-  await expect(overviewPage.getByRole("slider", { name: "重点点位尺寸" })).toHaveValue("30");
-  await expect(overviewPage.getByRole("slider", { name: "点位光晕内径" })).toHaveValue("0.49");
-  await expect(overviewPage.getByRole("slider", { name: "局端涟漪亮度" })).toHaveValue("3");
-  await expect(overviewPage.getByLabel("普通学校点位颜色")).toHaveValue("#ffffff");
-  await overviewPage.getByText("飞线材质", { exact: true }).click();
-  await expect(overviewPage.getByRole("slider", { name: "飞线底轨亮度" })).toHaveValue("0.3");
-  await expect(overviewPage.getByRole("slider", { name: "流光整体亮度" })).toHaveValue("3");
-  await expect(overviewPage.getByRole("slider", { name: "飞线流光速度" })).toHaveValue("0.18");
-  await overviewPage.getByText("锥峰材质与动画", { exact: true }).click();
-  const towerGridWidth = overviewPage.getByRole("slider", { name: "网格线宽度" });
-  await expect(towerGridWidth).toHaveValue("0.08");
-  await towerGridWidth.press("ArrowRight");
-  await expect(towerGridWidth).toHaveValue("0.09");
-  await expect(overviewPage.getByRole("slider", { name: "自动旋转速度" })).toHaveValue("0.2");
-  await expect(overviewPage.getByRole("slider", { name: "空闲恢复秒数" })).toHaveValue("10");
-  await overviewPage.getByText("下级聚焦", { exact: true }).click();
-  await expect(overviewPage.getByRole("slider", { name: "锥峰焦点 Z" })).toHaveValue("32");
-  await overviewPage.getByText("区级锥峰", { exact: true }).click();
-  await expect(overviewPage.getByRole("slider", { name: "区级底座半径" })).toHaveValue("36");
-  const horizontalOffset = overviewPage.getByRole("slider", { name: "水平偏移" });
-  await expect(horizontalOffset).toHaveValue("-60");
-  await horizontalOffset.press("ArrowLeft");
-  await expect(horizontalOffset).toHaveValue("-62");
-  await overviewPage.getByRole("button", { name: "恢复默认参数" }).click();
-  await expect(horizontalOffset).toHaveValue("-60");
-  await overviewPage.getByText("地图调试", { exact: true }).click();
+  expect(await overviewPage.locator(".school-list-item").count()).toBeGreaterThan(3);
+  await expect(overviewPage.locator(".profile-meta")).toHaveCSS("align-items", "center");
+  const profileMetaRows = overviewPage.locator(".profile-meta dl > div");
+  await expect(profileMetaRows).toHaveCount(2);
+  const firstMetaBounds = (await profileMetaRows.nth(0).boundingBox())!;
+  const secondMetaBounds = (await profileMetaRows.nth(1).boundingBox())!;
+  expect(secondMetaBounds.y).toBeGreaterThan(firstMetaBounds.y);
+  await expect(overviewPage.locator(".profile-tabs")).toHaveCSS("height", "34px");
+
+  const firstAccordion = overviewPage.locator(
+    "#collaboration-panel .accordion-list details",
+  ).nth(0);
+  await expect(firstAccordion).toHaveAttribute("open", "");
+  await firstAccordion.locator("summary").click();
+  await expect(firstAccordion).not.toHaveAttribute("open", "");
+  const secondAccordion = overviewPage.locator(
+    "#collaboration-panel .accordion-list details",
+  ).nth(1);
+  await secondAccordion.locator("summary").click();
+  await expect(secondAccordion).toHaveAttribute("open", "");
+  await expect(overviewPage.getByText("地图调试", { exact: true })).toHaveCount(0);
+  await expect(overviewPage.getByRole("button", { name: "保存视角" })).toHaveCount(0);
+  await expect(overviewPage.getByRole("button", { name: "恢复视角" })).toHaveCount(0);
+  await expect(overviewPage.getByRole("button", { name: "重置视角" })).toBeVisible();
+  await expect(overviewPage.locator(".map-camera-control > span")).toHaveCount(0);
   await overviewPage.getByRole("button", { name: "切换至凤岐华侨学校" }).click();
   await expect(
     overviewPage.getByRole("heading", { name: "凤岐华侨学校" }),
@@ -149,7 +130,6 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
     { timeout: 7_000 },
   ).not.toBe(initialTowerCardId);
   await expect(pinnedTowerCard).toHaveCount(1);
-  await expect(overviewPage.getByText("点击锥峰查看学校数据", { exact: false })).toBeAttached();
   await overviewPage.getByRole("button", { name: "学校网络", exact: true }).click();
   await expect(overviewPage.locator(".map-energy-tower-label")).toHaveCount(0);
   const mapCanvasBounds = await mapCanvas.boundingBox();
@@ -162,47 +142,6 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   expect(mapCanvasBounds?.y).toBe(overviewSurfaceBounds?.y);
   expect(mapCanvasBounds?.width).toBe(overviewSurfaceBounds?.width);
   expect(mapCanvasBounds?.height).toBe(overviewSurfaceBounds?.height);
-
-  const mapCenterX = (mapCanvasBounds?.x ?? 0) + (mapCanvasBounds?.width ?? 0) * 0.5;
-  const mapCenterY = (mapCanvasBounds?.y ?? 0) + (mapCanvasBounds?.height ?? 0) * 0.5;
-  await overviewPage.getByText("地图调试", { exact: true }).click();
-  const cameraFieldLabels = [
-    "相机 X",
-    "相机 Y",
-    "相机 Z",
-    "焦点 X",
-    "焦点 Y",
-    "焦点 Z",
-  ] as const;
-  const cameraFields = cameraFieldLabels.map((label) =>
-    overviewPage.locator(`input[aria-label="${label}"]`)
-  );
-  const readCameraValues = async () => Promise.all(
-    cameraFields.map(async (field) => Number(await field.inputValue())),
-  );
-  const cameraValuesBeforeOrbit = await readCameraValues();
-  await overviewPage.mouse.move(mapCenterX, mapCenterY);
-  await overviewPage.mouse.down();
-  await overviewPage.mouse.move(mapCenterX + 70, mapCenterY, { steps: 8 });
-  await overviewPage.mouse.up();
-  await expect.poll(async () => (await readCameraValues()).join("|")).not.toBe(
-    cameraValuesBeforeOrbit.join("|"),
-  );
-  const cameraValuesAfterOrbit = await readCameraValues();
-  expect(cameraValuesAfterOrbit[0]).not.toBeCloseTo(cameraValuesBeforeOrbit[0], 3);
-  expect(cameraValuesAfterOrbit[1]).not.toBeCloseTo(cameraValuesBeforeOrbit[1], 3);
-  expect(cameraValuesAfterOrbit[2]).toBeCloseTo(cameraValuesBeforeOrbit[2], 3);
-  expect(cameraValuesAfterOrbit.slice(3)).toEqual(cameraValuesBeforeOrbit.slice(3));
-
-  await overviewPage.getByRole("button", { name: "恢复默认参数" }).click();
-  const cameraValuesBeforeRightDrag = await readCameraValues();
-  await overviewPage.mouse.move(mapCenterX, mapCenterY);
-  await overviewPage.mouse.down({ button: "right" });
-  await overviewPage.mouse.move(mapCenterX + 70, mapCenterY, { steps: 8 });
-  await overviewPage.mouse.up({ button: "right" });
-  await overviewPage.waitForTimeout(200);
-  expect(await readCameraValues()).toEqual(cameraValuesBeforeRightDrag);
-  await overviewPage.getByText("地图调试", { exact: true }).click();
 
   await overviewPage.getByRole("button", { name: "切换至星河钴蓝" }).click();
   await expect(overviewPage.getByRole("button", { name: "切换至星河钴蓝" })).toHaveClass(/is-active/);

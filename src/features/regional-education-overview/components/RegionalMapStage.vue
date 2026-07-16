@@ -6,24 +6,22 @@ import {
   filterLocationsForMapState,
   initialMapState,
   loadMapLevel,
+  townshipMapStateForCoordinate,
 } from "../map-data-adapter";
 import type { MapState } from "../map-data-adapter";
 import type { DigitalTwinMapTheme } from "../map-themes";
-import type { MapVisualTuning } from "../rendering/map-visual-tuning";
 import type { EducationLocation, MapCameraView, MapDataLayerMode } from "../types";
 
 const props = defineProps<{
   locations: readonly EducationLocation[];
   selectedLocationId?: string;
   theme: DigitalTwinMapTheme;
-  visualTuning: MapVisualTuning;
   dataLayerMode: MapDataLayerMode;
 }>();
 
 const emit = defineEmits<{
   select: [location: EducationLocation];
   scopeChange: [state: MapState, locations: EducationLocation[]];
-  "update:visualTuning": [tuning: MapVisualTuning];
   "update:dataLayerMode": [mode: MapDataLayerMode];
 }>();
 
@@ -84,13 +82,24 @@ async function goBack() {
   }
 }
 
+async function focusLocation(location: EducationLocation) {
+  const townshipState = townshipMapStateForCoordinate(location.coordinate);
+  if (!townshipState || townshipState.code === currentState.value.code) return;
+  const feature = townshipState.focusFeatureCode
+    ? initialMapState.geoData.features.find(
+        (item) => item.properties.code === townshipState.focusFeatureCode,
+      )
+    : undefined;
+  if (feature) await focusRegion(feature);
+}
+
 watch(
   [currentState, visibleLocations],
   () => emit("scopeChange", currentState.value, visibleLocations.value),
   { immediate: true },
 );
 
-defineExpose({ goBack });
+defineExpose({ focusLocation, goBack });
 
 </script>
 
@@ -104,14 +113,12 @@ defineExpose({ goBack });
       ref="mapRenderer"
       :map-state="currentState"
       :theme="theme"
-      :visual-tuning="visualTuning"
       :data-layer-mode="dataLayerMode"
       :locations="visibleLocations"
       :selected-location-id="selectedLocationId"
       @select="emit('select', $event)"
       @feature-select="focusRegion"
       @scope-back="goBack"
-      @update:visual-tuning="emit('update:visualTuning', $event)"
       @update:data-layer-mode="emit('update:dataLayerMode', $event)"
     />
   </section>

@@ -71,6 +71,13 @@ export function filterLocationsForMapState(
     : [];
 }
 
+export function townshipMapStateForCoordinate(coordinate: readonly [number, number]) {
+  const feature = initialMapState.geoData.features.find((item) => (
+    featureContainsCoordinate(item, coordinate)
+  ));
+  return feature ? createTownshipMapState(feature) : undefined;
+}
+
 export function boundaryFeatureForMapState(state: MapState) {
   if (state.scope === "district") return districtBoundaryGeoData.features[0];
   return state.focusFeatureCode

@@ -76,12 +76,12 @@ describe("regional map render budget", () => {
 
   it("keeps screen framing separate from the geographic orbit pivot", () => {
     expect(mapScreenFraming({ scope: "district" }, defaultMapVisualTuning)).toEqual({
-      x: -108,
+      x: -220,
       y: -30,
     });
     expect(mapScreenFraming({ scope: "township" }, defaultMapVisualTuning)).toEqual({
-      x: 0,
-      y: -70,
+      x: -160,
+      y: 0,
     });
 
     const mapRoot = new THREE.Group();

@@ -5,8 +5,7 @@ import { rongchengEducationLocations } from "../education-locations";
 import RegionalMapStage from "../components/RegionalMapStage.vue";
 import { initialMapState } from "../map-data-adapter";
 import { getDigitalTwinMapTheme } from "../map-themes";
-import { defaultMapVisualTuning } from "../rendering/map-visual-tuning";
-import type { MapCameraView } from "../types";
+import type { EducationLocation, MapCameraView } from "../types";
 
 const parentCamera: MapCameraView = {
   fov: 37,
@@ -15,6 +14,42 @@ const parentCamera: MapCameraView = {
 };
 
 describe("RegionalMapStage", () => {
+  it("drills into the township containing a school selected outside the map", async () => {
+    const focusFeature = vi.fn(() => Promise.resolve());
+    const rendererStub = defineComponent({
+      name: "RongchengThreeMap",
+      setup(_, { expose }) {
+        expose({
+          getCameraView: () => parentCamera,
+          focusFeature,
+          animateCameraView: vi.fn(() => Promise.resolve()),
+        });
+        return () => h("div", { class: "renderer-stub" });
+      },
+    });
+    const wrapper = mount(RegionalMapStage, {
+      props: {
+        locations: rongchengEducationLocations,
+        theme: getDigitalTwinMapTheme("lime"),
+        dataLayerMode: "institutions",
+      },
+      global: { stubs: { RongchengThreeMap: rendererStub } },
+    });
+    const school = rongchengEducationLocations.find((location) => location.type !== "bureau");
+    expect(school).toBeDefined();
+
+    await (wrapper.vm as unknown as {
+      focusLocation: (location: EducationLocation) => Promise<void>;
+    }).focusLocation(school!);
+    await flushPromises();
+
+    const scopeEvents = wrapper.emitted("scopeChange");
+    expect(scopeEvents?.[scopeEvents.length - 1]?.[0]).toMatchObject({
+      scope: "township",
+    });
+    expect(focusFeature).toHaveBeenCalledWith(expect.any(String), true);
+  });
+
   it("switches focused siblings in place and animates back to the exact parent camera", async () => {
     const focusFeature = vi.fn();
     const animateCameraView = vi.fn();
@@ -33,7 +68,6 @@ describe("RegionalMapStage", () => {
       props: {
         locations: rongchengEducationLocations,
         theme: getDigitalTwinMapTheme("lime"),
-        visualTuning: defaultMapVisualTuning,
         dataLayerMode: "institutions",
       },
       global: {
@@ -93,7 +127,6 @@ describe("RegionalMapStage", () => {
       props: {
         locations: rongchengEducationLocations,
         theme: getDigitalTwinMapTheme("lime"),
-        visualTuning: defaultMapVisualTuning,
         dataLayerMode: "institutions",
       },
       global: { stubs: { RongchengThreeMap: rendererStub } },

@@ -1,23 +1,22 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import mapPinIcon from "@/assets/figma/regional-education-overview/map-pin.svg";
+import { gsap } from "gsap";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import chevronBottomIcon from "@/assets/figma/regional-education-overview/chevron-bottom.svg";
+import entityEmblemDecoration from "@/assets/figma/regional-education-overview/entity-emblem-decoration.svg";
 import { educationLocationTypeMeta } from "../education-locations";
-import type { EducationLocation, MapDataLayerMode } from "../types";
+import type { EducationLocation } from "../types";
 import AnimatedNumber from "./AnimatedNumber.vue";
 
 const props = defineProps<{
   location?: EducationLocation;
   scopeName: string;
-  canDrill: boolean;
   formattedDate: string;
-  entityCount: number;
   locations: readonly EducationLocation[];
-  dataLayerMode: MapDataLayerMode;
 }>();
 
 const emit = defineEmits<{
   locationSelect: [location: EducationLocation];
+  schoolNavigate: [location: EducationLocation];
 }>();
 
 const selectedTypeMeta = computed(() => props.location
@@ -29,25 +28,252 @@ const sourceLabel = computed(() => props.location?.source === "OpenStreetMap"
 const entityCode = computed(() => props.location?.sourceId
   ? `OSM-${props.location.sourceId.padStart(4, "0")}`
   : props.location?.id ?? "--");
-const importanceLabel = computed(() => props.location?.type === "bureau" ? "区域级" : "校级");
+const entityKindLabel = computed(() => props.location?.type === "bureau" ? "管理机构" : "学校");
+const entityUnit = computed(() => props.location?.type === "bureau" ? "个" : "所");
+const notificationTarget = computed(() => props.location?.type === "bureau"
+  ? `${props.scopeName}全部学校`
+  : props.location?.name ?? props.scopeName);
+const activeProfileTab = ref<"collaboration" | "school-notice">("collaboration");
+const profileRoot = ref<HTMLElement>();
+let profileAnimationContext: gsap.Context | undefined;
+const collaborationNotices = computed(() => [
+  {
+    id: "material-submission",
+    title: "材料报送提醒",
+    content: `${props.scopeName}本周材料报送窗口已开放，请按教育局协同办公要求核对附件与联系人信息。`,
+  },
+  {
+    id: "contact-maintenance",
+    title: "协同联系人维护",
+    content: `请核对${props.location?.name ?? props.scopeName}的协同联系人与值班信息，确保教育局通知能够及时送达。`,
+  },
+  {
+    id: "workflow-status",
+    title: "流程处理说明",
+    content: "协同事项提交后将进入教育局审核流程，处理状态与退回意见可在协同办公服务中持续查看。",
+  },
+]);
+const schoolNotices = computed(() => [
+  {
+    id: "school-profile",
+    title: "学校基础信息核验",
+    content: `请核对${notificationTarget.value}的机构名称、办学类型、所属镇街与服务联系人，发现差异后通过学校服务入口反馈。`,
+  },
+  {
+    id: "map-calibration",
+    title: "地图点位校准通知",
+    content: `当前点位来源为${sourceLabel.value}，正式业务使用前需结合教育局权威台账完成坐标与隶属关系校准。`,
+  },
+  {
+    id: "service-activation",
+    title: "学校服务接入提醒",
+    content: `${notificationTarget.value}可通过平台接收教育局通知、提交材料并反馈校务服务问题。`,
+  },
+]);
+const visibleSchools = computed(() => props.locations.filter((location) => location.type !== "bureau"));
+const schoolScroller = ref<HTMLElement>();
+const schoolScrollInterval = 4_000;
+const schoolScrollPauseReasons = new Set<string>();
+let schoolScrollTimer: number | undefined;
+let motionQuery: MediaQueryList | undefined;
+
+function stopSchoolRotation() {
+  if (schoolScrollTimer !== undefined) window.clearInterval(schoolScrollTimer);
+  schoolScrollTimer = undefined;
+}
+
+function scrollToNextSchool() {
+  const scroller = schoolScroller.value;
+  if (!scroller || scroller.scrollHeight <= scroller.clientHeight + 1) return;
+  const rows = Array.from(scroller.querySelectorAll<HTMLElement>(".school-list-item"));
+  if (rows.length < 2) return;
+  const nextIndex = rows.findIndex((row) => row.offsetTop > scroller.scrollTop + 2);
+  scroller.scrollTo({
+    top: nextIndex < 0 ? 0 : rows[nextIndex]?.offsetTop ?? 0,
+    behavior: "smooth",
+  });
+}
+
+function startSchoolRotation() {
+  stopSchoolRotation();
+  if (
+    motionQuery?.matches
+    || schoolScrollPauseReasons.size > 0
+    || visibleSchools.value.length < 2
+  ) return;
+  schoolScrollTimer = window.setInterval(scrollToNextSchool, schoolScrollInterval);
+}
+
+function pauseSchoolRotation(reason: string) {
+  schoolScrollPauseReasons.add(reason);
+  stopSchoolRotation();
+}
+
+function resumeSchoolRotation(reason: string) {
+  schoolScrollPauseReasons.delete(reason);
+  startSchoolRotation();
+}
+
+function handleMotionPreferenceChange() {
+  startSchoolRotation();
+}
+
+function selectSchool(school: EducationLocation) {
+  emit("locationSelect", school);
+  emit("schoolNavigate", school);
+}
+
+function stopAccordionAnimations() {
+  const root = profileRoot.value;
+  if (!root) return;
+  const targets = root.querySelectorAll<HTMLElement>(
+    ".accordion-content, .accordion-list summary img",
+  );
+  gsap.killTweensOf(targets);
+}
+
+function toggleAccordion(event: MouseEvent) {
+  const summary = event.currentTarget as HTMLElement;
+  const details = summary.closest("details");
+  const content = details?.querySelector<HTMLElement>(".accordion-content");
+  const icon = summary.querySelector<HTMLImageElement>("img");
+  if (!details || !content || !icon) return;
+
+  const shouldOpen = !details.open;
+  gsap.killTweensOf([content, icon]);
+
+  if (motionQuery?.matches) {
+    details.open = shouldOpen;
+    gsap.set(content, { clearProps: "height,overflow,opacity,visibility" });
+    gsap.set(icon, { rotation: shouldOpen ? 180 : 0 });
+    return;
+  }
+
+  profileAnimationContext?.add(() => {
+    gsap.to(icon, {
+      rotation: shouldOpen ? 180 : 0,
+      duration: 0.22,
+      ease: "power2.out",
+      overwrite: true,
+    });
+
+    if (shouldOpen) {
+      details.open = true;
+      const expandedHeight = content.scrollHeight;
+      gsap.fromTo(
+        content,
+        { height: 0, autoAlpha: 0, overflow: "hidden" },
+        {
+          height: expandedHeight,
+          autoAlpha: 1,
+          duration: 0.28,
+          ease: "power3.out",
+          overwrite: true,
+          onComplete: () => {
+            gsap.set(content, { clearProps: "height,overflow,opacity,visibility" });
+          },
+        },
+      );
+      return;
+    }
+
+    gsap.set(content, { height: content.getBoundingClientRect().height, overflow: "hidden" });
+    gsap.to(content, {
+      height: 0,
+      autoAlpha: 0,
+      duration: 0.24,
+      ease: "power2.inOut",
+      overwrite: true,
+      onComplete: () => {
+        details.open = false;
+        gsap.set(content, { clearProps: "height,overflow,opacity,visibility" });
+      },
+    });
+  });
+}
+
+watch(
+  () => [props.scopeName, visibleSchools.value.map((school) => school.id).join("|")],
+  async () => {
+    await nextTick();
+    schoolScroller.value?.scrollTo({ top: 0, behavior: "auto" });
+    startSchoolRotation();
+  },
+  { flush: "post" },
+);
+
+watch(
+  () => props.location?.id,
+  async (locationId) => {
+    if (!locationId) return;
+    await nextTick();
+    const scroller = schoolScroller.value;
+    const activeRow = Array.from(
+      scroller?.querySelectorAll<HTMLElement>(".school-list-item") ?? [],
+    ).find((row) => row.dataset.schoolId === locationId);
+    if (!scroller || !activeRow) return;
+    const rowTop = activeRow.offsetTop;
+    const rowBottom = rowTop + activeRow.offsetHeight;
+    if (rowTop < scroller.scrollTop || rowBottom > scroller.scrollTop + scroller.clientHeight) {
+      scroller.scrollTo({ top: rowTop, behavior: motionQuery?.matches ? "auto" : "smooth" });
+    }
+  },
+  { flush: "post" },
+);
+
+watch(activeProfileTab, stopAccordionAnimations, { flush: "sync" });
+
+onMounted(() => {
+  motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+  motionQuery?.addEventListener("change", handleMotionPreferenceChange);
+  if (profileRoot.value) {
+    profileAnimationContext = gsap.context(() => undefined, profileRoot.value);
+  }
+  startSchoolRotation();
+});
+
+onBeforeUnmount(() => {
+  stopSchoolRotation();
+  stopAccordionAnimations();
+  profileAnimationContext?.revert();
+  motionQuery?.removeEventListener("change", handleMotionPreferenceChange);
+});
 </script>
 
 <template>
-  <div class="right-hud">
-    <ol class="spatial-trail" aria-label="当前空间路径">
-      <li class="is-current">
-        <strong>{{ location?.name ?? scopeName }}</strong>
-        <span><img :src="mapPinIcon" alt="" aria-hidden="true">{{ selectedTypeMeta?.label ?? "行政区域" }}</span>
-      </li>
-      <li>
-        <strong>{{ scopeName }}</strong>
-        <span><AnimatedNumber :value="entityCount" /> 个空间实体</span>
-      </li>
-      <li v-if="scopeName !== '榕城区'">
-        <strong>榕城区</strong>
-        <span>区域教育总览</span>
-      </li>
-    </ol>
+  <div ref="profileRoot" class="right-hud">
+    <section class="spatial-trail" aria-label="当前范围学校">
+      <header class="school-list-header">
+        <div><strong>{{ scopeName }}</strong><span>学校定位</span></div>
+        <span><AnimatedNumber :value="visibleSchools.length" /> 所</span>
+      </header>
+      <div
+        ref="schoolScroller"
+        class="school-list"
+        tabindex="0"
+        aria-label="学校列表，可滚动浏览并选择学校"
+        @pointerenter="pauseSchoolRotation('pointer')"
+        @pointerleave="resumeSchoolRotation('pointer')"
+        @focusin="pauseSchoolRotation('focus')"
+        @focusout="resumeSchoolRotation('focus')"
+      >
+        <button
+          v-for="school in visibleSchools"
+          :key="school.id"
+          type="button"
+          class="school-list-item"
+          :class="{ 'is-active': school.id === location?.id }"
+          :data-school-id="school.id"
+          :aria-label="`切换至${school.name}`"
+          :aria-current="school.id === location?.id ? 'true' : undefined"
+          @click="selectSchool(school)"
+        >
+          <span>{{ school.name }}</span>
+          <small>{{ educationLocationTypeMeta[school.type].label }}</small>
+        </button>
+        <p v-if="visibleSchools.length === 0" class="school-list-empty">当前范围暂无学校点位</p>
+      </div>
+    </section>
 
     <aside class="right-panel" aria-label="当前教育机构详情">
       <template v-if="location && selectedTypeMeta">
@@ -56,79 +282,105 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
 
           <div class="profile-meta">
             <dl>
-              <div><dt>日期</dt><dd>{{ formattedDate }}</dd></div>
-              <div><dt>类型</dt><dd>{{ selectedTypeMeta.label }}</dd></div>
+              <div><dt>所属区域</dt><dd>{{ scopeName }}</dd></div>
+              <div><dt>机构类型</dt><dd>{{ selectedTypeMeta.label }}</dd></div>
             </dl>
-            <div class="entity-emblem" :style="{ '--entity-color': selectedTypeMeta.color }" aria-hidden="true">
+            <div class="entity-emblem" aria-hidden="true">
+              <img :src="entityEmblemDecoration" alt="">
               <span>{{ selectedTypeMeta.shortLabel }}</span>
             </div>
           </div>
 
           <div class="entity-metric">
-            <strong><AnimatedNumber :value="1" /></strong><span>个</span><p>地图实体</p>
+            <strong><AnimatedNumber :value="1" /></strong><span>{{ entityUnit }}</span><p>已接入{{ entityKindLabel }}</p>
           </div>
 
           <div class="profile-tabs" role="tablist" aria-label="机构详情分类">
-            <button type="button" class="is-active" role="tab" aria-selected="true">机构信息</button>
-            <button type="button" role="tab" aria-selected="false" disabled>运行追踪</button>
+            <button
+              type="button"
+              :class="{ 'is-active': activeProfileTab === 'collaboration' }"
+              role="tab"
+              :aria-selected="activeProfileTab === 'collaboration'"
+              aria-controls="collaboration-panel"
+              @click="activeProfileTab = 'collaboration'"
+            >协同办公</button>
+            <button
+              type="button"
+              :class="{ 'is-active': activeProfileTab === 'school-notice' }"
+              role="tab"
+              :aria-selected="activeProfileTab === 'school-notice'"
+              aria-controls="school-notice-panel"
+              @click="activeProfileTab = 'school-notice'"
+            >通知信息</button>
           </div>
 
-          <section class="detail-card" aria-label="空间实体数据">
+          <section
+            v-if="activeProfileTab === 'collaboration'"
+            id="collaboration-panel"
+            class="detail-card"
+            role="tabpanel"
+            aria-label="协同办公"
+          >
             <dl class="detail-grid">
+              <div><dt>协同主体</dt><dd>{{ location.name }}</dd></div>
               <div><dt>机构编码</dt><dd>{{ entityCode }}</dd></div>
-              <div><dt>接入状态</dt><dd>已接入</dd></div>
-              <div><dt>机构类型</dt><dd>{{ selectedTypeMeta.label }}</dd></div>
-              <div><dt>数据来源</dt><dd>{{ sourceLabel }}</dd></div>
-              <div><dt>数据等级</dt><dd><mark>{{ importanceLabel }}</mark></dd></div>
+              <div><dt>所属区域</dt><dd>{{ scopeName }}</dd></div>
+              <div><dt>接入状态</dt><dd><mark>在线</mark></dd></div>
             </dl>
 
             <dl class="detail-grid secondary-grid">
-              <div><dt>更新时间</dt><dd>{{ formattedDate }}</dd></div>
-              <div><dt>所属范围</dt><dd>{{ scopeName }}</dd></div>
-              <div><dt>数据效力</dt><dd>原型参考</dd></div>
+              <div><dt>材料报送</dt><dd>已开放</dd></div>
+              <div><dt>流程审核</dt><dd>教育局审核</dd></div>
+              <div><dt>消息接收</dt><dd>正常</dd></div>
+              <div><dt>数据更新</dt><dd>{{ formattedDate }}</dd></div>
             </dl>
 
             <div class="accordion-list">
-              <details open>
-                <summary>数据说明<img :src="chevronBottomIcon" alt="" aria-hidden="true"></summary>
-                <p>{{ location.note ?? "坐标来自公开地理数据，等待教育局权威台账补充运行指标。" }}</p>
+              <details
+                v-for="(notice, index) in collaborationNotices"
+                :key="notice.id"
+                :open="index === 0"
+              >
+                <summary @click.prevent="toggleAccordion">{{ notice.title }}<img :src="chevronBottomIcon" alt="" aria-hidden="true"></summary>
+                <div class="accordion-content"><p>{{ notice.content }}</p></div>
               </details>
-              <details>
-                <summary>坐标信息<img :src="chevronBottomIcon" alt="" aria-hidden="true"></summary>
-                <p>经度 {{ location.coordinate[0].toFixed(6) }}，纬度 {{ location.coordinate[1].toFixed(6) }}</p>
-              </details>
-              <details>
-                <summary>数据来源<img :src="chevronBottomIcon" alt="" aria-hidden="true"></summary>
-                <p>{{ sourceLabel }} 公开地理数据，仅用于本地原型展示。</p>
-              </details>
-              <details>
-                <summary>地图操作<img :src="chevronBottomIcon" alt="" aria-hidden="true"></summary>
-                <p>拖拽旋转、滚轮缩放、{{ dataLayerMode === "energy-towers" ? "点击锥峰查看学校数据" : "点击点位查看学校" }}。{{ canDrill ? "点击镇街边界可下钻。" : "当前已进入镇街层级。" }}</p>
-              </details>
-              <details>
-                <summary>校准状态<img :src="chevronBottomIcon" alt="" aria-hidden="true"></summary>
-                <p>正式上线前需使用教育局权威台账校准机构类型、隶属关系与坐标。</p>
+            </div>
+          </section>
+
+          <section
+            v-else
+            id="school-notice-panel"
+            class="detail-card"
+            role="tabpanel"
+            aria-label="通知信息"
+          >
+            <dl class="detail-grid">
+              <div><dt>通知对象</dt><dd>{{ notificationTarget }}</dd></div>
+              <div><dt>通知类型</dt><dd>学校服务</dd></div>
+              <div><dt>所属区域</dt><dd>{{ scopeName }}</dd></div>
+              <div><dt>发布状态</dt><dd><mark>可发送</mark></dd></div>
+            </dl>
+
+            <dl class="detail-grid secondary-grid">
+              <div><dt>发送渠道</dt><dd>平台消息</dd></div>
+              <div><dt>回执要求</dt><dd>需要确认</dd></div>
+              <div><dt>数据来源</dt><dd>{{ sourceLabel }}</dd></div>
+              <div><dt>数据更新</dt><dd>{{ formattedDate }}</dd></div>
+            </dl>
+
+            <div class="accordion-list">
+              <details
+                v-for="(notice, index) in schoolNotices"
+                :key="notice.id"
+                :open="index === 0"
+              >
+                <summary @click.prevent="toggleAccordion">{{ notice.title }}<img :src="chevronBottomIcon" alt="" aria-hidden="true"></summary>
+                <div class="accordion-content"><p>{{ notice.content }}</p></div>
               </details>
             </div>
           </section>
         </div>
 
-        <div class="panel-pagination" aria-label="切换教育机构">
-          <div class="pagination-track">
-            <button
-              v-for="item in locations"
-              :key="item.id"
-              type="button"
-              class="pagination-item"
-              :class="{ 'is-active': item.id === location.id }"
-              :aria-label="`切换至${item.name}`"
-              :aria-pressed="item.id === location.id"
-              @click="emit('locationSelect', item)"
-            >
-              <i aria-hidden="true" />
-            </button>
-          </div>
-        </div>
       </template>
 
       <div v-else class="empty-profile">
@@ -168,7 +420,7 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
 
 .right-panel h2 {
   margin: 0;
-  color: var(--dt-color-text);
+  color: var(--dt-color-text-strong);
   font-size: var(--dt-font-size-lg);
   line-height: var(--dt-line-height-lg);
   font-weight: var(--dt-font-weight-bold);
@@ -186,7 +438,8 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
   min-height: 72px;
   margin-top: 28px;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  gap: var(--dt-space-4);
 }
 
 .profile-meta dl,
@@ -196,13 +449,16 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
 
 .profile-meta dl {
   display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
   gap: var(--dt-space-2);
 }
 
 .profile-meta dl div,
 .detail-grid div {
   display: grid;
-  grid-template-columns: var(--dt-profile-label-column) minmax(0, 1fr);
+  grid-template-columns: minmax(56px, max-content) minmax(0, 1fr);
+  column-gap: var(--dt-space-3);
 }
 
 .profile-meta dt,
@@ -217,38 +473,35 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
 
 .profile-meta dt,
 .detail-grid dt {
+  width: auto;
+  min-width: 56px;
   color: var(--dt-color-text-muted);
 }
 
 .profile-meta dd,
 .detail-grid dd {
+  width: 100%;
   overflow: hidden;
-  color: var(--dt-color-text-secondary);
+  color: var(--dt-color-text-strong);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .entity-emblem {
-  --entity-color: var(--dt-color-accent);
   position: relative;
   display: grid;
-  width: 90px;
-  height: 56px;
-  color: var(--entity-color);
+  width: 72px;
+  height: 72px;
+  color: var(--dt-color-text);
   align-self: center;
   place-items: center;
 }
 
-.entity-emblem::before {
+.entity-emblem img {
   position: absolute;
-  width: 58px;
-  height: 36px;
-  border: 1px solid color-mix(in srgb, var(--entity-color) 82%, transparent);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--entity-color) 18%, transparent);
-  box-shadow: 0 0 var(--dt-space-6) color-mix(in srgb, var(--entity-color) 48%, transparent);
-  content: "";
-  transform: rotate(-12deg);
+  inset: 0;
+  width: 72px;
+  height: 72px;
 }
 
 .entity-emblem span {
@@ -257,7 +510,6 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
   font-size: var(--dt-font-size-lg);
   line-height: var(--dt-line-height-lg);
   font-weight: var(--dt-font-weight-bold);
-  text-shadow: 0 0 12px currentcolor;
 }
 
 .entity-metric {
@@ -267,7 +519,7 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
 }
 
 .entity-metric strong {
-  color: var(--dt-color-text);
+  color: var(--dt-color-text-strong);
   font-size: var(--dt-font-size-metric);
   line-height: var(--dt-line-height-metric);
   font-weight: var(--dt-font-weight-medium);
@@ -276,20 +528,21 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
 
 .entity-metric > span {
   margin-left: var(--dt-space-1);
-  color: var(--dt-color-text-secondary);
+  color: var(--dt-color-text-strong);
   font-size: var(--dt-font-size-sm);
 }
 
 .entity-metric p {
   margin: 0 0 0 var(--dt-space-8);
-  color: var(--dt-color-text-secondary);
+  color: var(--dt-color-text-strong);
   font-size: var(--dt-font-size-sm);
   line-height: var(--dt-line-height-sm);
 }
 
 .profile-tabs {
   display: flex;
-  height: 40px;
+  height: 34px;
+  flex: 0 0 34px;
   margin-top: var(--dt-space-4);
   border-bottom: var(--dt-border-width) solid var(--dt-color-line);
   align-items: flex-start;
@@ -305,10 +558,26 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
   font-size: var(--dt-font-size-md);
   line-height: var(--dt-line-height-md);
   font-weight: var(--dt-font-weight-light);
+  cursor: pointer;
 }
 
 .profile-tabs button.is-active {
   color: var(--dt-color-text);
+}
+
+.profile-tabs button.is-active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: var(--dt-color-text);
+  content: "";
+}
+
+.profile-tabs button:focus-visible {
+  outline: var(--dt-border-width) solid var(--dt-color-accent);
+  outline-offset: var(--dt-space-1);
 }
 
 .detail-card {
@@ -316,7 +585,7 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
   overflow: auto;
   flex: 1 1 auto;
   margin-top: var(--dt-space-4);
-  border: var(--dt-border-width) solid var(--dt-color-text-muted);
+  border: 0;
   border-radius: var(--dt-radius-sm);
   padding: var(--dt-space-6);
   background: var(--dt-detail-card-background);
@@ -345,7 +614,7 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
   border-radius: 3px;
   padding: 0 var(--dt-space-2);
   background: var(--dt-color-accent);
-  color: var(--dt-color-text);
+  color: var(--dt-color-text-strong);
   font-size: var(--dt-font-size-xs);
   line-height: 20px;
   justify-content: center;
@@ -369,7 +638,7 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
 .accordion-list summary {
   display: flex;
   min-height: 54px;
-  color: var(--dt-color-text-secondary);
+  color: var(--dt-color-text-strong);
   font-size: var(--dt-font-size-sm);
   line-height: var(--dt-line-height-sm);
   list-style: none;
@@ -392,7 +661,11 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
   transform: rotate(180deg);
 }
 
-.accordion-list details p {
+.accordion-content {
+  overflow: hidden;
+}
+
+.accordion-content p {
   margin: -1px 0 var(--dt-space-3);
   padding: var(--dt-space-3);
   background: var(--dt-color-panel-soft);
@@ -401,130 +674,159 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
   line-height: var(--dt-line-height-md);
 }
 
-.panel-pagination {
-  display: flex;
-  width: 100%;
-  height: var(--dt-pagination-height);
-  flex: 0 0 var(--dt-pagination-height);
-  padding-top: var(--dt-pagination-padding-top);
-  align-items: stretch;
-}
-
-.pagination-track {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  align-items: stretch;
-  gap: var(--dt-pagination-gap);
-}
-
-.pagination-item {
-  display: grid;
-  min-width: 1px;
-  height: 100%;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  flex: 1 1 0;
-  cursor: pointer;
-  place-items: center;
-}
-
-.pagination-item i {
-  width: 100%;
-  height: 2px;
-  background: var(--dt-color-line);
-  transition: background var(--dt-transition-fast), transform var(--dt-transition-fast);
-}
-
-.pagination-item:hover i,
-.pagination-item.is-active i {
-  background: var(--dt-color-text);
-}
-
-.pagination-item.is-active i {
-  transform: scaleY(1.5);
-}
-
 .spatial-trail {
   position: absolute;
   right: calc(var(--dt-right-panel-width) + var(--dt-trail-gap));
-  bottom: 163px;
-  display: grid;
+  bottom: 72px;
   width: var(--dt-trail-width);
-  margin: 0;
-  padding: 0;
   color: var(--dt-color-text-secondary);
-  list-style: none;
-  gap: var(--dt-space-6);
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .spatial-trail::after {
   position: absolute;
-  top: var(--dt-space-2);
+  z-index: 0;
+  top: 52px;
   right: 2px;
   bottom: 0;
   width: 1px;
   background: var(--dt-color-line);
   content: "";
+  pointer-events: none;
 }
 
-.spatial-trail li {
-  position: relative;
+.school-list-header {
+  display: grid;
+  min-height: 44px;
   padding-right: var(--dt-space-4);
   text-align: right;
+  justify-items: end;
+  gap: 2px;
 }
 
-.spatial-trail li::after {
+.school-list-header > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.school-list-header strong {
+  overflow: hidden;
+  color: var(--dt-color-accent);
+  font-size: var(--dt-font-size-sm);
+  line-height: var(--dt-line-height-sm);
+  font-weight: var(--dt-font-weight-light);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.school-list-header div span,
+.school-list-header > span {
+  color: var(--dt-color-text-muted);
+  font-size: var(--dt-font-size-xs);
+  line-height: var(--dt-line-height-xs);
+}
+
+.school-list-header > span {
+  flex: 0 0 auto;
+}
+
+.school-list {
+  position: relative;
+  z-index: 1;
+  overflow-y: auto;
+  max-height: 240px;
+  overscroll-behavior: contain;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+}
+
+.school-list::-webkit-scrollbar {
+  display: none;
+}
+
+.school-list:focus-visible {
+  outline: var(--dt-border-width) solid var(--dt-color-accent);
+  outline-offset: var(--dt-space-1);
+}
+
+.school-list-item {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 48px;
+  border: 0;
+  padding: var(--dt-space-1) var(--dt-space-4) var(--dt-space-1) 0;
+  background: transparent;
+  color: var(--dt-color-text-secondary);
+  font: inherit;
+  text-align: right;
+  cursor: pointer;
+  scroll-snap-align: start;
+  justify-items: end;
+  align-content: center;
+  gap: 2px;
+}
+
+.school-list-item::after {
   position: absolute;
   z-index: 1;
-  top: 6px;
+  top: 50%;
   right: 0;
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background: var(--dt-color-text-muted);
   content: "";
-  transform: translateX(50%);
+  transform: translate(50%, -50%);
 }
 
-.spatial-trail strong,
-.spatial-trail li > span {
-  display: flex;
+.school-list-item:hover {
+  color: var(--dt-color-accent);
+}
+
+.school-list-item:focus-visible {
+  outline: var(--dt-border-width) solid var(--dt-color-accent);
+  outline-offset: calc(-1 * var(--dt-space-1));
+}
+
+.school-list-item.is-active {
+  color: var(--dt-color-text);
+}
+
+.school-list-item:hover::after {
+  background: var(--dt-color-accent);
+}
+
+.school-list-item.is-active::after {
+  background: var(--dt-color-text);
+}
+
+.school-list-item span,
+.school-list-item small {
   overflow: hidden;
-  justify-content: flex-end;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.spatial-trail strong {
-  color: var(--dt-color-accent);
-  font-size: var(--dt-font-size-sm);
-  line-height: var(--dt-line-height-sm);
-  font-weight: var(--dt-font-weight-light);
-}
-
-.spatial-trail li > span {
-  margin-top: var(--dt-space-1);
-  color: var(--dt-color-text-muted);
+.school-list-item span {
   font-size: var(--dt-font-size-xs);
   line-height: var(--dt-line-height-xs);
-  align-items: center;
-  gap: var(--dt-space-1);
 }
 
-.spatial-trail li > span img {
-  width: var(--dt-icon-size-xs);
-  height: var(--dt-icon-size-xs);
+.school-list-item small {
+  color: var(--dt-color-text-muted);
+  font-size: 10px;
+  line-height: 12px;
 }
 
-.spatial-trail li.is-current strong {
-  color: var(--dt-color-text);
-}
-
-.spatial-trail li.is-current::after {
-  background: var(--dt-color-text);
+.school-list-empty {
+  margin: 0;
+  padding: var(--dt-space-4) var(--dt-space-4) var(--dt-space-4) 0;
+  color: var(--dt-color-text-muted);
+  font-size: var(--dt-font-size-xs);
+  line-height: var(--dt-line-height-sm);
+  text-align: right;
 }
 
 .empty-profile {
