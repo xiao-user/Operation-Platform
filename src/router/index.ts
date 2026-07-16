@@ -1,7 +1,11 @@
 import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
 import AppLayout from "@/layouts/AppLayout.vue";
-import { pageRegistryByKey, pageRouteRecords } from "@/config/page-registry";
+import {
+  pageRegistryByKey,
+  pageRouteRecords,
+  standalonePageRouteRecords,
+} from "@/config/page-registry";
 import { resolveTenantRouteAccess } from "@/router/tenant-route-access";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
@@ -23,6 +27,7 @@ const legacyRedirects: RouteRecordRaw[] = [
 ];
 
 const routes: RouteRecordRaw[] = [
+  ...standalonePageRouteRecords,
   {
     path: "/",
     component: AppLayout,
@@ -62,6 +67,20 @@ router.beforeEach((to) => {
   const navigationStore = useNavigationStore();
   const pageKey = typeof to.meta.pageKey === "string" ? to.meta.pageKey : "";
   const page = pageKey ? pageRegistryByKey.get(pageKey) : null;
+  const requestedTenantId = typeof to.query.tenantId === "string" ? to.query.tenantId : "";
+
+  if (page?.surface === "standalone") {
+    const requestedTenant = userStore.availableTenants.find(
+      (tenant) =>
+        tenant.id === requestedTenantId &&
+        page.tenantTypes.includes(tenant.type) &&
+        userStore.canAccessTenant(tenant),
+    );
+    if (!requestedTenant) return { name: "menu-unavailable" };
+    if (requestedTenant.id !== userStore.currentTenant.id) {
+      userStore.switchTenant(requestedTenant.id);
+    }
+  }
   const platformTenant = userStore.availableTenants.find((tenant) => tenant.type === "platform");
   const hasPlatformAdminRole = platformTenant
     ? userStore.hasAdminRoleForTenant(platformTenant.id)

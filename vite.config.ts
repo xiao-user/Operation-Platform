@@ -59,9 +59,20 @@ export default defineConfig({
     },
   },
   build: {
+    // Keep the standalone Three.js runtime isolated while retaining a tight growth warning budget.
+    chunkSizeWarningLimit: 550,
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (id.includes("/node_modules/three/examples/jsm/controls/")) {
+            return "three-controls";
+          }
+          if (id.includes("/node_modules/three/examples/jsm/renderers/")) {
+            return "three-renderers";
+          }
+          if (id.includes("/node_modules/three/")) {
+            return "three-core";
+          }
           const marker = "/node_modules/@lucide/vue/dist/esm/icons/";
           if (!id.includes(marker)) return;
           const filename = id.slice(id.lastIndexOf("/") + 1);

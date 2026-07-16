@@ -48,6 +48,17 @@ describe("page registry", () => {
     expect(pageRegistryByKey.has("system-permission-management")).toBe(false);
   });
 
+  it("registers the regional overview as a standalone new-tab page", () => {
+    expect(pageRegistryByKey.get("bureau-regional-education-overview")).toMatchObject({
+      title: "区域教育总览",
+      path: "/bureau/visualization/regional-education-overview",
+      tenantTypes: ["bureau"],
+      status: "available",
+      surface: "standalone",
+      openMode: "new-tab",
+    });
+  });
+
   it("registers a reusable menu-scoped developing placeholder page", () => {
     const page = pageRegistryByKey.get(DEVELOPING_PAGE_KEY);
 

@@ -71,7 +71,12 @@ export function resolveFirstTarget(
   if (node.type === "page" && node.pageKey) {
     const page = pages.get(node.pageKey);
     return page
-      ? { kind: "internal", path: resolvePagePathForMenu(page, node.id), pageKey: node.pageKey }
+      ? {
+          kind: "internal",
+          path: resolvePagePathForMenu(page, node.id),
+          pageKey: node.pageKey,
+          openMode: page.openMode ?? "current",
+        }
       : null;
   }
 

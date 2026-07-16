@@ -134,6 +134,6 @@ test("业务工作台快捷入口只使用当前角色获权菜单", async ({ pa
   await switchTenant(page, "天河区第二实验小学");
   const quickLinks = page.locator('[data-widget-key="school.business.quick-links"]');
 
-  await expect(quickLinks.getByRole("button", { name: new RegExp(permitted.allowedName) })).toBeVisible();
+  await expect(quickLinks.getByRole("link", { name: new RegExp(permitted.allowedName) })).toBeVisible();
   await expect(quickLinks.getByText(permitted.deniedName, { exact: true })).toHaveCount(0);
 });

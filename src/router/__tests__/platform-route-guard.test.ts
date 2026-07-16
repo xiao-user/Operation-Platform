@@ -24,4 +24,25 @@ describe("platform route guard", () => {
     expect(navigationStore.currentTenant?.type).toBe("platform");
     expect(router.currentRoute.value.path).toBe("/system/organization");
   });
+
+  it("restores the authorized bureau context for a standalone page", async () => {
+    const userStore = useUserStore();
+    const navigationStore = useNavigationStore();
+
+    await router.push({
+      path: "/bureau/visualization/regional-education-overview",
+      query: { tenantId: "bureau-001" },
+    });
+
+    expect(userStore.currentTenant.id).toBe("bureau-001");
+    expect(navigationStore.currentTenant?.id).toBe("bureau-001");
+    expect(router.currentRoute.value.name).toBe("bureau-regional-education-overview");
+    expect(router.currentRoute.value.meta.pageSurface).toBe("standalone");
+  });
+
+  it("rejects a standalone page without explicit tenant context", async () => {
+    await router.push("/bureau/visualization/regional-education-overview");
+
+    expect(router.currentRoute.value.name).toBe("menu-unavailable");
+  });
 });

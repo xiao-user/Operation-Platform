@@ -1,6 +1,7 @@
 <template>
   <div class="menu-node">
     <button
+      v-if="hasChildren"
       type="button"
       class="menu-button"
       :class="buttonClassName"
@@ -14,9 +15,56 @@
         <span class="menu-label">{{ item.name }}</span>
       </span>
 
-      <el-icon v-if="hasChildren" class="menu-arrow" :class="{ expanded: isExpanded }">
+      <el-icon class="menu-arrow" :class="{ expanded: isExpanded }">
         <ArrowDown />
       </el-icon>
+    </button>
+
+    <RouterLink
+      v-else-if="target?.kind === 'internal'"
+      :to="internalLocation"
+      :target="target.openMode === 'new-tab' ? '_blank' : undefined"
+      :rel="target.openMode === 'new-tab' ? 'noopener noreferrer' : undefined"
+      class="menu-button"
+      :class="buttonClassName"
+      :style="depthStyle"
+    >
+      <span class="menu-main">
+        <el-icon v-if="resolvedIcon" class="menu-icon">
+          <component :is="resolvedIcon" />
+        </el-icon>
+        <span class="menu-label">{{ item.name }}</span>
+      </span>
+    </RouterLink>
+
+    <a
+      v-else-if="target?.kind === 'external'"
+      :href="target.url"
+      :target="target.openMode === 'new-tab' ? '_blank' : undefined"
+      :rel="target.openMode === 'new-tab' ? 'noopener noreferrer' : undefined"
+      class="menu-button"
+      :class="buttonClassName"
+      :style="depthStyle"
+    >
+      <span class="menu-main">
+        <el-icon v-if="resolvedIcon" class="menu-icon">
+          <component :is="resolvedIcon" />
+        </el-icon>
+        <span class="menu-label">{{ item.name }}</span>
+      </span>
+    </a>
+
+    <button
+      v-else
+      type="button"
+      class="menu-button"
+      :class="buttonClassName"
+      :style="depthStyle"
+      disabled
+    >
+      <span class="menu-main">
+        <span class="menu-label">{{ item.name }}</span>
+      </span>
     </button>
 
     <div v-if="hasChildren && isExpanded" class="menu-children">
@@ -27,7 +75,7 @@
         :depth="depth + 1"
         :active-key="activeKey"
         :expanded-keys="expandedKeys"
-        @select="$emit('select', $event)"
+        :tenant-id="tenantId"
         @toggle="$emit('toggle', $event)"
       />
     </div>
@@ -38,6 +86,8 @@
 import { computed } from "vue";
 import { ArrowDown } from "@element-plus/icons-vue";
 import { resolveMenuIcon } from "@/components/menu-icons";
+import { pageRegistryByKey } from "@/config/page-registry";
+import { resolveFirstTarget } from "@/features/menu-config/menu-tree";
 import type { MenuTreeNode } from "@/features/menu-config/types";
 
 interface Props {
@@ -45,14 +95,15 @@ interface Props {
   depth?: number;
   activeKey: string;
   expandedKeys: string[];
+  tenantId?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   depth: 0,
+  tenantId: "",
 });
 
 const emit = defineEmits<{
-  select: [item: MenuTreeNode];
   toggle: [menuKey: string];
 }>();
 
@@ -63,6 +114,12 @@ const isActiveBranch = computed(() =>
   hasChildren.value && Boolean(props.activeKey) && containsActiveKey(props.item),
 );
 const resolvedIcon = computed(() => (props.item.icon ? resolveMenuIcon(props.item.icon) : null));
+const target = computed(() => resolveFirstTarget(props.item, pageRegistryByKey));
+const internalLocation = computed(() => {
+  if (target.value?.kind !== "internal") return "";
+  if (target.value.openMode === "current" || !props.tenantId) return target.value.path;
+  return { path: target.value.path, query: { tenantId: props.tenantId } };
+});
 const depthStyle = computed(() => {
   const indent = props.depth === 0 ? 20 : 50 + (props.depth - 1) * 20;
 
@@ -85,12 +142,7 @@ function containsActiveKey(item: MenuTreeNode): boolean {
 }
 
 function handleClick() {
-  if (hasChildren.value) {
-    emit("toggle", props.item.id);
-    return;
-  }
-
-  emit("select", props.item);
+  emit("toggle", props.item.id);
 }
 </script>
 
@@ -115,6 +167,7 @@ function handleClick() {
   transition:
     background-color 0.2s,
     color 0.2s;
+  text-decoration: none;
 }
 
 .menu-button:hover {

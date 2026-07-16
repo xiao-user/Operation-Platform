@@ -124,6 +124,7 @@ export interface WorkbenchQuickLinkData {
   kind: "internal" | "external";
   target: string;
   openMode?: "current" | "new-tab";
+  tenantId?: string;
 }
 
 export interface WorkbenchQuickLinksData {

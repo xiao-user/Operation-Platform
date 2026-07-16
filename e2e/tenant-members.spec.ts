@@ -39,6 +39,7 @@ async function setRoleOptions(page: Page, roleNames: string[]) {
     await roleSelect.click();
   }
   const options = page.locator(".el-select-dropdown:visible .el-select-dropdown__item");
+  await expect(options.first()).toBeVisible();
   const optionCount = await options.count();
   for (let index = 0; index < optionCount; index += 1) {
     const option = options.nth(index);

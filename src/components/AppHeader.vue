@@ -37,7 +37,9 @@
         <template v-for="tab in headerTabs" :key="tab.id">
           <RouterLink
             v-if="tab.target.kind === 'internal'"
-            :to="tab.target.path"
+            :to="internalLocation(tab.target)"
+            :target="internalTarget(tab.target)"
+            :rel="internalRel(tab.target)"
             class="nav-tab"
             :class="{ active: tab.active }"
             :aria-current="tab.active ? 'page' : undefined"
@@ -100,7 +102,7 @@ const headerTabs = computed<HeaderTab[]>(() => {
     return topLevelNavItems.value.flatMap((tab) => {
       const target: MenuTarget | null =
         tab.kind === "workbench"
-          ? { kind: "internal", path: "/workbench", pageKey: "workbench" }
+          ? { kind: "internal", path: "/workbench", pageKey: "workbench", openMode: "current" }
           : resolveFirstTarget(tab.node, pageRegistryByKey);
       return target
         ? [{
@@ -128,6 +130,19 @@ const headerTabs = computed<HeaderTab[]>(() => {
 function isTopLevelActive(tab: TopLevelNavItem) {
   if (tab.kind === "workbench") return isWorkbenchRoute.value;
   return !isWorkbenchRoute.value && activeModuleId.value === tab.id;
+}
+
+function internalLocation(target: Extract<MenuTarget, { kind: "internal" }>) {
+  if (target.openMode === "current") return target.path;
+  return { path: target.path, query: { tenantId: currentTenant.value.id } };
+}
+
+function internalTarget(target: Extract<MenuTarget, { kind: "internal" }>) {
+  return target.openMode === "new-tab" ? "_blank" : undefined;
+}
+
+function internalRel(target: Extract<MenuTarget, { kind: "internal" }>) {
+  return target.openMode === "new-tab" ? "noopener noreferrer" : undefined;
 }
 
 function externalTarget(target: Extract<MenuTarget, { kind: "external" }>) {

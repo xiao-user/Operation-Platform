@@ -35,14 +35,24 @@ function layoutsEqual(first: UserWorkbenchLayout | null, second: UserWorkbenchLa
   return JSON.stringify(first) === JSON.stringify(second);
 }
 
-function collectQuickLinks(nodes: readonly MenuTreeNode[]): WorkbenchQuickLinkData[] {
+function collectQuickLinks(
+  nodes: readonly MenuTreeNode[],
+  tenantId: string,
+): WorkbenchQuickLinkData[] {
   const result: WorkbenchQuickLinkData[] = [];
   const visit = (items: readonly MenuTreeNode[]) => {
     for (const node of items) {
       if (node.type === "page" || node.type === "external") {
         const target = resolveFirstTarget(node, pageRegistryByKey);
         if (target?.kind === "internal") {
-          result.push({ id: node.id, name: node.name, kind: "internal", target: target.path });
+          result.push({
+            id: node.id,
+            name: node.name,
+            kind: "internal",
+            target: target.path,
+            openMode: target.openMode,
+            tenantId,
+          });
         } else if (target?.kind === "external") {
           result.push({
             id: node.id,
@@ -111,12 +121,14 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     draftLayout.value = null;
     hasOverride.value = result.hasOverride;
     recoveryNotice.value = result.recoveryNotice;
-    quickLinks.value = collectQuickLinks(navigationTree);
+    quickLinks.value = collectQuickLinks(navigationTree, tenant.id);
     isEditing.value = false;
   }
 
   function updateQuickLinks(navigationTree: readonly MenuTreeNode[]) {
-    quickLinks.value = collectQuickLinks(navigationTree);
+    const tenantId = context.value?.tenant.id;
+    if (!tenantId) return;
+    quickLinks.value = collectQuickLinks(navigationTree, tenantId);
   }
 
   function beginEditing() {

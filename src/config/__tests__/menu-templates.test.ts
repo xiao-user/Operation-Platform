@@ -39,9 +39,56 @@ describe("tenant menu templates", () => {
       "数据中心",
     ]);
     expect(tenantMenuTemplates.school.some((item) => item.name === "工作台")).toBe(false);
-    expect(tenantMenuTemplates.bureau.filter((item) => item.type === "module")).toHaveLength(3);
+    expect(tenantMenuTemplates.bureau.some((item) => item.name === "工作台")).toBe(false);
+    expect(
+      tenantMenuTemplates.bureau
+        .filter((item) => item.type === "module")
+        .map((item) => item.name),
+    ).toEqual([
+      "基础平台",
+      "协同办公",
+      "教育管理",
+      "公共服务",
+      "AI精准教学",
+      "AI教师发展",
+      "AI教育治理",
+      "智慧大脑",
+    ]);
     expect(tenantMenuTemplates.org.filter((item) => item.type === "module")).toHaveLength(4);
     expect(tenantMenuTemplates.platform.filter((item) => item.type === "module")).toHaveLength(1);
+  });
+
+  it("preserves the education bureau common menu hierarchy", () => {
+    const records = tenantMenuTemplates.bureau;
+    const child = (parentId: string, name: string) =>
+      records.find((record) => record.parentId === parentId && record.name === name)!;
+
+    const publicService = records.find(
+      (record) => record.parentId === null && record.name === "公共服务",
+    )!;
+    const schoolService = child(publicService.id, "学校服务");
+    expect(child(schoolService.id, "课后管理")).toMatchObject({
+      type: "page",
+      pageKey: DEVELOPING_PAGE_KEY,
+    });
+
+    const aiGovernance = records.find(
+      (record) => record.parentId === null && record.name === "AI教育治理",
+    )!;
+    const mentalHealth = child(aiGovernance.id, "学生心理健康管理");
+    expect(child(mentalHealth.id, "心理健康档案")).toMatchObject({
+      type: "page",
+      pageKey: DEVELOPING_PAGE_KEY,
+    });
+
+    const smartBrain = records.find(
+      (record) => record.parentId === null && record.name === "智慧大脑",
+    )!;
+    const cockpit = child(smartBrain.id, "数据驾驶舱");
+    expect(child(cockpit.id, "区域教育总览")).toMatchObject({
+      type: "page",
+      pageKey: "bureau-regional-education-overview",
+    });
   });
 
   it("preserves representative school menu hierarchy and flattens only beyond level four", () => {

@@ -7,7 +7,7 @@
         :item="item"
         :active-key="activeMenuId"
         :expanded-keys="mergedExpandedKeys"
-        @select="handleMenuSelect"
+        :tenant-id="currentTenant.id"
         @toggle="handleToggle"
       />
     </div>
@@ -16,16 +16,16 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useNavigationStore } from "@/stores/navigation";
-import type { MenuTreeNode } from "@/features/menu-config/types";
+import { useUserStore } from "@/stores/user";
 import SidebarMenuNode from "@/components/SidebarMenuNode.vue";
 
-const router = useRouter();
 const navigationStore = useNavigationStore();
+const userStore = useUserStore();
 const { activeModuleId, activeMenuId, activeSecondLevelNode, deepMenus, defaultOpenMenus } =
   storeToRefs(navigationStore);
+const { currentTenant } = storeToRefs(userStore);
 
 const userExpandedKeys = ref<string[]>([]);
 const userCollapsedKeys = ref<string[]>([]);
@@ -42,10 +42,6 @@ watch([activeModuleId, activeSecondLevelNode], () => {
   userExpandedKeys.value = [];
   userCollapsedKeys.value = [];
 });
-
-function handleMenuSelect(item: MenuTreeNode) {
-  navigationStore.navigateToMenu(item.id, router);
-}
 
 function handleToggle(menuKey: string) {
   if (defaultOpenMenus.value.includes(menuKey)) {

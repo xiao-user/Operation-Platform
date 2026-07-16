@@ -3,6 +3,8 @@ import type { MenuConfigRecord } from "@/features/menu-config/types";
 import type { TenantType } from "@/types/user";
 
 export type PageResourceStatus = "available" | "developing-placeholder";
+export type PageSurface = "shell" | "standalone";
+export type PageOpenMode = "current" | "new-tab";
 
 export interface PageRegistryItem {
   key: string;
@@ -17,6 +19,8 @@ export interface PageRegistryItem {
   requiresAdmin: boolean;
   allowDuplicateMenuBinding: boolean;
   menuRouteParam: string | null;
+  surface: PageSurface;
+  openMode: PageOpenMode;
 }
 
 interface PageOptions {
@@ -27,6 +31,8 @@ interface PageOptions {
   requiresAdmin?: boolean;
   allowDuplicateMenuBinding?: boolean;
   menuRouteParam?: string;
+  surface?: PageSurface;
+  openMode?: PageOpenMode;
 }
 
 interface SelectablePageResourceOptions {
@@ -69,6 +75,8 @@ function page(
     requiresAdmin: options.requiresAdmin ?? false,
     allowDuplicateMenuBinding: options.allowDuplicateMenuBinding ?? false,
     menuRouteParam: options.menuRouteParam ?? null,
+    surface: options.surface ?? "shell",
+    openMode: options.openMode ?? "current",
   };
 }
 
@@ -190,6 +198,20 @@ export const pageRegistry: PageRegistryItem[] = [
   page("bureau-operation-log", "操作日志", "/bureau/custody/operation-log", bureau),
   page("bureau-settings", "设置", "/bureau/custody/settings", bureau),
 
+  // 教育局 · 智慧大脑
+  page(
+    "bureau-regional-education-overview",
+    "区域教育总览",
+    "/bureau/visualization/regional-education-overview",
+    bureau,
+    () => import("@/views/bureau/visualization/RegionalEducationOverviewView.vue"),
+    {
+      description: "榕城区教育数字孪生首页，支持三维镇街下钻、教育机构点位与多主题态势切换。",
+      surface: "standalone",
+      openMode: "new-tab",
+    },
+  ),
+
   // 教育局 · 组织与运营商
   page("bureau-org-structure", "组织架构", "/bureau/org/structure", bureau),
   page("bureau-staff-manage", "人员管理", "/bureau/org/staff", bureau),
@@ -264,14 +286,25 @@ export function listSelectablePageResources({
   );
 }
 
-export const pageRouteRecords: RouteRecordRaw[] = pageRegistry.map((item) => ({
-  path: item.path.slice(1),
-  name: item.key,
-  component: item.component,
-  meta: {
-    pageKey: item.key,
-    menuOwnerKey: item.menuOwnerKey,
-    title: item.title,
-    requiresAdmin: item.requiresAdmin,
-  },
-}));
+function routeRecord(item: PageRegistryItem, path: string): RouteRecordRaw {
+  return {
+    path,
+    name: item.key,
+    component: item.component,
+    meta: {
+      pageKey: item.key,
+      menuOwnerKey: item.menuOwnerKey,
+      title: item.title,
+      requiresAdmin: item.requiresAdmin,
+      pageSurface: item.surface,
+    },
+  };
+}
+
+export const pageRouteRecords: RouteRecordRaw[] = pageRegistry
+  .filter((item) => item.surface === "shell")
+  .map((item) => routeRecord(item, item.path.slice(1)));
+
+export const standalonePageRouteRecords: RouteRecordRaw[] = pageRegistry
+  .filter((item) => item.surface === "standalone")
+  .map((item) => routeRecord(item, item.path));

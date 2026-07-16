@@ -68,6 +68,22 @@ describe("menu tree", () => {
       kind: "internal",
       path: "/academic/course-list",
       pageKey: "course-list",
+      openMode: "current",
+    });
+  });
+
+  it("keeps the registered open mode for internal pages", () => {
+    const [pageNode] = buildMenuTree([
+      menu({ id: "overview", type: "page", name: "区域教育总览", pageKey: "overview" }),
+    ]);
+    const pages = new Map([
+      ["overview", { path: "/bureau/visualization/regional-education-overview", openMode: "new-tab" as const }],
+    ]);
+
+    expect(resolveFirstTarget(pageNode!, pages)).toMatchObject({
+      kind: "internal",
+      pageKey: "overview",
+      openMode: "new-tab",
     });
   });
 

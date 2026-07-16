@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mount } from "@vue/test-utils";
+import { mount, RouterLinkStub } from "@vue/test-utils";
 import SidebarMenuNode from "@/components/SidebarMenuNode.vue";
 import type { MenuTreeNode } from "@/features/menu-config/types";
 
@@ -51,5 +51,32 @@ describe("SidebarMenuNode", () => {
     });
 
     expect(wrapper.find(".menu-button").classes()).toContain("is-branch-active");
+  });
+
+  it("renders standalone internal pages as tenant-scoped new-tab router links", () => {
+    const item = {
+      ...node("overview", "区域教育总览"),
+      pageKey: "bureau-regional-education-overview",
+    };
+
+    const wrapper = mount(SidebarMenuNode, {
+      props: {
+        item,
+        tenantId: "bureau-001",
+        activeKey: "",
+        expandedKeys: [],
+      },
+      global: {
+        stubs: { RouterLink: RouterLinkStub },
+      },
+    });
+
+    const link = wrapper.findComponent(RouterLinkStub);
+    expect(link.props("to")).toEqual({
+      path: "/bureau/visualization/regional-education-overview",
+      query: { tenantId: "bureau-001" },
+    });
+    expect(link.attributes("target")).toBe("_blank");
+    expect(link.attributes("rel")).toBe("noopener noreferrer");
   });
 });

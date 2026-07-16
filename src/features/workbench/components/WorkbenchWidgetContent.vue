@@ -46,26 +46,37 @@
   </div>
 
   <div v-else-if="data.kind === 'quick-links'" class="quick-link-grid">
-    <button
-      v-for="item in data.items"
-      :key="item.id"
-      type="button"
-      @click="openQuickLink(item)"
-    >
-      <span>{{ item.name.slice(0, 1) }}</span>
-      {{ item.name }}
-    </button>
+    <template v-for="item in data.items" :key="item.id">
+      <RouterLink
+        v-if="item.kind === 'internal'"
+        class="quick-link-item"
+        :to="internalQuickLinkLocation(item)"
+        :target="item.openMode === 'new-tab' ? '_blank' : undefined"
+        :rel="item.openMode === 'new-tab' ? 'noopener noreferrer' : undefined"
+      >
+        <span>{{ item.name.slice(0, 1) }}</span>
+        {{ item.name }}
+      </RouterLink>
+      <a
+        v-else
+        class="quick-link-item"
+        :href="item.target"
+        :target="item.openMode === 'new-tab' ? '_blank' : undefined"
+        :rel="item.openMode === 'new-tab' ? 'noopener noreferrer' : undefined"
+      >
+        <span>{{ item.name.slice(0, 1) }}</span>
+        {{ item.name }}
+      </a>
+    </template>
     <div v-if="!data.items.length" class="quick-link-empty">当前角色暂无可用快捷入口</div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { useRouter } from "vue-router";
 import type { WorkbenchQuickLinkData, WorkbenchWidgetData } from "@/features/workbench/types";
 
 const props = defineProps<{ data: WorkbenchWidgetData }>();
-const router = useRouter();
 
 const linePoints = computed(() => {
   if (props.data.kind !== "trend" || !props.data.values.length) return "";
@@ -86,14 +97,9 @@ const areaPath = computed(() => {
   return `M ${points[0]} L ${points.slice(1).join(" L ")} L 590,170 L 10,170 Z`;
 });
 
-async function openQuickLink(item: WorkbenchQuickLinkData) {
-  if (item.kind === "internal") {
-    await router.push(item.target);
-  } else if (item.openMode === "new-tab") {
-    window.open(item.target, "_blank", "noopener,noreferrer");
-  } else {
-    window.location.assign(item.target);
-  }
+function internalQuickLinkLocation(item: WorkbenchQuickLinkData) {
+  if (item.openMode === "current" || !item.tenantId) return item.target;
+  return { path: item.target, query: { tenantId: item.tenantId } };
 }
 </script>
 
@@ -256,7 +262,7 @@ async function openQuickLink(item: WorkbenchQuickLinkData) {
   gap: var(--spacing-8);
 }
 
-.quick-link-grid button {
+.quick-link-item {
   display: flex;
   align-items: center;
   min-width: 0;
@@ -274,14 +280,15 @@ async function openQuickLink(item: WorkbenchQuickLinkData) {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   cursor: pointer;
+  text-decoration: none;
 }
 
-.quick-link-grid button:hover {
+.quick-link-item:hover {
   color: var(--color-primary);
   border-color: var(--color-primary-line-light);
 }
 
-.quick-link-grid button > span {
+.quick-link-item > span {
   display: inline-flex;
   align-items: center;
   justify-content: center;

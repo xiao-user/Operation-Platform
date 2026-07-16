@@ -3,11 +3,10 @@ import {
   menuTemplateDefaultPageByModule,
   menuTemplateModules,
 } from "@/config/menu-template-definitions";
+import { bureauMenuOutline } from "@/config/bureau-menu-outline";
+import type { MenuOutlineNode } from "@/config/menu-outline";
 import { DEVELOPING_PAGE_KEY, pageRegistryByPath } from "@/config/page-registry";
-import {
-  schoolMenuOutline,
-  type SchoolMenuOutlineNode,
-} from "@/config/school-menu-outline";
+import { schoolMenuOutline } from "@/config/school-menu-outline";
 import { MAX_MENU_DEPTH } from "@/features/menu-config/menu-validation";
 import type { MenuConfigRecord, MenuItemType } from "@/features/menu-config/types";
 import type { MenuIconKey, SideMenuItem } from "@/types/navigation";
@@ -59,58 +58,106 @@ const schoolModuleIcons: Record<string, MenuIconKey> = {
   数据中心: "data",
 };
 
-function flattenPageLevel(nodes: readonly SchoolMenuOutlineNode[]) {
-  const names: string[] = [];
-  const visit = (node: SchoolMenuOutlineNode) => {
-    names.push(node.name);
-    node.children.forEach(visit);
-  };
-  nodes.forEach(visit);
-  return names;
+const bureauModuleIcons: Record<string, MenuIconKey> = {
+  基础平台: "Building2",
+  协同办公: "BriefcaseBusiness",
+  教育管理: "School",
+  公共服务: "Users",
+  AI精准教学: "NotebookTabs",
+  AI教师发展: "GraduationCap",
+  AI教育治理: "Landmark",
+  智慧大脑: "ChartNoAxesCombined",
+};
+
+const bureauPageKeysByOutlinePath: Readonly<Record<string, string>> = {
+  "智慧大脑/数据驾驶舱/区域教育总览": "bureau-regional-education-overview",
+};
+
+interface FlattenedOutlinePage {
+  name: string;
+  namePath: string[];
 }
 
-function buildSchoolMenuRecords(
-  nodes: readonly SchoolMenuOutlineNode[],
+function flattenPageLevel(nodes: readonly MenuOutlineNode[], parentNamePath: readonly string[]) {
+  const pages: FlattenedOutlinePage[] = [];
+  const visit = (node: MenuOutlineNode, namePath: readonly string[]) => {
+    const nextNamePath = [...namePath, node.name];
+    pages.push({ name: node.name, namePath: nextNamePath });
+    node.children.forEach((child) => visit(child, nextNamePath));
+  };
+  nodes.forEach((node) => visit(node, parentNamePath));
+  return pages;
+}
+
+function buildOutlineMenuRecords(
+  tenantType: TenantType,
+  nodes: readonly MenuOutlineNode[],
   parentId: string,
   level: number,
   path: string,
+  parentNamePath: readonly string[],
+  pageKeysByOutlinePath: Readonly<Record<string, string>>,
 ): MenuConfigRecord[] {
   if (level >= MAX_MENU_DEPTH) {
-    return flattenPageLevel(nodes).map((name, index) =>
+    return flattenPageLevel(nodes, parentNamePath).map((page, index) =>
       record(
-        `template:school:${path}:page:${index}`,
+        `template:${tenantType}:${path}:page:${index}`,
         "page",
-        name,
+        page.name,
         parentId,
         (index + 1) * 10,
-        { pageKey: DEVELOPING_PAGE_KEY },
+        { pageKey: pageKeysByOutlinePath[page.namePath.join("/")] ?? DEVELOPING_PAGE_KEY },
       ),
     );
   }
 
   return nodes.flatMap((node, index) => {
-    const id = `template:school:${path}:${index}`;
+    const id = `template:${tenantType}:${path}:${index}`;
     const sort = (index + 1) * 10;
+    const namePath = [...parentNamePath, node.name];
     if (node.children.length) {
       return [
         record(id, "directory", node.name, parentId, sort),
-        ...buildSchoolMenuRecords(node.children, id, level + 1, `${path}:${index}`),
+        ...buildOutlineMenuRecords(
+          tenantType,
+          node.children,
+          id,
+          level + 1,
+          `${path}:${index}`,
+          namePath,
+          pageKeysByOutlinePath,
+        ),
       ];
     }
     return [
-      record(id, "page", node.name, parentId, sort, { pageKey: DEVELOPING_PAGE_KEY }),
+      record(id, "page", node.name, parentId, sort, {
+        pageKey: pageKeysByOutlinePath[namePath.join("/")] ?? DEVELOPING_PAGE_KEY,
+      }),
     ];
   });
 }
 
-function buildSchoolTemplate() {
-  return schoolMenuOutline.flatMap((module, index) => {
-    const moduleId = `template:school:module:${index}`;
+function buildOutlineTemplate(
+  tenantType: TenantType,
+  outline: readonly MenuOutlineNode[],
+  moduleIcons: Readonly<Record<string, MenuIconKey>>,
+  pageKeysByOutlinePath: Readonly<Record<string, string>> = {},
+) {
+  return outline.flatMap((module, index) => {
+    const moduleId = `template:${tenantType}:module:${index}`;
     return [
       record(moduleId, "module", module.name, null, (index + 1) * 10, {
-        icon: schoolModuleIcons[module.name] ?? "menu",
+        icon: moduleIcons[module.name] ?? "menu",
       }),
-      ...buildSchoolMenuRecords(module.children, moduleId, 2, `module:${index}`),
+      ...buildOutlineMenuRecords(
+        tenantType,
+        module.children,
+        moduleId,
+        2,
+        `module:${index}`,
+        [module.name],
+        pageKeysByOutlinePath,
+      ),
     ];
   });
 }
@@ -181,8 +228,13 @@ function buildTemplate(tenantType: TenantType): MenuConfigRecord[] {
 }
 
 export const tenantMenuTemplates: Record<TenantType, MenuConfigRecord[]> = {
-  school: buildSchoolTemplate(),
-  bureau: buildTemplate("bureau"),
+  school: buildOutlineTemplate("school", schoolMenuOutline, schoolModuleIcons),
+  bureau: buildOutlineTemplate(
+    "bureau",
+    bureauMenuOutline,
+    bureauModuleIcons,
+    bureauPageKeysByOutlinePath,
+  ),
   org: buildTemplate("org"),
   platform: buildTemplate("platform"),
 };

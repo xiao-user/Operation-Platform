@@ -1,7 +1,6 @@
-export interface SchoolMenuOutlineNode {
-  name: string;
-  children: SchoolMenuOutlineNode[];
-}
+import { parseMenuOutline, type MenuOutlineNode } from "@/config/menu-outline";
+
+export type SchoolMenuOutlineNode = MenuOutlineNode;
 
 const rawSchoolMenuOutline = `
 家校共育
@@ -313,28 +312,4 @@ const rawSchoolMenuOutline = `
     学校驾驶舱
 `;
 
-function parseOutline(source: string) {
-  const roots: SchoolMenuOutlineNode[] = [];
-  const stack: SchoolMenuOutlineNode[] = [];
-
-  for (const rawLine of source.trim().split("\n")) {
-    const leadingSpaces = rawLine.length - rawLine.trimStart().length;
-    if (leadingSpaces % 2 !== 0) throw new Error(`学校菜单缩进无效：${rawLine}`);
-    const level = leadingSpaces / 2;
-    const node: SchoolMenuOutlineNode = { name: rawLine.trim(), children: [] };
-
-    if (level === 0) roots.push(node);
-    else {
-      const parent = stack[level - 1];
-      if (!parent) throw new Error(`学校菜单缺少上级节点：${rawLine}`);
-      parent.children.push(node);
-    }
-
-    stack[level] = node;
-    stack.length = level + 1;
-  }
-
-  return roots;
-}
-
-export const schoolMenuOutline = parseOutline(rawSchoolMenuOutline);
+export const schoolMenuOutline = parseMenuOutline(rawSchoolMenuOutline, "学校");

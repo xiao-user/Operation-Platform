@@ -31,6 +31,13 @@ const school: TenantInfo = {
   type: "school",
   enabled: true,
 };
+const bureau: TenantInfo = {
+  id: "bureau-aggregate",
+  name: "聚合配置教育局",
+  shortName: "聚合教育局",
+  type: "bureau",
+  enabled: true,
+};
 
 describe("tenant configuration repository", () => {
   beforeEach(() => localStorage.clear());
@@ -82,6 +89,20 @@ describe("tenant configuration repository", () => {
     expect(stored.shellConfig.workbench.label).toBe("统一入口");
     expect(stored.roles[1].description).toBe("更新后的角色");
     expect(stored.menuRecords).toHaveLength(configuration.menuRecords.length);
+  });
+
+  it("does not replace an existing education bureau menu with a newer default template", () => {
+    const repository = new LocalStorageTenantConfigurationRepository(localStorage);
+    const configuration = repository.list(bureau).configuration;
+    const firstModule = configuration.menuRecords.find((record) => record.type === "module")!;
+    firstModule.name = "现有自定义菜单";
+    repository.replace(bureau, configuration);
+
+    const reloaded = new LocalStorageTenantConfigurationRepository(localStorage).list(bureau);
+
+    expect(reloaded.configuration.menuRecords.find((record) => record.id === firstModule.id)?.name)
+      .toBe("现有自定义菜单");
+    expect(reloaded.recoveryNotice).toBeNull();
   });
 
   it("removes aggregate and legacy data when a tenant is deleted", () => {
