@@ -1,5 +1,5 @@
 export interface DigitalTwinMapTheme {
-  id: "lime" | "cyan" | "amber";
+  id: "lime" | "cyan" | "amber" | "royal";
   name: string;
   description: string;
   primary: string;
@@ -35,8 +35,8 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     internalLine: "rgba(212,233,148,0.42)",
     topFill: "#11170F",
     topOpacity: 0.9,
-    sideTop: "#CBDD8B",
-    sideBottom: "rgba(4,232,108,0.04)",
+    sideTop: "#28E28B",
+    sideBottom: "#E1FF00",
     labelText: "#E9F1D2",
     labelBorder: "rgba(212,233,148,0.58)",
     labelGlow: "rgba(4,232,108,0.24)",
@@ -61,8 +61,8 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     internalLine: "rgba(124,179,255,0.42)",
     topFill: "#0C1421",
     topOpacity: 0.9,
-    sideTop: "#94BAF0",
-    sideBottom: "rgba(47,254,254,0.04)",
+    sideTop: "#00EEFF",
+    sideBottom: "#0AFFD6",
     labelText: "#E3ECF8",
     labelBorder: "rgba(124,179,255,0.58)",
     labelGlow: "rgba(47,254,254,0.24)",
@@ -87,8 +87,8 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     internalLine: "rgba(240,195,131,0.42)",
     topFill: "#19140E",
     topOpacity: 0.9,
-    sideTop: "#E5C391",
-    sideBottom: "rgba(255,208,59,0.04)",
+    sideTop: "#FFF700",
+    sideBottom: "#FA9E00",
     labelText: "#F3E9DA",
     labelBorder: "rgba(240,195,131,0.58)",
     labelGlow: "rgba(255,208,59,0.24)",
@@ -103,6 +103,32 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     pageText: "#F0EBE4",
     pageMuted: "rgba(221,207,187,0.56)",
     pageLine: "rgba(255,208,59,0.24)",
+  },
+  {
+    id: "royal",
+    name: "星河钴蓝",
+    description: "教育数字态势",
+    primary: "#2B67D1",
+    outline: "#78A8FF",
+    internalLine: "rgba(120,168,255,0.42)",
+    topFill: "#0B1324",
+    topOpacity: 0.9,
+    sideTop: "#2B67D1",
+    sideBottom: "#75B8FF",
+    labelText: "#E7EFFF",
+    labelBorder: "rgba(120,168,255,0.58)",
+    labelGlow: "rgba(43,103,209,0.3)",
+    labelPointer: "#2B67D1",
+    scatter: "#2B67D1",
+    ripple: "rgba(43,103,209,0.38)",
+    flyLine: "rgba(120,168,255,0.78)",
+    hudRing: "rgba(43,103,209,0.2)",
+    chaseLightHead: "#FFFFFF",
+    chaseLightTail: "rgba(255,255,255,0)",
+    pageBackground: "#080F1D",
+    pageText: "#E8EFFF",
+    pageMuted: "rgba(199,213,239,0.58)",
+    pageLine: "rgba(43,103,209,0.3)",
   },
 ] as const;
 

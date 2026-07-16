@@ -12,13 +12,20 @@ interface CameraTweenValues {
   targetY: number;
   targetZ: number;
   fov: number;
-  rootX: number;
+  framingX: number;
+  framingY: number;
+}
+
+export interface MapCameraFraming {
+  x: number;
+  y: number;
 }
 
 interface MapCameraTransitionOptions {
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
-  mapRoot: THREE.Group;
+  getFraming: () => MapCameraFraming;
+  applyFraming: (framing: MapCameraFraming) => void;
   requestRender: () => void;
   requestHighFrameRate: (duration?: number) => void;
 }
@@ -37,7 +44,7 @@ export class MapCameraTransition {
     };
   }
 
-  apply(view: MapCameraView, rootX: number) {
+  apply(view: MapCameraView, framing: MapCameraFraming) {
     this.cancel();
     const values: CameraTweenValues = {
       cameraX: view.position[0],
@@ -47,7 +54,8 @@ export class MapCameraTransition {
       targetY: view.target[1],
       targetZ: view.target[2],
       fov: view.fov,
-      rootX,
+      framingX: framing.x,
+      framingY: framing.y,
     };
     this.applyValues(values);
     const dampingEnabled = this.options.controls.enableDamping;
@@ -58,14 +66,19 @@ export class MapCameraTransition {
     this.options.controls.enableDamping = dampingEnabled;
   }
 
-  animate(view: MapCameraView, rootX: number, motionEnabled: boolean): Promise<void> {
+  animate(
+    view: MapCameraView,
+    framing: MapCameraFraming,
+    motionEnabled: boolean,
+  ): Promise<void> {
     this.cancel();
     if (!motionEnabled) {
-      this.apply(view, rootX);
+      this.apply(view, framing);
       return Promise.resolve();
     }
 
-    const { camera, controls, mapRoot } = this.options;
+    const { camera, controls, getFraming } = this.options;
+    const currentFraming = getFraming();
     const values: CameraTweenValues = {
       cameraX: camera.position.x,
       cameraY: camera.position.y,
@@ -74,7 +87,8 @@ export class MapCameraTransition {
       targetY: controls.target.y,
       targetZ: controls.target.z,
       fov: camera.fov,
-      rootX: mapRoot.position.x,
+      framingX: currentFraming.x,
+      framingY: currentFraming.y,
     };
     const duration = digitalTwinMotion.cameraDuration;
     this.options.requestHighFrameRate(duration * 1000 + 200);
@@ -92,7 +106,8 @@ export class MapCameraTransition {
         targetY: view.target[1],
         targetZ: view.target[2],
         fov: view.fov,
-        rootX,
+        framingX: framing.x,
+        framingY: framing.y,
         duration,
         ease: digitalTwinMotion.cameraEase,
         overwrite: true,
@@ -110,12 +125,12 @@ export class MapCameraTransition {
   }
 
   private applyValues(values: CameraTweenValues) {
-    const { camera, controls, mapRoot, requestRender } = this.options;
+    const { camera, controls, applyFraming, requestRender } = this.options;
     camera.position.set(values.cameraX, values.cameraY, values.cameraZ);
     controls.target.set(values.targetX, values.targetY, values.targetZ);
     camera.fov = values.fov;
-    mapRoot.position.x = values.rootX;
-    camera.updateProjectionMatrix();
+    applyFraming({ x: values.framingX, y: values.framingY });
     requestRender();
   }
+
 }

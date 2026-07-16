@@ -55,13 +55,22 @@ describe("regional education map navigation", () => {
 });
 
 describe("digital twin map themes", () => {
-  it("provides three complete switchable themes", () => {
-    expect(digitalTwinMapThemes.map((theme) => theme.id)).toEqual(["lime", "cyan", "amber"]);
+  it("provides four complete switchable themes", () => {
+    expect(digitalTwinMapThemes.map((theme) => theme.id)).toEqual([
+      "lime",
+      "cyan",
+      "amber",
+      "royal",
+    ]);
     for (const theme of digitalTwinMapThemes) {
       expect(theme.primary).toMatch(/^#[0-9A-F]{6}$/i);
       expect(theme.topFill).not.toBe(theme.primary);
       expect(theme.pageBackground).toMatch(/^#[0-9A-F]{6}$/i);
     }
     expect(getDigitalTwinMapTheme("cyan").name).toBe("深海矩阵");
+    expect(getDigitalTwinMapTheme("royal")).toMatchObject({
+      name: "星河钴蓝",
+      primary: "#2B67D1",
+    });
   });
 });

@@ -27,3 +27,5 @@ export interface MapCameraView {
   target: [number, number, number];
   fov: number;
 }
+
+export type MapDataLayerMode = "institutions" | "energy-towers";

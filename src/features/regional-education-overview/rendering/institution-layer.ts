@@ -3,6 +3,8 @@ import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import type { DigitalTwinMapTheme } from "../map-themes";
 import type { EducationLocation } from "../types";
 import type { MapProjection } from "./map-projection";
+import { defaultMapVisualTuning, mapVisualColor } from "./map-visual-tuning";
+import type { MapVisualTuning } from "./map-visual-tuning";
 import { ResourceOwner } from "./resource-owner";
 import { regionTopZ } from "./region-layer";
 import { themeColor } from "./theme-color";
@@ -14,6 +16,27 @@ const bureauHitRadius = 30;
 interface ViewportSize {
   width: number;
   height: number;
+}
+
+export function institutionRippleFrame(
+  elapsed: number,
+  delay: number,
+  tuning: Pick<
+    MapVisualTuning,
+    | "institutionRippleSpeed"
+    | "institutionRippleStartScale"
+    | "institutionRippleScaleRange"
+  >,
+) {
+  const progress = elapsed * tuning.institutionRippleSpeed - delay;
+  if (progress <= 0) return { scale: 0, opacity: 0 };
+  const phase = progress % 1;
+  const fadeIn = THREE.MathUtils.smoothstep(phase, 0, 0.12);
+  const fadeOut = 1 - THREE.MathUtils.smoothstep(phase, 0.62, 1);
+  return {
+    scale: tuning.institutionRippleStartScale + phase * tuning.institutionRippleScaleRange,
+    opacity: fadeIn * fadeOut,
+  };
 }
 
 export class InstitutionLayer {
@@ -32,6 +55,7 @@ export class InstitutionLayer {
   private readonly rippleMeshes: THREE.Mesh[] = [];
   private selectedLocationId?: string;
   private hoveredLocationId?: string;
+  private animationStartTime?: number;
 
   constructor(
     private readonly locations: readonly EducationLocation[],
@@ -39,6 +63,7 @@ export class InstitutionLayer {
     theme: DigitalTwinMapTheme,
     selectedLocationId: string | undefined,
     pixelRatio: number,
+    private tuning: Readonly<MapVisualTuning> = defaultMapVisualTuning,
   ) {
     this.selectedLocationId = selectedLocationId;
     const positions = new Float32Array(locations.length * 3);
@@ -77,12 +102,20 @@ export class InstitutionLayer {
       depthWrite: false,
       uniforms: {
         uPixelRatio: { value: pixelRatio },
+        uPointSize: { value: tuning.institutionPointSize },
+        uEmphasisPointSize: { value: tuning.institutionEmphasisPointSize },
+        uHaloInnerRadius: { value: tuning.institutionHaloInnerRadius },
+        uCoreRadius: { value: tuning.institutionCoreRadius },
+        uHaloOpacity: { value: tuning.institutionHaloOpacity },
+        uEmphasisHaloOpacity: { value: tuning.institutionEmphasisHaloOpacity },
       },
       vertexShader: `
         attribute vec3 pointColor;
         attribute float selected;
         attribute float bureau;
         uniform float uPixelRatio;
+        uniform float uPointSize;
+        uniform float uEmphasisPointSize;
         varying vec3 vColor;
         varying float vSelected;
         varying float vBureau;
@@ -90,7 +123,7 @@ export class InstitutionLayer {
           vColor = pointColor;
           vSelected = selected;
           vBureau = bureau;
-          gl_PointSize = mix(12.0, 18.0, max(selected, bureau)) * uPixelRatio;
+          gl_PointSize = mix(uPointSize, uEmphasisPointSize, max(selected, bureau)) * uPixelRatio;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
@@ -98,13 +131,20 @@ export class InstitutionLayer {
         varying vec3 vColor;
         varying float vSelected;
         varying float vBureau;
+        uniform float uHaloInnerRadius;
+        uniform float uCoreRadius;
+        uniform float uHaloOpacity;
+        uniform float uEmphasisHaloOpacity;
         void main() {
           float distanceToCenter = distance(gl_PointCoord, vec2(0.5));
           if (distanceToCenter > 0.5) discard;
-          float halo = 1.0 - smoothstep(0.36, 0.5, distanceToCenter);
-          float core = 1.0 - smoothstep(0.0, 0.17, distanceToCenter);
+          float halo = 1.0 - smoothstep(uHaloInnerRadius, 0.5, distanceToCenter);
+          float core = 1.0 - smoothstep(0.0, uCoreRadius, distanceToCenter);
           float emphasis = max(vSelected, vBureau);
-          float opacity = max(halo * mix(0.10, 0.22, emphasis), core);
+          float opacity = max(
+            halo * mix(uHaloOpacity, uEmphasisHaloOpacity, emphasis),
+            core
+          );
           gl_FragColor = vec4(vColor, opacity);
         }
       `,
@@ -117,9 +157,16 @@ export class InstitutionLayer {
   }
 
   private applyPointColors(theme: DigitalTwinMapTheme) {
-    const defaultColor = new THREE.Color(theme.labelText);
-    const selectedColor = new THREE.Color(theme.primary);
-    const bureauColor = themeColor(theme.scatter, theme.primary).color;
+    const defaultColor = new THREE.Color(
+      mapVisualColor(this.tuning, "institutionDefault", theme.labelText),
+    );
+    const selectedColor = new THREE.Color(
+      mapVisualColor(this.tuning, "institutionSelected", theme.primary),
+    );
+    const bureauColor = themeColor(
+      mapVisualColor(this.tuning, "institutionBureau", theme.scatter),
+      theme.primary,
+    ).color;
     this.locationByPointIndex.forEach((location, index) => {
       const color = location.type === "bureau"
         ? bureauColor
@@ -132,24 +179,30 @@ export class InstitutionLayer {
     const bureau = this.locationByPointIndex.find((location) => location.type === "bureau");
     if (!bureau) return;
     const point = this.projection.projectPoint(bureau.coordinate, regionTopZ + 1);
-    const ripple = themeColor(theme.ripple, theme.primary);
+    const ripple = themeColor(
+      mapVisualColor(this.tuning, "institutionRipple", theme.ripple),
+      theme.primary,
+    );
+    const rippleOpacity = ripple.opacity * this.tuning.institutionRippleOpacityScale;
     for (let index = 0; index < 2; index += 1) {
       const material = this.owner.material(new THREE.MeshBasicMaterial({
         color: ripple.color,
         transparent: true,
-        opacity: ripple.opacity,
+        opacity: rippleOpacity,
         blending: THREE.AdditiveBlending,
         depthTest: false,
         depthWrite: false,
         side: THREE.DoubleSide,
       }));
-      material.userData.baseOpacity = ripple.opacity;
+      material.userData.baseOpacity = rippleOpacity;
       const mesh = new THREE.Mesh(
         this.owner.geometry(new THREE.RingGeometry(12, 13, 48)),
         material,
       );
       mesh.position.copy(point);
-      mesh.userData.phase = index * 0.5;
+      mesh.scale.setScalar(0);
+      mesh.userData.delay = index * 0.5;
+      material.opacity = 0;
       mesh.renderOrder = 17;
       this.rippleMaterials.push(material);
       this.rippleMeshes.push(mesh);
@@ -215,13 +268,28 @@ export class InstitutionLayer {
     this.pointsMaterial.uniforms.uPixelRatio!.value = pixelRatio;
   }
 
-  applyTheme(theme: DigitalTwinMapTheme) {
+  applyTheme(
+    theme: DigitalTwinMapTheme,
+    tuning: Readonly<MapVisualTuning> = this.tuning,
+  ) {
+    this.tuning = tuning;
+    this.pointsMaterial.uniforms.uPointSize!.value = tuning.institutionPointSize;
+    this.pointsMaterial.uniforms.uEmphasisPointSize!.value = tuning.institutionEmphasisPointSize;
+    this.pointsMaterial.uniforms.uHaloInnerRadius!.value = tuning.institutionHaloInnerRadius;
+    this.pointsMaterial.uniforms.uCoreRadius!.value = tuning.institutionCoreRadius;
+    this.pointsMaterial.uniforms.uHaloOpacity!.value = tuning.institutionHaloOpacity;
+    this.pointsMaterial.uniforms.uEmphasisHaloOpacity!.value = (
+      tuning.institutionEmphasisHaloOpacity
+    );
     this.applyPointColors(theme);
     this.pointsGeometry.getAttribute("pointColor").needsUpdate = true;
-    const ripple = themeColor(theme.ripple, theme.primary);
+    const ripple = themeColor(
+      mapVisualColor(tuning, "institutionRipple", theme.ripple),
+      theme.primary,
+    );
     for (const material of this.rippleMaterials) {
       material.color.copy(ripple.color);
-      material.userData.baseOpacity = ripple.opacity;
+      material.userData.baseOpacity = ripple.opacity * tuning.institutionRippleOpacityScale;
     }
   }
 
@@ -250,12 +318,19 @@ export class InstitutionLayer {
   }
 
   animate(time: number) {
+    this.animationStartTime ??= time;
+    const elapsed = Math.max(0, time - this.animationStartTime);
     for (const [index, mesh] of this.rippleMeshes.entries()) {
-      const phase = (time * 0.24 + Number(mesh.userData.phase ?? 0)) % 1;
-      const scale = 0.65 + phase * 1.45;
-      mesh.scale.setScalar(scale);
+      const frame = institutionRippleFrame(
+        elapsed,
+        Number(mesh.userData.delay ?? 0),
+        this.tuning,
+      );
+      mesh.scale.setScalar(frame.scale);
       const material = this.rippleMaterials[index];
-      if (material) material.opacity = Number(material.userData.baseOpacity ?? material.opacity) * (1 - phase);
+      if (material) {
+        material.opacity = Number(material.userData.baseOpacity ?? 0) * frame.opacity;
+      }
     }
   }
 

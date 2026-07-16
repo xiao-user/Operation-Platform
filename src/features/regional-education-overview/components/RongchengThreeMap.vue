@@ -15,6 +15,10 @@
 
     <div class="map-camera-control" aria-label="地图视角与点位控制">
       <span>{{ scopeLabel }}</span>
+      <div class="map-layer-switch" role="group" aria-label="地图数据图层">
+        <button type="button" :class="{ 'is-active': dataLayerMode === 'institutions' }" :aria-pressed="dataLayerMode === 'institutions'" @click="emit('update:dataLayerMode', 'institutions')">学校网络</button>
+        <button type="button" :class="{ 'is-active': dataLayerMode === 'energy-towers' }" :aria-pressed="dataLayerMode === 'energy-towers'" @click="emit('update:dataLayerMode', 'energy-towers')">能量锥峰</button>
+      </div>
       <button type="button" @click="saveCameraView">保存视角</button>
       <button type="button" @click="restoreSavedCameraView">恢复视角</button>
       <button type="button" @click="resetCameraView">重置视角</button>
@@ -36,6 +40,7 @@ import {
 import type { MapVisualTuning } from "../rendering/map-visual-tuning";
 import type {
   EducationLocation,
+  MapDataLayerMode,
   MapCameraView,
 } from "../types";
 
@@ -45,15 +50,17 @@ const props = defineProps<{
   locations: readonly EducationLocation[];
   selectedLocationId?: string;
   visualTuning: MapVisualTuning;
+  dataLayerMode: MapDataLayerMode;
 }>();
 const emit = defineEmits<{
   select: [location: EducationLocation];
   featureSelect: [feature: MapState["geoData"]["features"][number]];
   scopeBack: [];
   "update:visualTuning": [tuning: MapVisualTuning];
+  "update:dataLayerMode": [mode: MapDataLayerMode];
 }>();
 const canvasHost = ref<HTMLElement>();
-const cameraStorageKey = "regional-education-overview:camera-view:v3";
+const cameraStorageKey = "regional-education-overview:camera-view:v4";
 const scopeLabel = computed(
   () => `${props.mapState.scope === "district" ? "区县" : "镇街"} / ${props.mapState.regionName}`,
 );
@@ -93,6 +100,7 @@ onMounted(() => {
     props.locations,
     props.theme,
     props.selectedLocationId,
+    props.dataLayerMode,
     {
       locationSelect: (location) => emit("select", location),
       featureSelect: (feature) => emit("featureSelect", feature),
@@ -119,6 +127,7 @@ watch(
 );
 watch(() => props.visualTuning, (tuning) => engine?.setVisualTuning(tuning), { deep: true });
 watch(() => props.theme, (theme) => engine?.setTheme(theme));
+watch(() => props.dataLayerMode, (mode) => engine?.setDataLayerMode(mode));
 watch(
   () => props.selectedLocationId,
   (locationId) => engine?.setSelectedLocation(locationId),
@@ -126,7 +135,9 @@ watch(
 
 defineExpose({
   getCameraView: () => engine?.getCameraView(),
-  focusFeature: (featureCode: string) => engine?.focusFeature(featureCode) ?? Promise.resolve(),
+  focusFeature: (featureCode: string, applyTownshipDefaults: boolean) => (
+    engine?.focusFeature(featureCode, applyTownshipDefaults) ?? Promise.resolve()
+  ),
   animateCameraView: (view: MapCameraView) => engine?.animateCameraView(view) ?? Promise.resolve(),
 });
 
@@ -209,6 +220,18 @@ onBeforeUnmount(() => {
   border-color: var(--map-primary);
 }
 
+.map-layer-switch {
+  display: flex;
+  margin-right: var(--dt-space-2);
+  border: var(--dt-border-width) solid color-mix(in srgb, var(--map-primary) 24%, transparent);
+  border-radius: var(--dt-radius-xs);
+  padding: 2px;
+  background: color-mix(in srgb, var(--dt-color-canvas) 78%, transparent);
+}
+
+.map-layer-switch button { border-color: transparent; background: transparent; color: color-mix(in srgb, var(--map-label-text) 58%, transparent); }
+.map-layer-switch button.is-active { border-color: color-mix(in srgb, var(--map-primary) 62%, transparent); background: color-mix(in srgb, var(--map-primary) 14%, var(--dt-color-panel)); color: var(--map-primary); box-shadow: inset 0 0 var(--dt-space-3) color-mix(in srgb, var(--map-primary) 18%, transparent), 0 0 var(--dt-space-3) color-mix(in srgb, var(--map-primary) 10%, transparent); }
+
 
 .map-canvas-host :deep(.map-region-label) {
   border: var(--dt-border-width) solid color-mix(in srgb, var(--map-outline) 38%, transparent);
@@ -252,6 +275,27 @@ onBeforeUnmount(() => {
 .map-canvas-host :deep(.map-location-name.is-bureau) {
   color: var(--map-label-pointer);
   text-shadow: 0 0 var(--dt-space-3) var(--map-label-glow);
+}
+
+.map-canvas-host :deep(.map-energy-tower-label) { display: grid; min-width: 92px; transform: translateY(-8px) scale(0.96); border: var(--dt-border-width) solid color-mix(in srgb, var(--map-primary) 38%, transparent); border-radius: var(--dt-radius-xs); padding: var(--dt-space-1) var(--dt-space-2); background: color-mix(in srgb, var(--dt-color-canvas) 84%, transparent); box-shadow: 0 0 var(--dt-space-4) color-mix(in srgb, var(--map-primary) 12%, transparent); color: var(--map-label-text); text-align: center; white-space: nowrap; opacity: 0; visibility: hidden; backdrop-filter: blur(var(--dt-panel-blur)); transition: opacity var(--dt-transition-fast), visibility var(--dt-transition-fast), transform var(--dt-transition-fast), border-color var(--dt-transition-fast); }
+.map-canvas-host :deep(.map-energy-tower-label strong) { font-size: var(--dt-font-size-xs); font-weight: var(--dt-font-weight-medium); letter-spacing: var(--dt-letter-spacing-label); }
+.map-canvas-host :deep(.map-energy-tower-label > span) { color: var(--map-primary); font-size: 10px; line-height: var(--dt-line-height-tight); }
+.map-canvas-host :deep(.map-energy-tower-label.has-school-details) { min-width: 128px; padding-block: var(--dt-space-2); }
+.map-canvas-host :deep(.tower-school-list) { max-height: 42px; overflow: hidden; margin-top: 3px; color: color-mix(in srgb, var(--map-label-text) 74%, transparent); font-size: 10px; line-height: 14px; }
+.map-canvas-host :deep(.tower-school-list-track),
+.map-canvas-host :deep(.tower-school-list-cycle) { display: grid; }
+.map-canvas-host :deep(.tower-school-list-cycle span) { height: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-canvas-host :deep(.tower-school-list.is-scrolling .tower-school-list-track) { animation: tower-school-list-scroll var(--school-scroll-duration) linear infinite; }
+.map-canvas-host :deep(.map-energy-tower-label.is-pinned.is-revealed) { opacity: calc(0.78 * var(--tower-reveal, 1)); visibility: visible; }
+.map-canvas-host :deep(.map-energy-tower-label.is-hovered.is-revealed) { transform: translateY(-12px) scale(1.06); border-color: var(--map-primary); opacity: var(--tower-reveal, 1); visibility: visible; }
+
+@keyframes tower-school-list-scroll {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-canvas-host :deep(.tower-school-list.is-scrolling .tower-school-list-track) { animation: none; }
 }
 
 .map-canvas-host :deep(.map-context-label) {

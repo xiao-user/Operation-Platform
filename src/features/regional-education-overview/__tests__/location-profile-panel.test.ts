@@ -16,6 +16,7 @@ describe("LocationProfilePanel pagination", () => {
         canDrill: true,
         formattedDate: "2026-07-15",
         entityCount: locations.length,
+        dataLayerMode: "institutions",
       },
     });
 

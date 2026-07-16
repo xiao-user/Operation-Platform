@@ -18,6 +18,7 @@ import type { DigitalTwinMapTheme } from "@/features/regional-education-overview
 import type {
   EducationLocation,
   EducationLocationType,
+  MapDataLayerMode,
 } from "@/features/regional-education-overview/types";
 import { digitalTwinMotion } from "@/features/regional-education-overview/motion";
 import {
@@ -35,6 +36,7 @@ const selectedLocation = ref<EducationLocation | undefined>(rongchengEducationLo
 const activeLocations = ref<EducationLocation[]>([...rongchengEducationLocations]);
 const activeMapState = ref<MapState>(initialMapState);
 const mapVisualTuning = ref(cloneMapVisualTuning(defaultMapVisualTuning));
+const dataLayerMode = ref<MapDataLayerMode>("institutions");
 const now = ref(new Date());
 const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
   year: "numeric",
@@ -172,9 +174,11 @@ onBeforeUnmount(() => {
       :selected-location-id="selectedLocation?.id"
       :theme="activeTheme"
       :visual-tuning="mapVisualTuning"
+      :data-layer-mode="dataLayerMode"
       @select="selectLocation"
       @scope-change="handleScopeChange"
       @update:visual-tuning="mapVisualTuning = $event"
+      @update:data-layer-mode="dataLayerMode = $event"
     />
 
     <div class="hud-layer">
@@ -205,6 +209,7 @@ onBeforeUnmount(() => {
           :formatted-date="formattedDate"
           :entity-count="activeLocations.length"
           :locations="activeLocations"
+          :data-layer-mode="dataLayerMode"
           @location-select="selectLocation"
         />
 

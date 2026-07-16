@@ -21,7 +21,9 @@ function dampingRate(frameFactor: number) {
 
 const interactionDamping = {
   scale: dampingRate(0.14),
-  elevation: dampingRate(0.18),
+  // Keep thickness scale and base offset on the same curve so a hover can grow
+  // downward while the region's top surface stays mathematically stationary.
+  elevation: dampingRate(0.14),
   highlight: dampingRate(0.2),
   overlay: dampingRate(0.16),
 } as const;
@@ -88,6 +90,7 @@ export class RegionLayer {
       uniforms: {
         topColor: { value: new THREE.Color() },
         bottomColor: { value: new THREE.Color() },
+        topOpacity: { value: tuning.regionSideTopOpacity },
         bottomOpacity: { value: 0.06 },
       },
       vertexShader: `
@@ -100,11 +103,12 @@ export class RegionLayer {
       fragmentShader: `
         uniform vec3 topColor;
         uniform vec3 bottomColor;
+        uniform float topOpacity;
         uniform float bottomOpacity;
         varying float vHeight;
         void main() {
           vec3 color = mix(bottomColor, topColor, vHeight);
-          float opacity = mix(bottomOpacity, 0.86, vHeight);
+          float opacity = mix(bottomOpacity, topOpacity, vHeight);
           gl_FragColor = vec4(color, opacity);
         }
       `,
@@ -198,7 +202,6 @@ export class RegionLayer {
         if (!outerRing || !shape) continue;
         const regionGroup = new THREE.Group();
         regionGroup.userData.feature = feature;
-        regionGroup.userData.targetLift = 0;
         regionGroup.userData.targetBaseZ = 0;
         regionGroup.userData.targetScaleZ = 1;
         this.regionGroups.add(regionGroup);
@@ -285,18 +288,30 @@ export class RegionLayer {
       regionTop,
     );
     this.baseMaterial.color.set(regionTop);
+    this.baseMaterial.opacity = tuning.regionBaseOpacity;
     this.sideMaterial.uniforms.topColor!.value.set(
       mapVisualColor(tuning, "sideTop", theme.sideTop),
     );
     this.sideMaterial.uniforms.bottomColor!.value.copy(bottom.color);
-    this.sideMaterial.uniforms.bottomOpacity!.value = bottom.opacity;
+    this.sideMaterial.uniforms.topOpacity!.value = tuning.regionSideTopOpacity;
+    this.sideMaterial.uniforms.bottomOpacity!.value = (
+      bottom.opacity * tuning.regionSideBottomOpacityScale
+    );
     this.terrainMaterial.color.set(regionTop);
     this.terrainMaterial.emissive.set(regionTop);
-    this.terrainMaterial.opacity = 0.9 * theme.topOpacity;
+    this.terrainMaterial.opacity = tuning.regionTerrainOpacity;
+    this.terrainMaterial.roughness = tuning.regionTerrainRoughness;
+    this.terrainMaterial.metalness = tuning.regionTerrainMetalness;
+    this.terrainMaterial.normalScale.setScalar(tuning.regionTerrainNormalScale);
+    this.terrainMaterial.emissiveIntensity = tuning.regionTerrainEmissiveIntensity;
     this.internalBoundaryMaterial.color.copy(internal.color);
-    this.internalBoundaryMaterial.opacity = internal.opacity;
+    this.internalBoundaryMaterial.opacity = (
+      internal.opacity * tuning.regionInternalBoundaryOpacityScale
+    );
     this.topContourMaterial.color.set(outline);
+    this.topContourMaterial.opacity = tuning.regionTopContourOpacity;
     this.bottomContourMaterial.color.set(outline);
+    this.bottomContourMaterial.opacity = tuning.regionBottomContourOpacity;
     for (const material of this.highlightMaterials.values()) {
       material.color.set(mapVisualColor(tuning, "hover", theme.primary));
     }
@@ -328,22 +343,28 @@ export class RegionLayer {
       const focused = hasFocus && code === this.focusFeatureCode;
       const hovered = code === this.hoveredFeatureCode;
       if (!hasFocus) {
-        regionGroup.userData.targetScaleZ = this.tuning.districtThickness / baseThickness;
-        regionGroup.userData.targetBaseZ = 0;
-        regionGroup.userData.targetLift = hovered ? this.tuning.districtHoverLift : 0;
+        const thickness = hovered
+          ? this.tuning.districtHoverThickness
+          : this.tuning.districtThickness;
+        regionGroup.userData.targetScaleZ = thickness / baseThickness;
+        regionGroup.userData.targetBaseZ = topZ
+          * (this.tuning.districtThickness - thickness) / baseThickness;
         regionGroup.renderOrder = hovered ? 22 : 20;
       } else if (focused) {
-        regionGroup.userData.targetScaleZ = this.tuning.townshipFocusThickness / baseThickness;
-        regionGroup.userData.targetBaseZ = this.tuning.townshipFocusLift;
-        regionGroup.userData.targetLift = hovered ? this.tuning.districtHoverLift * 0.45 : 0;
+        const thickness = hovered
+          ? this.tuning.townshipFocusHoverThickness
+          : this.tuning.townshipFocusThickness;
+        regionGroup.userData.targetScaleZ = thickness / baseThickness;
+        regionGroup.userData.targetBaseZ = this.tuning.townshipFocusLift
+          + topZ * (this.tuning.townshipFocusThickness - thickness) / baseThickness;
         regionGroup.renderOrder = 40;
       } else {
         const thickness = hovered
           ? this.tuning.townshipSiblingHoverThickness
           : this.tuning.townshipSiblingThickness;
         regionGroup.userData.targetScaleZ = thickness / baseThickness;
-        regionGroup.userData.targetBaseZ = this.tuning.townshipSiblingBaseZ;
-        regionGroup.userData.targetLift = hovered ? this.tuning.townshipSiblingHoverLift : 0;
+        regionGroup.userData.targetBaseZ = this.tuning.townshipSiblingBaseZ
+          + topZ * (this.tuning.townshipSiblingThickness - thickness) / baseThickness;
         regionGroup.renderOrder = hovered ? 30 : 10;
       }
       const highlight = this.highlightMaterials.get(regionGroup);
@@ -418,8 +439,7 @@ export class RegionLayer {
     if (Math.abs(nextScaleZ - group.scale.z) > 0.0001) dirty = true;
     group.scale.z = nextScaleZ;
     const targetBaseZ = Number(group.userData.targetBaseZ ?? 0);
-    const targetLift = Number(group.userData.targetLift ?? 0);
-    const targetZ = targetBaseZ + targetLift;
+    const targetZ = targetBaseZ;
     const next = interactionValue(
       group.position.z,
       targetZ,

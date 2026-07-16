@@ -10,24 +10,26 @@ import {
 import type { MapState } from "../map-data-adapter";
 import type { DigitalTwinMapTheme } from "../map-themes";
 import type { MapVisualTuning } from "../rendering/map-visual-tuning";
-import type { EducationLocation, MapCameraView } from "../types";
+import type { EducationLocation, MapCameraView, MapDataLayerMode } from "../types";
 
 const props = defineProps<{
   locations: readonly EducationLocation[];
   selectedLocationId?: string;
   theme: DigitalTwinMapTheme;
   visualTuning: MapVisualTuning;
+  dataLayerMode: MapDataLayerMode;
 }>();
 
 const emit = defineEmits<{
   select: [location: EducationLocation];
   scopeChange: [state: MapState, locations: EducationLocation[]];
   "update:visualTuning": [tuning: MapVisualTuning];
+  "update:dataLayerMode": [mode: MapDataLayerMode];
 }>();
 
 interface MapRendererApi {
   getCameraView: () => MapCameraView | undefined;
-  focusFeature: (featureCode: string) => Promise<void>;
+  focusFeature: (featureCode: string, applyTownshipDefaults: boolean) => Promise<void>;
   animateCameraView: (view: MapCameraView) => Promise<void>;
 }
 
@@ -53,7 +55,8 @@ async function focusRegion(feature: GeoFeature) {
   transitioning.value = true;
   try {
     const nextState = loadMapLevel(code);
-    if (currentState.value.scope === "district") {
+    const enteringFromDistrict = currentState.value.scope === "district";
+    if (enteringFromDistrict) {
       history.value.push({
         state: currentState.value,
         cameraView: mapRenderer.value?.getCameraView(),
@@ -61,7 +64,7 @@ async function focusRegion(feature: GeoFeature) {
     }
     currentState.value = nextState;
     await nextTick();
-    await mapRenderer.value?.focusFeature(code);
+    await mapRenderer.value?.focusFeature(code, enteringFromDistrict);
   } finally {
     transitioning.value = false;
   }
@@ -102,12 +105,14 @@ defineExpose({ goBack });
       :map-state="currentState"
       :theme="theme"
       :visual-tuning="visualTuning"
+      :data-layer-mode="dataLayerMode"
       :locations="visibleLocations"
       :selected-location-id="selectedLocationId"
       @select="emit('select', $event)"
       @feature-select="focusRegion"
       @scope-back="goBack"
       @update:visual-tuning="emit('update:visualTuning', $event)"
+      @update:data-layer-mode="emit('update:dataLayerMode', $event)"
     />
   </section>
 </template>

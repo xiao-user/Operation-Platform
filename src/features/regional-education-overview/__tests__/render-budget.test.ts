@@ -1,19 +1,42 @@
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { rongchengEducationLocations } from "../education-locations";
-import { boundaryFeatureForMapState, initialMapState } from "../map-data-adapter";
+import {
+  boundaryFeatureForMapState,
+  filterLocationsForMapState,
+  initialMapState,
+  loadMapLevel,
+} from "../map-data-adapter";
 import { getDigitalTwinMapTheme } from "../map-themes";
 import { AmbientEffectsLayer } from "../rendering/ambient-effects-layer";
 import { ConnectionLayer } from "../rendering/connection-layer";
-import { InstitutionLayer } from "../rendering/institution-layer";
-import { createMapProjection, largestOuterRingOfFeature } from "../rendering/map-projection";
-import { RegionLayer } from "../rendering/region-layer";
+import {
+  energyTowerDimensions,
+  energyTowerHeight,
+  energyTowerRenderOrder,
+  EnergyTowerLayer,
+} from "../rendering/energy-tower-layer";
+import {
+  institutionRippleFrame,
+  InstitutionLayer,
+} from "../rendering/institution-layer";
+import {
+  createMapProjection,
+  featureCenter,
+  largestOuterRingOfFeature,
+} from "../rendering/map-projection";
+import { RegionLayer, regionTopZ } from "../rendering/region-layer";
 import { defaultMapVisualTuning } from "../rendering/map-visual-tuning";
 import {
   anchorDynamicOverlay,
-  compensateTransitionTargetX,
-  scopeFramingX,
+  mapScreenFraming,
+  minimumCameraDistanceDuringScopeChange,
+  resolveMapOrbitPivot,
+  shouldRunMapAutoRotation,
+  townshipFocusPositionZ,
+  townshipFocusTargetZ,
 } from "../rendering/regional-map-engine";
 import { ResourceOwner } from "../rendering/resource-owner";
 import type { EducationLocation } from "../types";
@@ -39,14 +62,109 @@ function createLargeLocationSet(count: number): EducationLocation[] {
 }
 
 describe("regional map render budget", () => {
-  it("keeps scope framing continuous until the camera transition takes ownership", () => {
-    const districtRootX = scopeFramingX({ scope: "district" }, defaultMapVisualTuning);
-    const townshipRootX = scopeFramingX({ scope: "township" }, defaultMapVisualTuning);
+  it("maps larger grid school counts to taller township towers at a smaller near-view scale", () => {
+    expect(energyTowerHeight(6, 6, "township")).toBeGreaterThan(
+      energyTowerHeight(2, 6, "township"),
+    );
+    expect(energyTowerDimensions("township").radius).toBeLessThan(
+      energyTowerDimensions("district").radius,
+    );
+    expect(energyTowerDimensions("township").maximumHeight).toBeLessThan(
+      energyTowerDimensions("district").maximumHeight,
+    );
+  });
 
-    expect(districtRootX).toBe(-108);
-    expect(townshipRootX).toBe(-60);
-    expect(compensateTransitionTargetX(120, districtRootX, townshipRootX)).toBe(168);
-    expect(compensateTransitionTargetX(168, townshipRootX, districtRootX)).toBe(120);
+  it("keeps screen framing separate from the geographic orbit pivot", () => {
+    expect(mapScreenFraming({ scope: "district" }, defaultMapVisualTuning)).toEqual({
+      x: -108,
+      y: -30,
+    });
+    expect(mapScreenFraming({ scope: "township" }, defaultMapVisualTuning)).toEqual({
+      x: 0,
+      y: -70,
+    });
+
+    const mapRoot = new THREE.Group();
+    mapRoot.position.set(36, -28, -24);
+    mapRoot.rotation.z = 0.21;
+    mapRoot.scale.setScalar(0.8);
+    const districtBoundary = boundaryFeatureForMapState(initialMapState);
+    expect(districtBoundary).toBeDefined();
+    const center = featureCenter(districtBoundary!)!;
+    const expected = mapRoot.localToWorld(
+      projection.projectPoint(center, regionTopZ),
+    );
+    const pivot = resolveMapOrbitPivot(
+      initialMapState,
+      projection,
+      mapRoot,
+      regionTopZ,
+    );
+
+    expect(pivot?.distanceTo(expected)).toBeLessThan(0.000_001);
+    expect(pivot?.x).not.toBe(defaultMapVisualTuning.cameraTargetX);
+  });
+
+  it("keeps return constraints stable and only resets camera Z on parent drilldown", () => {
+    expect(minimumCameraDistanceDuringScopeChange("township", "district")).toBe(280);
+    expect(minimumCameraDistanceDuringScopeChange("district", "district")).toBe(480);
+    expect(townshipFocusPositionZ(true, 146, defaultMapVisualTuning)).toBe(80);
+    expect(townshipFocusPositionZ(false, 146, defaultMapVisualTuning)).toBe(146);
+  });
+
+  it("uses the configured focus Z only for township energy towers", () => {
+    expect(townshipFocusTargetZ("energy-towers", 12, defaultMapVisualTuning)).toBe(32);
+    expect(townshipFocusTargetZ("institutions", 12, defaultMapVisualTuning)).toBe(12);
+  });
+
+  it("resumes planar auto rotation only after controls have been idle", () => {
+    expect(shouldRunMapAutoRotation(true, false, 10_000, 10_000)).toBe(true);
+    expect(shouldRunMapAutoRotation(true, false, 9_999, 10_000)).toBe(false);
+    expect(shouldRunMapAutoRotation(true, true, 12_000, 10_000)).toBe(false);
+    expect(shouldRunMapAutoRotation(false, false, 12_000, 10_000)).toBe(false);
+  });
+
+  it("keeps the geographic pivot fixed on screen during Z-up orbit rotation", () => {
+    const camera = new THREE.PerspectiveCamera(30, 1.5, 1, 2400);
+    camera.up.set(0, 0, 1);
+    camera.position.set(50, -700, 500);
+    camera.setViewOffset(1200, 800, 108, -30, 1200, 800);
+    const controls = new OrbitControls(camera, document.createElement("canvas"));
+    const pivot = new THREE.Vector3(-8, 28, 11);
+    controls.target.copy(pivot);
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.2;
+    controls.update(1);
+    camera.updateMatrixWorld();
+    const screenPositionBefore = pivot.clone().project(camera);
+    const cameraZBefore = camera.position.z;
+    const distanceBefore = camera.position.distanceTo(pivot);
+
+    controls.update(1);
+    camera.updateMatrixWorld();
+
+    const screenPositionAfter = pivot.clone().project(camera);
+    expect(controls.target.distanceTo(pivot)).toBeLessThan(0.000_001);
+    expect(camera.position.z).toBeCloseTo(cameraZBefore, 6);
+    expect(camera.position.distanceTo(pivot)).toBeCloseTo(distanceBefore, 6);
+    expect(screenPositionAfter.x).toBeCloseTo(screenPositionBefore.x, 6);
+    expect(screenPositionAfter.y).toBeCloseTo(screenPositionBefore.y, 6);
+    controls.dispose();
+  });
+
+  it("starts bureau ripples at zero scale and hides both ends of every cycle", () => {
+    const tuning = {
+      institutionRippleSpeed: 1,
+      institutionRippleStartScale: 0,
+      institutionRippleScaleRange: 1.45,
+    };
+
+    expect(institutionRippleFrame(0, 0, tuning)).toEqual({ scale: 0, opacity: 0 });
+    expect(institutionRippleFrame(0.25, 0.5, tuning)).toEqual({ scale: 0, opacity: 0 });
+    expect(institutionRippleFrame(0.5, 0, tuning)).toMatchObject({ scale: 0.725 });
+    expect(institutionRippleFrame(0.5, 0, tuning).opacity).toBeGreaterThan(0);
+    expect(institutionRippleFrame(0.999, 0, tuning).opacity).toBeLessThan(0.001);
+    expect(institutionRippleFrame(1, 0, tuning)).toEqual({ scale: 0, opacity: 0 });
   });
 
   it("anchors points and connections above the active focused surface", () => {
@@ -65,8 +183,23 @@ describe("regional map render budget", () => {
 
   it("keeps institution and connection draw objects constant as schools grow", () => {
     const locations = createLargeLocationSet(500);
-    const institutions = new InstitutionLayer(locations, projection, theme, locations[0]?.id, 1);
-    const connections = new ConnectionLayer(locations, projection, theme);
+    const materialTuning = {
+      ...defaultMapVisualTuning,
+      institutionPointSize: 21,
+      institutionEmphasisPointSize: 27,
+      connectionBaseOpacity: 0.13,
+      connectionFlowSpeed: 0.31,
+      connectionTailLength: 0.27,
+    };
+    const institutions = new InstitutionLayer(
+      locations,
+      projection,
+      theme,
+      locations[0]?.id,
+      1,
+      materialTuning,
+    );
+    const connections = new ConnectionLayer(locations, projection, theme, materialTuning);
     const points: THREE.Points[] = [];
     const labels: CSS2DObject[] = [];
     institutions.root.traverse((object) => {
@@ -77,9 +210,156 @@ describe("regional map render budget", () => {
     expect(points).toHaveLength(1);
     expect(labels.length).toBeLessThanOrEqual(2);
     expect(connections.root.children).toHaveLength(2);
+    const pointMaterial = points[0]?.material as THREE.ShaderMaterial;
+    expect(pointMaterial.uniforms.uPointSize?.value).toBe(21);
+    expect(pointMaterial.uniforms.uEmphasisPointSize?.value).toBe(27);
+    const connectionBase = (connections.root.children[0] as THREE.LineSegments)
+      .material as THREE.LineBasicMaterial;
+    const connectionFlow = (connections.root.children[1] as THREE.LineSegments)
+      .material as THREE.ShaderMaterial;
+    expect(connectionBase.opacity).toBeCloseTo(0.76 * 0.13);
+    expect(connectionFlow.uniforms.speed?.value).toBe(0.31);
+    expect(connectionFlow.uniforms.tailLength?.value).toBe(0.27);
 
     institutions.dispose();
     connections.dispose();
+  });
+
+  it("renders energy towers as a depth-independent map overlay", () => {
+    const gradient = { addColorStop: vi.fn() };
+    const context = {
+      createRadialGradient: vi.fn(() => gradient),
+      fillRect: vi.fn(),
+      fillStyle: "",
+    } as unknown as CanvasRenderingContext2D;
+    const contextSpy = vi.spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue(context);
+    const layer = new EnergyTowerLayer(
+      initialMapState,
+      rongchengEducationLocations,
+      projection,
+      theme,
+      defaultMapVisualTuning,
+    );
+    const towerMaterials: THREE.ShaderMaterial[] = [];
+    const glowMaterials: THREE.MeshBasicMaterial[] = [];
+    layer.root.traverse((object) => {
+      if (object instanceof THREE.Mesh && object.material instanceof THREE.ShaderMaterial) {
+        towerMaterials.push(object.material);
+      }
+      if (
+        object instanceof THREE.Mesh
+        && object.material instanceof THREE.MeshBasicMaterial
+        && object.material.map
+      ) {
+        glowMaterials.push(object.material);
+      }
+    });
+
+    expect(towerMaterials.length).toBeGreaterThan(0);
+    expect(towerMaterials.every((material) => !material.depthTest && !material.depthWrite)).toBe(true);
+    expect(layer.root.renderOrder).toBe(energyTowerRenderOrder);
+    expect(layer.root.children.every((group) => group.renderOrder === energyTowerRenderOrder)).toBe(true);
+    expect(layer.root.children.every((group) => group.position.z > regionTopZ)).toBe(true);
+    expect(layer.root.children.every((group) => group.scale.z === 0.001)).toBe(true);
+    expect(towerMaterials.every((material) => material.uniforms.uReveal?.value === 0)).toBe(true);
+    expect(towerMaterials.every((material) => (
+      material.uniforms.uGridLineWidth?.value
+      === defaultMapVisualTuning.energyTowerGridLineWidth
+    ))).toBe(true);
+    expect(towerMaterials.every((material) => (
+      material.uniforms.uTipGlowStrength?.value
+      === defaultMapVisualTuning.energyTowerTipGlowStrength
+    ))).toBe(true);
+    const liveMaterialTuning = {
+      ...defaultMapVisualTuning,
+      energyTowerGridLineWidth: 0.2,
+      energyTowerTipGlowStrength: 2.4,
+      energyTowerGlowOpacity: 0.61,
+    };
+    layer.applyTuning(theme, liveMaterialTuning);
+    expect(towerMaterials.every((material) => material.uniforms.uGridLineWidth?.value === 0.2))
+      .toBe(true);
+    expect(towerMaterials.every((material) => material.uniforms.uTipGlowStrength?.value === 2.4))
+      .toBe(true);
+    expect(glowMaterials.every((material) => material.userData.baseOpacity === 0.61))
+      .toBe(true);
+    expect(glowMaterials.every((material) => material.color.getHexString() === "04e86c"))
+      .toBe(true);
+    layer.applyTheme(getDigitalTwinMapTheme("cyan"));
+    expect(glowMaterials.every((material) => material.color.getHexString() === "2ffefe"))
+      .toBe(true);
+    expect(gradient.addColorStop).toHaveBeenCalledWith(0, "#FFFFFF");
+    expect(gradient.addColorStop).toHaveBeenCalledWith(
+      defaultMapVisualTuning.energyTowerGlowMidpoint,
+      "rgba(255,255,255,0.53)",
+    );
+    for (let index = 0; index < 180; index += 1) layer.animate(1 / 60);
+    expect(layer.root.children.every((group) => group.scale.z === 1)).toBe(true);
+    expect(towerMaterials.every((material) => material.uniforms.uReveal?.value === 1)).toBe(true);
+    layer.startExit();
+    for (let index = 0; index < 180; index += 1) layer.animate(1 / 60);
+    expect(layer.isHidden()).toBe(true);
+    layer.dispose();
+    contextSpy.mockRestore();
+  });
+
+  it("cycles one child tower card, pauses on hover, and scrolls long school lists", () => {
+    const gradient = { addColorStop: vi.fn() };
+    const context = {
+      createRadialGradient: vi.fn(() => gradient),
+      fillRect: vi.fn(),
+      fillStyle: "",
+    } as unknown as CanvasRenderingContext2D;
+    const contextSpy = vi.spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue(context);
+    const townshipState = loadMapLevel("445202013");
+    const townshipLocations = filterLocationsForMapState(
+      rongchengEducationLocations,
+      townshipState,
+    );
+    const layer = new EnergyTowerLayer(
+      townshipState,
+      townshipLocations,
+      projection,
+      theme,
+      defaultMapVisualTuning,
+    );
+    const labels: HTMLElement[] = [];
+    layer.root.traverse((object) => {
+      if (object instanceof CSS2DObject) labels.push(object.element);
+    });
+
+    expect(labels.length).toBeGreaterThan(1);
+    expect(labels.filter((label) => label.classList.contains("is-pinned"))).toHaveLength(1);
+    expect(labels.every((label) => label.querySelector("strong")?.textContent?.endsWith("所学校")))
+      .toBe(true);
+    expect(labels.every((label) => !label.textContent?.includes("片区"))).toBe(true);
+    const scrollingList = labels
+      .map((label) => label.querySelector<HTMLElement>(".tower-school-list.is-scrolling"))
+      .find(Boolean);
+    expect(scrollingList).toBeTruthy();
+    expect(scrollingList?.querySelectorAll(".tower-school-list-cycle")).toHaveLength(2);
+
+    const initialPinnedId = labels.find((label) => label.classList.contains("is-pinned"))
+      ?.dataset.energyTowerId;
+    for (let index = 0; index < 306; index += 1) layer.animate(1 / 60);
+    const cycledPinnedId = labels.find((label) => label.classList.contains("is-pinned"))
+      ?.dataset.energyTowerId;
+    expect(cycledPinnedId).not.toBe(initialPinnedId);
+
+    const hoverLabel = labels.find((label) => label.dataset.energyTowerId !== cycledPinnedId)!;
+    const hoverId = hoverLabel.dataset.energyTowerId!;
+    layer.setHovered(hoverId);
+    expect(hoverLabel.classList.contains("is-pinned")).toBe(true);
+    expect(hoverLabel.classList.contains("is-hovered")).toBe(true);
+    for (let index = 0; index < 360; index += 1) layer.animate(1 / 60);
+    expect(hoverLabel.classList.contains("is-pinned")).toBe(true);
+    layer.setHovered();
+    expect(hoverLabel.classList.contains("is-pinned")).toBe(true);
+
+    layer.dispose();
+    contextSpy.mockRestore();
   });
 
   it("matches institution hit testing to the marker's screen-space radius", () => {
@@ -153,7 +433,18 @@ describe("regional map render budget", () => {
       }
     });
 
-    regions.applyTheme(getDigitalTwinMapTheme("cyan"));
+    const materialTuning = {
+      ...defaultMapVisualTuning,
+      regionBaseOpacity: 0.41,
+      regionTerrainRoughness: 0.62,
+      regionTerrainMetalness: 0.24,
+      regionTerrainNormalScale: 1.7,
+      regionTerrainEmissiveIntensity: 0.36,
+      regionSideTopOpacity: 0.67,
+      regionTopContourOpacity: 0.73,
+      regionBottomContourOpacity: 0.29,
+    };
+    regions.applyTheme(getDigitalTwinMapTheme("cyan"), materialTuning);
     regions.root.traverse((object) => {
       if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
         geometryIdsAfter.push(object.geometry.id);
@@ -161,6 +452,30 @@ describe("regional map render budget", () => {
     });
 
     expect(geometryIdsAfter).toEqual(geometryIdsBefore);
+    const terrainMaterials: THREE.MeshStandardMaterial[] = [];
+    const sideMaterials: THREE.ShaderMaterial[] = [];
+    const basicOpacities = new Set<number>();
+    const lineOpacities = new Set<number>();
+    regions.root.traverse((object) => {
+      if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshStandardMaterial) {
+        terrainMaterials.push(object.material);
+      } else if (object instanceof THREE.Mesh && object.material instanceof THREE.ShaderMaterial) {
+        sideMaterials.push(object.material);
+      } else if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshBasicMaterial) {
+        basicOpacities.add(object.material.opacity);
+      } else if (object instanceof THREE.Line && object.material instanceof THREE.LineBasicMaterial) {
+        lineOpacities.add(object.material.opacity);
+      }
+    });
+    expect(terrainMaterials.every((material) => material.roughness === 0.62)).toBe(true);
+    expect(terrainMaterials.every((material) => material.metalness === 0.24)).toBe(true);
+    expect(terrainMaterials.every((material) => material.normalScale.x === 1.7)).toBe(true);
+    expect(terrainMaterials.every((material) => material.emissiveIntensity === 0.36)).toBe(true);
+    expect(sideMaterials.every((material) => material.uniforms.topOpacity?.value === 0.67))
+      .toBe(true);
+    expect(basicOpacities.has(0.41)).toBe(true);
+    expect(lineOpacities.has(0.73)).toBe(true);
+    expect(lineOpacities.has(0.29)).toBe(true);
     regions.dispose();
     textures.diffuse.dispose();
     textures.normal.dispose();
@@ -198,6 +513,7 @@ describe("regional map render budget", () => {
     expect(inactive?.scale.z).toBeCloseTo(defaultMapVisualTuning.townshipSiblingThickness / 22, 3);
     expect(active?.renderOrder).toBeGreaterThan(inactive?.renderOrder ?? 0);
 
+    const inactiveSurfaceBeforeHover = (inactive?.position.z ?? 0) + 44 * (inactive?.scale.z ?? 0);
     regions.setHovered(inactive);
     for (let index = 0; index < 100; index += 1) regions.animate();
     expect(inactive?.scale.z).toBeCloseTo(
@@ -206,8 +522,15 @@ describe("regional map render budget", () => {
     );
     expect(inactive?.position.z).toBeCloseTo(
       defaultMapVisualTuning.townshipSiblingBaseZ
-        + defaultMapVisualTuning.townshipSiblingHoverLift,
+        + 44 * (
+          defaultMapVisualTuning.townshipSiblingThickness
+          - defaultMapVisualTuning.townshipSiblingHoverThickness
+        ) / 22,
       2,
+    );
+    expect((inactive?.position.z ?? 0) + 44 * (inactive?.scale.z ?? 0)).toBeCloseTo(
+      inactiveSurfaceBeforeHover,
+      3,
     );
     expect(inactive?.renderOrder).toBeGreaterThan(20);
 

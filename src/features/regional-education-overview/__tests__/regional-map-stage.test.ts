@@ -34,6 +34,7 @@ describe("RegionalMapStage", () => {
         locations: rongchengEducationLocations,
         theme: getDigitalTwinMapTheme("lime"),
         visualTuning: defaultMapVisualTuning,
+        dataLayerMode: "institutions",
       },
       global: {
         stubs: { RongchengThreeMap: rendererStub },
@@ -50,7 +51,7 @@ describe("RegionalMapStage", () => {
     expect(drilldownEvents?.[drilldownEvents.length - 1]?.[0]).toMatchObject({
       code: "445202001",
     });
-    expect(focusFeature).toHaveBeenCalledWith("445202001");
+    expect(focusFeature).toHaveBeenCalledWith("445202001", true);
 
     const sibling = initialMapState.geoData.features.find(
       (feature) => feature.properties.code === "445202002",
@@ -62,7 +63,7 @@ describe("RegionalMapStage", () => {
     expect(siblingEvents?.[siblingEvents.length - 1]?.[0]).toMatchObject({
       code: "445202002",
     });
-    expect(focusFeature).toHaveBeenLastCalledWith("445202002");
+    expect(focusFeature).toHaveBeenLastCalledWith("445202002", false);
 
     wrapper.findComponent(rendererStub).vm.$emit("scope-back");
     await flushPromises();
@@ -93,6 +94,7 @@ describe("RegionalMapStage", () => {
         locations: rongchengEducationLocations,
         theme: getDigitalTwinMapTheme("lime"),
         visualTuning: defaultMapVisualTuning,
+        dataLayerMode: "institutions",
       },
       global: { stubs: { RongchengThreeMap: rendererStub } },
     });

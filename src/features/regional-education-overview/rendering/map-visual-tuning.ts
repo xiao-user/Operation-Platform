@@ -11,7 +11,15 @@ export type MapVisualColorKey =
   | "contextFill"
   | "contextLine"
   | "boundaryHead"
-  | "boundaryTail";
+  | "boundaryTail"
+  | "hudRing"
+  | "institutionDefault"
+  | "institutionSelected"
+  | "institutionBureau"
+  | "institutionRipple"
+  | "connection"
+  | "energyTower"
+  | "energyTowerGlow";
 
 type MapVisualColorOverrides = Partial<Record<MapVisualColorKey, string>>;
 
@@ -26,6 +34,8 @@ export interface MapVisualTuning {
   offsetY: number;
   scale: number;
   rotationZ: number;
+  autoRotationSpeed: number;
+  autoRotationResumeDelaySeconds: number;
   cameraFov: number;
   cameraPositionX: number;
   cameraPositionY: number;
@@ -36,20 +46,84 @@ export interface MapVisualTuning {
   districtFramingOffsetX: number;
   contextFillOpacity: number;
   contextLineOpacity: number;
+  ambientLightIntensity: number;
+  directionalLightIntensity: number;
+  regionBaseOpacity: number;
+  regionTerrainOpacity: number;
+  regionTerrainRoughness: number;
+  regionTerrainMetalness: number;
+  regionTerrainNormalScale: number;
+  regionTerrainEmissiveIntensity: number;
+  regionSideTopOpacity: number;
+  regionSideBottomOpacityScale: number;
+  regionInternalBoundaryOpacityScale: number;
+  regionTopContourOpacity: number;
+  regionBottomContourOpacity: number;
   districtThickness: number;
-  districtHoverLift: number;
+  districtHoverThickness: number;
   districtHoverOpacity: number;
   townshipFocusDistance: number;
+  townshipCameraPositionZ: number;
+  townshipEnergyTowerTargetZ: number;
   townshipFocusFramingOffsetX: number;
   townshipFocusFramingOffsetY: number;
   townshipFocusThickness: number;
+  townshipFocusHoverThickness: number;
   townshipFocusLift: number;
   townshipSiblingThickness: number;
   townshipSiblingBaseZ: number;
   townshipSiblingHoverThickness: number;
-  townshipSiblingHoverLift: number;
   townshipSiblingOverlayOpacity: number;
   townshipHoverOpacity: number;
+  energyTowerDistrictMinimumHeight: number;
+  energyTowerDistrictMaximumHeight: number;
+  energyTowerDistrictRadius: number;
+  energyTowerTownshipMinimumHeight: number;
+  energyTowerTownshipMaximumHeight: number;
+  energyTowerTownshipRadius: number;
+  energyTowerTownshipGridCellSizeDegrees: number;
+  energyTowerHeightExponent: number;
+  energyTowerCurveFactor: number;
+  energyTowerRevealRate: number;
+  energyTowerLabelCycleSeconds: number;
+  energyTowerVerticalGridCount: number;
+  energyTowerRingGridCount: number;
+  energyTowerFadeFloor: number;
+  energyTowerFadeEnd: number;
+  energyTowerGlowRadiusScale: number;
+  energyTowerGlowOpacity: number;
+  energyTowerGlowMidpoint: number;
+  energyTowerGlowMidAlpha: number;
+  energyTowerGridLineWidth: number;
+  energyTowerBaseColorStrength: number;
+  energyTowerHeightColorStrength: number;
+  energyTowerGridColorStrength: number;
+  energyTowerTipGlowExponent: number;
+  energyTowerTipGlowStrength: number;
+  energyTowerHoverColorStrength: number;
+  energyTowerBaseOpacity: number;
+  energyTowerHeightOpacity: number;
+  energyTowerGridOpacity: number;
+  energyTowerHoverOpacity: number;
+  institutionPointSize: number;
+  institutionEmphasisPointSize: number;
+  institutionHaloInnerRadius: number;
+  institutionCoreRadius: number;
+  institutionHaloOpacity: number;
+  institutionEmphasisHaloOpacity: number;
+  institutionRippleOpacityScale: number;
+  institutionRippleSpeed: number;
+  institutionRippleStartScale: number;
+  institutionRippleScaleRange: number;
+  connectionBaseOpacity: number;
+  connectionFlowOpacityScale: number;
+  connectionFlowSpeed: number;
+  connectionTailLength: number;
+  connectionCoreLength: number;
+  connectionTailStrength: number;
+  hudRingPlateOpacityScale: number;
+  hudRingTickOpacityScale: number;
+  hudRingRotationSpeed: number;
   boundarySpeed: number;
   boundaryTailLength: number;
   colorOverrides: MapVisualColorOverrides;
@@ -57,9 +131,11 @@ export interface MapVisualTuning {
 
 export const defaultMapVisualTuning: Readonly<MapVisualTuning> = Object.freeze({
   offsetX: -60,
-  offsetY: -0,
+  offsetY: -30,
   scale: 0.8,
   rotationZ: -0,
+  autoRotationSpeed: 0.2,
+  autoRotationResumeDelaySeconds: 10,
   cameraFov: 30,
   cameraPositionX: 34,
   cameraPositionY: -760,
@@ -70,24 +146,89 @@ export const defaultMapVisualTuning: Readonly<MapVisualTuning> = Object.freeze({
   districtFramingOffsetX: -48,
   contextFillOpacity: 0.07,
   contextLineOpacity: 0.18,
+  ambientLightIntensity: 1.35,
+  directionalLightIntensity: 2.2,
+  regionBaseOpacity: 0.75,
+  regionTerrainOpacity: 1,
+  regionTerrainRoughness: 0.94,
+  regionTerrainMetalness: 0.8,
+  regionTerrainNormalScale: 1,
+  regionTerrainEmissiveIntensity: 0.12,
+  regionSideTopOpacity: 0.86,
+  regionSideBottomOpacityScale: 1,
+  regionInternalBoundaryOpacityScale: 1,
+  regionTopContourOpacity: 0.7,
+  regionBottomContourOpacity: 0.52,
   districtThickness: 7,
-  districtHoverLift: 6,
+  districtHoverThickness: 12,
   districtHoverOpacity: 0.4,
   townshipFocusDistance: 470,
+  townshipCameraPositionZ: 80,
+  townshipEnergyTowerTargetZ: 32,
   townshipFocusFramingOffsetX: 60,
   townshipFocusFramingOffsetY: -40,
   townshipFocusThickness: 16,
+  townshipFocusHoverThickness: 20,
   townshipFocusLift: 0,
   townshipSiblingThickness: 1.2,
   townshipSiblingBaseZ: 14,
   townshipSiblingHoverThickness: 4,
-  townshipSiblingHoverLift: 5,
   townshipSiblingOverlayOpacity: 0.5,
   townshipHoverOpacity: 0.14,
+  energyTowerDistrictMinimumHeight: 32,
+  energyTowerDistrictMaximumHeight: 180,
+  energyTowerDistrictRadius: 36,
+  energyTowerTownshipMinimumHeight: 18,
+  energyTowerTownshipMaximumHeight: 120,
+  energyTowerTownshipRadius: 20,
+  energyTowerTownshipGridCellSizeDegrees: 0.025,
+  energyTowerHeightExponent: 1.05,
+  energyTowerCurveFactor: 6.5,
+  energyTowerRevealRate: 2.4,
+  energyTowerLabelCycleSeconds: 5,
+  energyTowerVerticalGridCount: 8,
+  energyTowerRingGridCount: 15,
+  energyTowerFadeFloor: 0.02,
+  energyTowerFadeEnd: 0.09,
+  energyTowerGlowRadiusScale: 0.7,
+  energyTowerGlowOpacity: 0.83,
+  energyTowerGlowMidpoint: 0.36,
+  energyTowerGlowMidAlpha: 0.53,
+  energyTowerGridLineWidth: 0.08,
+  energyTowerBaseColorStrength: 0.26,
+  energyTowerHeightColorStrength: 0.74,
+  energyTowerGridColorStrength: 0.72,
+  energyTowerTipGlowExponent: 2,
+  energyTowerTipGlowStrength: 1.8,
+  energyTowerHoverColorStrength: 0.55,
+  energyTowerBaseOpacity: 0.48,
+  energyTowerHeightOpacity: 0.3,
+  energyTowerGridOpacity: 0.18,
+  energyTowerHoverOpacity: 0.08,
+  institutionPointSize: 20,
+  institutionEmphasisPointSize: 30,
+  institutionHaloInnerRadius: 0.49,
+  institutionCoreRadius: 0.17,
+  institutionHaloOpacity: 0.1,
+  institutionEmphasisHaloOpacity: 0.22,
+  institutionRippleOpacityScale: 3,
+  institutionRippleSpeed: 0.24,
+  institutionRippleStartScale: 0,
+  institutionRippleScaleRange: 1.45,
+  connectionBaseOpacity: 0.3,
+  connectionFlowOpacityScale: 3,
+  connectionFlowSpeed: 0.18,
+  connectionTailLength: 0.18,
+  connectionCoreLength: 0.025,
+  connectionTailStrength: 0.52,
+  hudRingPlateOpacityScale: 0.18,
+  hudRingTickOpacityScale: 1,
+  hudRingRotationSpeed: 0.18,
   boundarySpeed: 0.055,
   boundaryTailLength: 0.09,
   colorOverrides: Object.freeze({
     inactiveRegion: "#0F131F",
+    institutionDefault: "#FFFFFF",
     internalLine: "#363A44",
     outline: "#363A44",
   }),
@@ -151,4 +292,26 @@ export function mapCameraTuningChanged(
   next: Readonly<MapVisualTuning>,
 ) {
   return cameraTuningKeys.some((key) => previous[key] !== next[key]);
+}
+
+const energyTowerGeometryTuningKeys = [
+  "energyTowerDistrictMinimumHeight",
+  "energyTowerDistrictMaximumHeight",
+  "energyTowerDistrictRadius",
+  "energyTowerTownshipMinimumHeight",
+  "energyTowerTownshipMaximumHeight",
+  "energyTowerTownshipRadius",
+  "energyTowerTownshipGridCellSizeDegrees",
+  "energyTowerHeightExponent",
+  "energyTowerCurveFactor",
+  "energyTowerGlowRadiusScale",
+  "energyTowerGlowMidpoint",
+  "energyTowerGlowMidAlpha",
+] as const;
+
+export function energyTowerTuningChanged(
+  previous: Readonly<MapVisualTuning>,
+  next: Readonly<MapVisualTuning>,
+) {
+  return energyTowerGeometryTuningKeys.some((key) => previous[key] !== next[key]);
 }

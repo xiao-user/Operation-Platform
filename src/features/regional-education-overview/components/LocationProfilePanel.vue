@@ -3,7 +3,7 @@ import { computed } from "vue";
 import mapPinIcon from "@/assets/figma/regional-education-overview/map-pin.svg";
 import chevronBottomIcon from "@/assets/figma/regional-education-overview/chevron-bottom.svg";
 import { educationLocationTypeMeta } from "../education-locations";
-import type { EducationLocation } from "../types";
+import type { EducationLocation, MapDataLayerMode } from "../types";
 import AnimatedNumber from "./AnimatedNumber.vue";
 
 const props = defineProps<{
@@ -13,6 +13,7 @@ const props = defineProps<{
   formattedDate: string;
   entityCount: number;
   locations: readonly EducationLocation[];
+  dataLayerMode: MapDataLayerMode;
 }>();
 
 const emit = defineEmits<{
@@ -102,7 +103,7 @@ const importanceLabel = computed(() => props.location?.type === "bureau" ? "区�
               </details>
               <details>
                 <summary>地图操作<img :src="chevronBottomIcon" alt="" aria-hidden="true"></summary>
-                <p>拖拽旋转、滚轮缩放、点击点位查看。{{ canDrill ? "点击镇街边界可下钻。" : "当前已进入镇街层级。" }}</p>
+                <p>拖拽旋转、滚轮缩放、{{ dataLayerMode === "energy-towers" ? "点击锥峰查看学校数据" : "点击点位查看学校" }}。{{ canDrill ? "点击镇街边界可下钻。" : "当前已进入镇街层级。" }}</p>
               </details>
               <details>
                 <summary>校准状态<img :src="chevronBottomIcon" alt="" aria-hidden="true"></summary>

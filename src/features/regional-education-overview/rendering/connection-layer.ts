@@ -2,6 +2,8 @@ import * as THREE from "three";
 import type { DigitalTwinMapTheme } from "../map-themes";
 import type { EducationLocation } from "../types";
 import type { MapProjection } from "./map-projection";
+import { defaultMapVisualTuning, mapVisualColor } from "./map-visual-tuning";
+import type { MapVisualTuning } from "./map-visual-tuning";
 import { ResourceOwner } from "./resource-owner";
 import { regionTopZ } from "./region-layer";
 import { themeColor } from "./theme-color";
@@ -16,6 +18,7 @@ export class ConnectionLayer {
     locations: readonly EducationLocation[],
     projection: MapProjection,
     theme: DigitalTwinMapTheme,
+    private tuning: Readonly<MapVisualTuning> = defaultMapVisualTuning,
   ) {
     const basePositions: number[] = [];
     const flowPositions: number[] = [];
@@ -72,6 +75,10 @@ export class ConnectionLayer {
         time: { value: 0 },
         color: { value: new THREE.Color() },
         opacity: { value: 1 },
+        speed: { value: tuning.connectionFlowSpeed },
+        tailLength: { value: tuning.connectionTailLength },
+        coreLength: { value: tuning.connectionCoreLength },
+        tailStrength: { value: tuning.connectionTailStrength },
       },
       vertexShader: `
         attribute float progress;
@@ -88,15 +95,22 @@ export class ConnectionLayer {
         uniform float time;
         uniform vec3 color;
         uniform float opacity;
+        uniform float speed;
+        uniform float tailLength;
+        uniform float coreLength;
+        uniform float tailStrength;
         varying float vProgress;
         varying float vDelay;
         void main() {
-          float head = fract(time * 0.18 + vDelay);
+          float head = fract(time * speed + vDelay);
           float delta = head - vProgress;
           if (delta < 0.0) delta += 1.0;
-          float tail = smoothstep(0.18, 0.0, delta);
-          float core = smoothstep(0.025, 0.0, delta);
-          gl_FragColor = vec4(color, (tail * 0.52 + core * 0.48) * opacity);
+          float tail = smoothstep(tailLength, 0.0, delta);
+          float core = smoothstep(coreLength, 0.0, delta);
+          gl_FragColor = vec4(
+            color,
+            (tail * tailStrength + core * (1.0 - tailStrength)) * opacity
+          );
         }
       `,
     }));
@@ -106,12 +120,25 @@ export class ConnectionLayer {
     this.applyTheme(theme);
   }
 
-  applyTheme(theme: DigitalTwinMapTheme) {
-    const flyLine = themeColor(theme.flyLine, theme.primary);
+  applyTheme(
+    theme: DigitalTwinMapTheme,
+    tuning: Readonly<MapVisualTuning> = this.tuning,
+  ) {
+    this.tuning = tuning;
+    const flyLine = themeColor(
+      mapVisualColor(tuning, "connection", theme.flyLine),
+      theme.primary,
+    );
     this.baseMaterial.color.copy(flyLine.color);
-    this.baseMaterial.opacity = flyLine.opacity * 0.06;
+    this.baseMaterial.opacity = flyLine.opacity * tuning.connectionBaseOpacity;
     this.flowMaterial.uniforms.color!.value.copy(flyLine.color);
-    this.flowMaterial.uniforms.opacity!.value = flyLine.opacity;
+    this.flowMaterial.uniforms.opacity!.value = (
+      flyLine.opacity * tuning.connectionFlowOpacityScale
+    );
+    this.flowMaterial.uniforms.speed!.value = tuning.connectionFlowSpeed;
+    this.flowMaterial.uniforms.tailLength!.value = tuning.connectionTailLength;
+    this.flowMaterial.uniforms.coreLength!.value = tuning.connectionCoreLength;
+    this.flowMaterial.uniforms.tailStrength!.value = tuning.connectionTailStrength;
   }
 
   animate(time: number) {

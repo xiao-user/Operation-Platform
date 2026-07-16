@@ -48,3 +48,4 @@ __screenshots__/
 # Local browser inspection snapshots and generated QA artifacts.
 /.playwright-cli/
 /output/
+.gstack/

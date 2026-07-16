@@ -11,11 +11,13 @@ import {
 } from "../map-data-adapter";
 import type { MapState } from "../map-data-adapter";
 import type { DigitalTwinMapTheme } from "../map-themes";
-import type { EducationLocation, MapCameraView } from "../types";
+import type { EducationLocation, MapCameraView, MapDataLayerMode } from "../types";
 import { AmbientEffectsLayer } from "./ambient-effects-layer";
 import { ConnectionLayer } from "./connection-layer";
+import { energyTowerRenderOrder, EnergyTowerLayer } from "./energy-tower-layer";
 import { InstitutionLayer } from "./institution-layer";
 import { MapCameraTransition } from "./map-camera-transition";
+import type { MapCameraFraming } from "./map-camera-transition";
 import {
   createMapProjection,
   featureCenter,
@@ -27,6 +29,7 @@ import { RegionalContextLayer } from "./regional-context-layer";
 import {
   cloneMapVisualTuning,
   defaultMapVisualTuning,
+  energyTowerTuningChanged,
   mapCameraTuningChanged,
   mapCameraViewFromTuning,
   mapVisualTuningWithCameraView,
@@ -47,6 +50,16 @@ const scopeFrameBoostDuration = 1400;
 const clickMoveTolerance = 5;
 const minimumMapPolarAngle = THREE.MathUtils.degToRad(20);
 const maximumMapPolarAngle = THREE.MathUtils.degToRad(75);
+const districtMinimumCameraDistance = 480;
+const townshipMinimumCameraDistance = 280;
+const mapPresentationViewKeys = [
+  "offsetX",
+  "offsetY",
+  "scale",
+  "rotationZ",
+  "autoRotationSpeed",
+  "autoRotationResumeDelaySeconds",
+] as const;
 export const defaultRegionalMapCameraView: MapCameraView = {
   ...mapCameraViewFromTuning(defaultMapVisualTuning),
 };
@@ -74,19 +87,81 @@ export function anchorDynamicOverlay(
   root.renderOrder = renderOrder;
 }
 
-export function scopeFramingX(
+export function mapScreenFraming(
   mapState: Pick<MapState, "scope">,
-  tuning: Pick<MapVisualTuning, "offsetX" | "districtFramingOffsetX">,
+  tuning: Pick<
+    MapVisualTuning,
+    | "offsetX"
+    | "offsetY"
+    | "districtFramingOffsetX"
+    | "townshipFocusFramingOffsetX"
+    | "townshipFocusFramingOffsetY"
+  >,
 ) {
-  return tuning.offsetX + (mapState.scope === "district" ? tuning.districtFramingOffsetX : 0);
+  return mapState.scope === "district"
+    ? {
+        x: tuning.offsetX + tuning.districtFramingOffsetX,
+        y: tuning.offsetY,
+      }
+    : {
+        x: tuning.offsetX + tuning.townshipFocusFramingOffsetX,
+        y: tuning.offsetY + tuning.townshipFocusFramingOffsetY,
+      };
 }
 
-export function compensateTransitionTargetX(
-  worldTargetX: number,
-  currentRootX: number,
-  targetRootX: number,
+export function resolveMapOrbitPivot(
+  mapState: MapState,
+  projection: MapProjection,
+  mapRoot: THREE.Object3D,
+  localSurfaceZ: number,
 ) {
-  return worldTargetX + targetRootX - currentRootX;
+  const feature = boundaryFeatureForMapState(mapState);
+  const coordinate = feature ? featureCenter(feature) : undefined;
+  if (!coordinate) return undefined;
+  mapRoot.updateWorldMatrix(true, false);
+  return mapRoot.localToWorld(projection.projectPoint(coordinate, localSurfaceZ));
+}
+
+export function minimumCameraDistanceForScope(scope: MapState["scope"]) {
+  return scope === "township"
+    ? townshipMinimumCameraDistance
+    : districtMinimumCameraDistance;
+}
+
+export function minimumCameraDistanceDuringScopeChange(
+  previousScope: MapState["scope"],
+  nextScope: MapState["scope"],
+) {
+  return previousScope === "township" && nextScope === "district"
+    ? townshipMinimumCameraDistance
+    : minimumCameraDistanceForScope(nextScope);
+}
+
+export function townshipFocusPositionZ(
+  applyTownshipDefaults: boolean,
+  currentCameraZ: number,
+  tuning: Pick<MapVisualTuning, "townshipCameraPositionZ">,
+) {
+  return applyTownshipDefaults ? tuning.townshipCameraPositionZ : currentCameraZ;
+}
+
+export function townshipFocusTargetZ(
+  dataLayerMode: MapDataLayerMode,
+  calculatedTargetZ: number,
+  tuning: Pick<MapVisualTuning, "townshipEnergyTowerTargetZ">,
+) {
+  return dataLayerMode === "energy-towers"
+    ? tuning.townshipEnergyTowerTargetZ
+    : calculatedTargetZ;
+}
+
+export function shouldRunMapAutoRotation(
+  motionEnabled: boolean,
+  controlsInteracting: boolean,
+  timestamp: number,
+  resumeAt: number,
+) {
+  return motionEnabled && !controlsInteracting && timestamp >= resumeAt;
 }
 
 export class RegionalMapEngine {
@@ -112,6 +187,8 @@ export class RegionalMapEngine {
   private contextLayer?: RegionalContextLayer;
   private institutionLayer?: InstitutionLayer;
   private connectionLayer?: ConnectionLayer;
+  private energyTowerLayer?: EnergyTowerLayer;
+  private readonly exitingEnergyTowerLayers: EnergyTowerLayer[] = [];
   private effectsLayer?: AmbientEffectsLayer;
   private projection?: MapProjection;
   private frameId = 0;
@@ -119,13 +196,17 @@ export class RegionalMapEngine {
   private highFrameRateUntil = 0;
   private pointerDownPosition?: [number, number];
   private controlsInteracting = false;
+  private autoRotationResumeAt = 0;
   private pointerDirty = false;
   private disposed = false;
   private motionEnabled = true;
   private selectedLocationId?: string;
+  private townshipInstitutionTargetZ?: number;
+  private dataLayerMode: MapDataLayerMode;
   private mapState: MapState;
   private locations: readonly EducationLocation[];
   private theme: DigitalTwinMapTheme;
+  private currentFraming: MapCameraFraming = { x: 0, y: 0 };
   private visualTuning: MapVisualTuning = cloneMapVisualTuning(defaultMapVisualTuning);
 
   constructor(
@@ -134,12 +215,14 @@ export class RegionalMapEngine {
     locations: readonly EducationLocation[],
     theme: DigitalTwinMapTheme,
     selectedLocationId: string | undefined,
+    dataLayerMode: MapDataLayerMode,
     private readonly events: RegionalMapEngineEvents,
   ) {
     this.mapState = mapState;
     this.locations = locations;
     this.theme = theme;
     this.selectedLocationId = selectedLocationId;
+    this.dataLayerMode = dataLayerMode;
     this.viewport = this.measureHost();
     const { width, height } = this.viewport;
     this.camera = new THREE.PerspectiveCamera(defaultRegionalMapCameraView.fov, width / height, 1, 2400);
@@ -167,14 +250,17 @@ export class RegionalMapEngine {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
     this.controls.enablePan = false;
+    this.controls.autoRotate = false;
+    this.controls.autoRotateSpeed = this.visualTuning.autoRotationSpeed;
     this.controls.minPolarAngle = minimumMapPolarAngle;
     this.controls.maxPolarAngle = maximumMapPolarAngle;
-    this.controls.minDistance = 480;
+    this.controls.minDistance = districtMinimumCameraDistance;
     this.controls.maxDistance = 1100;
     this.cameraTransition = new MapCameraTransition({
       camera: this.camera,
       controls: this.controls,
-      mapRoot: this.mapRoot,
+      getFraming: () => ({ ...this.currentFraming }),
+      applyFraming: this.applyCameraFraming,
       requestRender: this.requestRender,
       requestHighFrameRate: this.requestHighFrameRate,
     });
@@ -183,13 +269,21 @@ export class RegionalMapEngine {
     this.controls.addEventListener("start", this.onControlsStart);
     this.controls.addEventListener("end", this.onControlsEnd);
 
-    this.ambientLight = new THREE.AmbientLight(theme.sideTop, 1.35);
-    this.directionLight = new THREE.DirectionalLight(theme.labelText, 2.2);
+    this.ambientLight = new THREE.AmbientLight(
+      theme.sideTop,
+      this.visualTuning.ambientLightIntensity,
+    );
+    this.directionLight = new THREE.DirectionalLight(
+      theme.labelText,
+      this.visualTuning.directionalLightIntensity,
+    );
     this.directionLight.position.set(120, -240, 420);
     this.scene.add(this.ambientLight, this.directionLight, this.mapRoot);
     this.applyMapTransform();
     this.textures = createTerrainTextureSet(this.renderer);
     this.buildScopeLayers();
+    this.alignOrbitPivot(true);
+    this.applyCameraFraming(mapScreenFraming(this.mapState, this.visualTuning));
 
     this.host.addEventListener("pointermove", this.onPointerMove);
     this.host.addEventListener("pointerleave", this.onPointerLeave);
@@ -282,6 +376,13 @@ export class RegionalMapEngine {
         institutionOverlayRenderOrder,
       );
     }
+    if (this.energyTowerLayer) {
+      anchorDynamicOverlay(
+        this.energyTowerLayer.root,
+        activeSurfaceZ,
+        energyTowerRenderOrder,
+      );
+    }
     const boundarySurfaceZ = this.regionLayer?.getBoundarySurfaceZ() ?? activeSurfaceZ;
     this.effectsLayer?.setBoundarySurfaceZ(boundarySurfaceZ + 1.5);
   }
@@ -322,16 +423,39 @@ export class RegionalMapEngine {
     this.buildDynamicLayers();
   }
 
-  private buildDynamicLayers() {
-    if (!this.projection) return;
+  private buildDynamicLayers(): EnergyTowerLayer | undefined {
+    if (!this.projection) return undefined;
+    if (this.dataLayerMode === "energy-towers") {
+      this.energyTowerLayer = new EnergyTowerLayer(
+        this.mapState,
+        this.locations,
+        this.projection,
+        this.theme,
+        this.visualTuning,
+      );
+      anchorDynamicOverlay(
+        this.energyTowerLayer.root,
+        this.regionLayer?.getCurrentActiveSurfaceZ() ?? regionTopZ,
+        energyTowerRenderOrder,
+      );
+      this.mapRoot.add(this.energyTowerLayer.root);
+      if (!this.motionEnabled) this.energyTowerLayer.settle(true);
+      return this.energyTowerLayer;
+    }
     this.institutionLayer = new InstitutionLayer(
       this.locations,
       this.projection,
       this.theme,
       this.selectedLocationId,
       this.renderer.getPixelRatio(),
+      this.visualTuning,
     );
-    this.connectionLayer = new ConnectionLayer(this.locations, this.projection, this.theme);
+    this.connectionLayer = new ConnectionLayer(
+      this.locations,
+      this.projection,
+      this.theme,
+      this.visualTuning,
+    );
     const activeSurfaceZ = this.regionLayer?.getCurrentActiveSurfaceZ() ?? regionTopZ;
     anchorDynamicOverlay(
       this.connectionLayer.root,
@@ -344,13 +468,23 @@ export class RegionalMapEngine {
       institutionOverlayRenderOrder,
     );
     this.mapRoot.add(this.connectionLayer.root, this.institutionLayer.root);
+    return undefined;
   }
 
-  private disposeDynamicLayers() {
+  private disposeDynamicLayers(animateEnergyExit = false) {
     this.institutionLayer?.dispose();
     this.connectionLayer?.dispose();
+    if (this.energyTowerLayer) {
+      if (animateEnergyExit && this.motionEnabled) {
+        this.energyTowerLayer.startExit();
+        this.exitingEnergyTowerLayers.push(this.energyTowerLayer);
+      } else {
+        this.energyTowerLayer.dispose();
+      }
+    }
     this.institutionLayer = undefined;
     this.connectionLayer = undefined;
+    this.energyTowerLayer = undefined;
   }
 
   private processPointer() {
@@ -358,13 +492,15 @@ export class RegionalMapEngine {
     this.pointerDirty = false;
     this.scene.updateMatrixWorld();
     this.raycaster.setFromCamera(this.pointer, this.camera);
+    const energyTower = this.energyTowerLayer?.hit(this.raycaster);
     const location = this.institutionLayer?.hitScreenPoint(
       this.pointer,
       this.camera,
       this.viewport,
     );
-    const region = this.regionLayer?.hit(this.raycaster);
+    const region = energyTower ? undefined : this.regionLayer?.hit(this.raycaster);
     this.institutionLayer?.setHovered(location?.id);
+    this.energyTowerLayer?.setHovered(energyTower?.datum.id);
     this.regionLayer?.setHovered(region?.group);
     if (region) {
       this.highFrameRateUntil = Math.max(
@@ -376,13 +512,13 @@ export class RegionalMapEngine {
     for (const [feature, element] of this.regionLabelElements) {
       element.classList.toggle(
         "is-visible",
-        !location && feature === region?.feature,
+        !location && !energyTower && feature === region?.feature,
       );
     }
-    this.renderer.domElement.style.cursor = location || region
+    this.renderer.domElement.style.cursor = location || region || energyTower
       ? "pointer"
       : this.mapState.scope === "township" ? "zoom-out" : "grab";
-    return { location, region };
+    return { location, region, energyTower };
   }
 
   private renderFrame = (timestamp: number) => {
@@ -399,12 +535,23 @@ export class RegionalMapEngine {
     const delta = this.previousFrameTime ? elapsed / 1000 : minimumFrameDuration / 1000;
     this.previousFrameTime = timestamp;
     this.processPointer();
-    const controlsDirty = this.controls.update();
+    this.updateAutoRotation(timestamp);
+    const controlsDirty = this.controls.update(delta);
     const time = timestamp / 1000;
     if (this.motionEnabled) {
       this.connectionLayer?.animate(time);
       this.effectsLayer?.animate(time, delta);
       this.institutionLayer?.animate(time);
+      this.energyTowerLayer?.animate(delta);
+      for (let index = this.exitingEnergyTowerLayers.length - 1; index >= 0; index -= 1) {
+        const layer = this.exitingEnergyTowerLayers[index];
+        if (!layer) continue;
+        layer.animate(delta);
+        if (layer.isHidden()) {
+          layer.dispose();
+          this.exitingEnergyTowerLayers.splice(index, 1);
+        }
+      }
     }
     const regionDirty = this.motionEnabled
       ? this.regionLayer?.animate(delta) ?? false
@@ -436,6 +583,25 @@ export class RegionalMapEngine {
     this.requestRender();
   }
 
+  private pauseAutoRotation(
+    delaySeconds = this.visualTuning.autoRotationResumeDelaySeconds,
+  ) {
+    this.controls.autoRotate = false;
+    this.autoRotationResumeAt = performance.now() + Math.max(0, delaySeconds) * 1000;
+  }
+
+  private updateAutoRotation(timestamp: number) {
+    this.controls.autoRotateSpeed = this.visualTuning.autoRotationSpeed;
+    // OrbitControls advances from its current spherical pose, so resuming after
+    // user input neither allocates a per-frame tween nor snaps to a preset view.
+    this.controls.autoRotate = shouldRunMapAutoRotation(
+      this.motionEnabled,
+      this.controlsInteracting,
+      timestamp,
+      this.autoRotationResumeAt,
+    );
+  }
+
   private updatePointer(event: PointerEvent | MouseEvent) {
     this.pointer.x = ((event.clientX - this.viewport.left) / this.viewport.width) * 2 - 1;
     this.pointer.y = -((event.clientY - this.viewport.top) / this.viewport.height) * 2 + 1;
@@ -451,6 +617,7 @@ export class RegionalMapEngine {
     if (this.controlsInteracting) return;
     this.pointerDirty = false;
     this.institutionLayer?.setHovered();
+    this.energyTowerLayer?.setHovered();
     this.regionLayer?.setHovered();
     for (const element of this.regionLabelElements.values()) element.classList.remove("is-visible");
     this.renderer.domElement.style.cursor = this.mapState.scope === "township" ? "zoom-out" : "grab";
@@ -470,6 +637,7 @@ export class RegionalMapEngine {
 
   private onControlsStart = () => {
     this.controlsInteracting = true;
+    this.pauseAutoRotation();
     this.cameraTransition.cancel();
     this.renderer.domElement.style.cursor = "grabbing";
     this.requestHighFrameRate(scopeFrameBoostDuration);
@@ -477,6 +645,7 @@ export class RegionalMapEngine {
 
   private onControlsEnd = () => {
     this.controlsInteracting = false;
+    this.pauseAutoRotation();
     this.renderer.domElement.style.cursor = this.mapState.scope === "township" ? "zoom-out" : "grab";
     this.syncVisualTuningFromCamera();
   };
@@ -494,6 +663,12 @@ export class RegionalMapEngine {
     this.updatePointer(event);
     const hit = this.processPointer();
     if (hit?.location) return this.events.locationSelect(hit.location);
+    if (hit?.energyTower?.datum.location) {
+      return this.events.locationSelect(hit.energyTower.datum.location);
+    }
+    if (hit?.energyTower?.datum.feature) {
+      return this.events.featureSelect(hit.energyTower.datum.feature);
+    }
     if (hit?.region) this.events.featureSelect(hit.region.feature);
     else if (this.mapState.scope === "township") this.events.scopeBack();
   };
@@ -512,11 +687,16 @@ export class RegionalMapEngine {
   private onMotionPreferenceChange = (event: MediaQueryListEvent) => {
     this.motionEnabled = !event.matches;
     if (!this.motionEnabled) {
+      this.controls.autoRotate = false;
       window.cancelAnimationFrame(this.frameId);
       this.frameId = 0;
+      this.energyTowerLayer?.settle(true);
+      for (const layer of this.exitingEnergyTowerLayers) layer.dispose();
+      this.exitingEnergyTowerLayers.length = 0;
       this.requestRender();
     } else {
       this.previousFrameTime = 0;
+      this.pauseAutoRotation();
       this.startLoop();
     }
   };
@@ -526,7 +706,7 @@ export class RegionalMapEngine {
     const { width, height } = this.viewport;
     const pixelRatio = this.resolvePixelRatio();
     this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
+    this.applyCameraFraming(this.currentFraming);
     this.renderer.setPixelRatio(pixelRatio);
     this.renderer.setSize(width, height);
     this.labelRenderer.setSize(width, height);
@@ -535,8 +715,15 @@ export class RegionalMapEngine {
   };
 
   setMapState(mapState: MapState, locations: readonly EducationLocation[]) {
+    this.pauseAutoRotation();
+    const previousScope = this.mapState.scope;
     this.mapState = mapState;
     this.locations = locations;
+    if (mapState.scope === "district") this.townshipInstitutionTargetZ = undefined;
+    this.controls.minDistance = minimumCameraDistanceDuringScopeChange(
+      previousScope,
+      mapState.scope,
+    );
     this.regionLayer?.setFocus(mapState.focusFeatureCode, this.visualTuning);
     if (this.effectsLayer && this.projection && this.regionLayer) {
       this.effectsLayer.setBoundary(
@@ -546,14 +733,14 @@ export class RegionalMapEngine {
       );
     }
     this.updateRegionLabelPositions();
-    this.disposeDynamicLayers();
+    this.disposeDynamicLayers(this.dataLayerMode === "energy-towers");
     this.buildDynamicLayers();
     this.requestHighFrameRate(scopeFrameBoostDuration);
   }
 
   setLocations(locations: readonly EducationLocation[]) {
     this.locations = locations;
-    this.disposeDynamicLayers();
+    this.disposeDynamicLayers(this.dataLayerMode === "energy-towers");
     this.buildDynamicLayers();
     this.requestRender();
   }
@@ -564,12 +751,43 @@ export class RegionalMapEngine {
     this.requestRender();
   }
 
+  setDataLayerMode(mode: MapDataLayerMode) {
+    if (this.dataLayerMode === mode) return;
+    this.pauseAutoRotation();
+    if (this.mapState.scope === "township" && this.dataLayerMode === "institutions") {
+      this.townshipInstitutionTargetZ = this.controls.target.z;
+    }
+    const animateEnergyExit = this.dataLayerMode === "energy-towers";
+    this.disposeDynamicLayers(animateEnergyExit);
+    this.dataLayerMode = mode;
+    this.buildDynamicLayers();
+    if (this.mapState.scope === "township") {
+      const currentView = this.cameraTransition.getView();
+      const targetZ = mode === "energy-towers"
+        ? this.visualTuning.townshipEnergyTowerTargetZ
+        : this.townshipInstitutionTargetZ ?? currentView.target[2];
+      void this.cameraTransition.animate({
+        ...currentView,
+        target: [currentView.target[0], currentView.target[1], targetZ],
+      }, this.currentFraming, this.motionEnabled)
+        .then(() => {
+          this.pauseAutoRotation();
+          this.syncVisualTuningFromCamera();
+        });
+    }
+    this.requestHighFrameRate();
+  }
+
   setTheme(theme: DigitalTwinMapTheme) {
     this.theme = theme;
-    this.regionLayer?.applyTheme(theme);
+    this.regionLayer?.applyTheme(theme, this.visualTuning);
     this.contextLayer?.applyTheme(theme, this.visualTuning);
-    this.institutionLayer?.applyTheme(theme);
-    this.connectionLayer?.applyTheme(theme);
+    this.institutionLayer?.applyTheme(theme, this.visualTuning);
+    this.connectionLayer?.applyTheme(theme, this.visualTuning);
+    this.energyTowerLayer?.applyTheme(theme, this.visualTuning);
+    for (const layer of this.exitingEnergyTowerLayers) {
+      layer.applyTheme(theme, this.visualTuning);
+    }
     this.effectsLayer?.applyTheme(theme, this.visualTuning);
     this.ambientLight.color.set(theme.sideTop);
     this.directionLight.color.set(theme.labelText);
@@ -582,10 +800,13 @@ export class RegionalMapEngine {
 
   private applyCameraViewInternal(view: MapCameraView) {
     this.applyMapTransform();
-    this.cameraTransition.apply(view, this.mapRoot.position.x);
+    const framing = mapScreenFraming(this.mapState, this.visualTuning);
+    this.cameraTransition.apply(view, framing);
+    this.alignOrbitPivot(true);
   }
 
   applyCameraView(view: MapCameraView) {
+    this.pauseAutoRotation();
     this.applyCameraViewInternal(view);
     this.syncVisualTuningFromCamera();
   }
@@ -599,74 +820,167 @@ export class RegionalMapEngine {
   }
 
   private applyMapTransform() {
-    this.mapRoot.position.set(
-      scopeFramingX(this.mapState, this.visualTuning),
-      this.visualTuning.offsetY,
-      -24,
-    );
+    this.mapRoot.position.set(0, 0, -24);
     this.mapRoot.rotation.z = this.visualTuning.rotationZ;
     this.mapRoot.scale.setScalar(this.visualTuning.scale);
+  }
+
+  private applyCameraFraming = (framing: MapCameraFraming) => {
+    this.currentFraming = { ...framing };
+    this.camera.setViewOffset(
+      this.viewport.width,
+      this.viewport.height,
+      -framing.x,
+      framing.y,
+      this.viewport.width,
+      this.viewport.height,
+    );
+    this.camera.updateProjectionMatrix();
+  };
+
+  private alignOrbitPivot(preserveCameraOffset: boolean) {
+    if (!this.projection || !this.regionLayer) return;
+    const pivot = resolveMapOrbitPivot(
+      this.mapState,
+      this.projection,
+      this.mapRoot,
+      this.regionLayer.getActiveSurfaceZ(),
+    );
+    if (!pivot) return;
+    if (this.mapState.scope === "township" && this.dataLayerMode === "energy-towers") {
+      pivot.z = this.visualTuning.townshipEnergyTowerTargetZ;
+    }
+    if (preserveCameraOffset) {
+      this.camera.position.add(pivot.clone().sub(this.controls.target));
+    }
+    this.controls.target.copy(pivot);
+    this.controls.update();
   }
 
   setVisualTuning(tuning: MapVisualTuning) {
     this.cameraTransition.cancel();
     const cameraChanged = mapCameraTuningChanged(this.visualTuning, tuning);
+    const viewConfigurationChanged = cameraChanged || mapPresentationViewKeys.some(
+      (key) => this.visualTuning[key] !== tuning[key],
+    );
+    const townshipCameraZChanged = (
+      this.visualTuning.townshipCameraPositionZ !== tuning.townshipCameraPositionZ
+    );
+    const townshipEnergyTargetZChanged = (
+      this.visualTuning.townshipEnergyTowerTargetZ !== tuning.townshipEnergyTowerTargetZ
+    );
+    const energyTowerChanged = energyTowerTuningChanged(this.visualTuning, tuning);
+    if (viewConfigurationChanged) {
+      this.pauseAutoRotation(tuning.autoRotationResumeDelaySeconds);
+    }
     this.visualTuning = cloneMapVisualTuning(tuning);
+    this.controls.autoRotateSpeed = tuning.autoRotationSpeed;
     this.applyMapTransform();
+    this.alignOrbitPivot(true);
+    const framing = mapScreenFraming(this.mapState, this.visualTuning);
+    this.applyCameraFraming(framing);
     if (cameraChanged) {
-      this.cameraTransition.apply(
-        mapCameraViewFromTuning(tuning),
-        this.mapRoot.position.x,
-      );
+      this.cameraTransition.apply(mapCameraViewFromTuning(tuning), framing);
+      this.alignOrbitPivot(true);
+    }
+    const applyTownshipCameraAdjustment = this.mapState.scope === "township" && (
+      townshipCameraZChanged
+      || (townshipEnergyTargetZChanged && this.dataLayerMode === "energy-towers")
+    );
+    if (applyTownshipCameraAdjustment) {
+      const currentView = this.cameraTransition.getView();
+      this.cameraTransition.apply({
+        ...currentView,
+        position: [
+          currentView.position[0],
+          currentView.position[1],
+          townshipCameraZChanged
+            ? tuning.townshipCameraPositionZ
+            : currentView.position[2],
+        ],
+        target: [
+          currentView.target[0],
+          currentView.target[1],
+          townshipEnergyTargetZChanged && this.dataLayerMode === "energy-towers"
+            ? tuning.townshipEnergyTowerTargetZ
+            : currentView.target[2],
+        ],
+      }, framing);
+      this.syncVisualTuningFromCamera();
     }
     this.contextLayer?.applyTheme(this.theme, tuning);
     this.regionLayer?.setTuning(tuning);
     this.effectsLayer?.applyTheme(this.theme, tuning);
+    this.institutionLayer?.applyTheme(this.theme, tuning);
+    this.connectionLayer?.applyTheme(this.theme, tuning);
+    this.ambientLight.intensity = tuning.ambientLightIntensity;
+    this.directionLight.intensity = tuning.directionalLightIntensity;
+    if (energyTowerChanged && this.dataLayerMode === "energy-towers") {
+      this.energyTowerLayer?.dispose();
+      this.energyTowerLayer = undefined;
+      this.buildDynamicLayers()?.settle(true);
+    } else {
+      this.energyTowerLayer?.applyTuning(this.theme, tuning);
+    }
+    for (const layer of this.exitingEnergyTowerLayers) layer.applyTheme(this.theme, tuning);
     if (!this.motionEnabled) this.regionLayer?.settle();
     this.syncSurfaceLayers();
     this.updateRegionLabelPositions();
     this.requestRender();
   }
 
-  focusFeature(featureCode: string): Promise<void> {
+  focusFeature(featureCode: string, applyTownshipDefaults: boolean): Promise<void> {
     const feature = this.mapState.geoData.features.find(
       (item) => item.properties.code === featureCode,
     );
     const coordinate = feature ? featureCenter(feature) : undefined;
     if (!coordinate || !this.projection) return Promise.resolve();
+    this.pauseAutoRotation();
     this.scene.updateMatrixWorld();
     const target = this.projection.projectPoint(
       coordinate,
       (this.regionLayer?.getActiveSurfaceZ() ?? regionTopZ) + 8,
     );
     this.mapRoot.localToWorld(target);
-    const targetRootX = scopeFramingX(this.mapState, this.visualTuning);
-    target.x = compensateTransitionTargetX(
-      target.x,
-      this.mapRoot.position.x,
-      targetRootX,
-    );
     const framedTarget = target.clone();
-    framedTarget.x += this.visualTuning.townshipFocusFramingOffsetX;
-    framedTarget.y += this.visualTuning.townshipFocusFramingOffsetY;
+    this.townshipInstitutionTargetZ = framedTarget.z;
+    framedTarget.z = townshipFocusTargetZ(
+      this.dataLayerMode,
+      framedTarget.z,
+      this.visualTuning,
+    );
     const direction = this.camera.position.clone().sub(this.controls.target).normalize();
     const position = framedTarget.clone().addScaledVector(
       direction,
       this.visualTuning.townshipFocusDistance,
     );
+    position.z = townshipFocusPositionZ(
+      applyTownshipDefaults,
+      this.camera.position.z,
+      this.visualTuning,
+    );
     return this.cameraTransition.animate({
       fov: this.visualTuning.cameraFov,
       position: [position.x, position.y, position.z],
       target: [framedTarget.x, framedTarget.y, framedTarget.z],
-    }, targetRootX, this.motionEnabled).then(() => this.syncVisualTuningFromCamera());
+    }, mapScreenFraming(this.mapState, this.visualTuning), this.motionEnabled).then(() => {
+      this.pauseAutoRotation();
+      this.syncVisualTuningFromCamera();
+    });
   }
 
   animateCameraView(view: MapCameraView) {
+    this.pauseAutoRotation();
     return this.cameraTransition.animate(
       view,
-      scopeFramingX(this.mapState, this.visualTuning),
+      mapScreenFraming(this.mapState, this.visualTuning),
       this.motionEnabled,
-    ).then(() => this.syncVisualTuningFromCamera());
+    ).then(() => {
+      this.pauseAutoRotation();
+      this.controls.minDistance = minimumCameraDistanceForScope(this.mapState.scope);
+      this.controls.update();
+      this.syncVisualTuningFromCamera();
+    });
   }
 
   dispose() {
@@ -692,6 +1006,8 @@ export class RegionalMapEngine {
     this.contextLayer?.dispose();
     this.effectsLayer?.dispose();
     this.disposeDynamicLayers();
+    for (const layer of this.exitingEnergyTowerLayers) layer.dispose();
+    this.exitingEnergyTowerLayers.length = 0;
     this.textures.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();

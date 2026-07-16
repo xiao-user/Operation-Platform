@@ -11,19 +11,20 @@ function createTransition() {
     target: new THREE.Vector3(0, 0, 0),
     update: vi.fn(),
   } as unknown as OrbitControls;
-  const mapRoot = new THREE.Group();
   const requestRender = vi.fn();
   const requestHighFrameRate = vi.fn();
+  let framing = { x: 12, y: -8 };
   return {
     camera,
     controls,
-    mapRoot,
+    getFraming: () => framing,
     requestRender,
     requestHighFrameRate,
     transition: new MapCameraTransition({
       camera,
       controls,
-      mapRoot,
+      getFraming: () => framing,
+      applyFraming: (next) => { framing = next; },
       requestRender,
       requestHighFrameRate,
     }),
@@ -40,17 +41,18 @@ describe("MapCameraTransition", () => {
   it("applies a reduced-motion view atomically", async () => {
     const context = createTransition();
 
-    await context.transition.animate(targetView, -120, false);
+    await context.transition.animate(targetView, { x: -108, y: -30 }, false);
 
     expect(context.transition.getView()).toEqual(targetView);
-    expect(context.mapRoot.position.x).toBe(-120);
+    expect(context.getFraming()).toEqual({ x: -108, y: -30 });
     expect(context.requestHighFrameRate).not.toHaveBeenCalled();
   });
 
   it("settles an interrupted transition promise so navigation cannot deadlock", async () => {
     const context = createTransition();
-    const completion = context.transition.animate(targetView, -120, true);
+    const completion = context.transition.animate(targetView, { x: -108, y: -30 }, true);
 
+    expect(context.getFraming()).toEqual({ x: 12, y: -8 });
     context.transition.cancel();
 
     await expect(completion).resolves.toBeUndefined();

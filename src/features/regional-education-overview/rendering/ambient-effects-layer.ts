@@ -143,19 +143,22 @@ export class AmbientEffectsLayer {
       mapVisualColor(tuning, "boundaryTail", theme.chaseLightTail),
       "rgba(255,255,255,0)",
     );
-    const ring = themeColor(theme.hudRing, theme.primary);
+    const ring = themeColor(
+      mapVisualColor(tuning, "hudRing", theme.hudRing),
+      theme.primary,
+    );
     this.chaseMaterial.uniforms.headColor!.value.copy(head.color);
     this.chaseMaterial.uniforms.tailColor!.value.copy(tail.color);
     this.chaseMaterial.uniforms.headOpacity!.value = head.opacity;
     this.chaseMaterial.uniforms.tailOpacity!.value = tail.opacity;
     this.ringPlateMaterial.color.copy(ring.color);
-    this.ringPlateMaterial.opacity = ring.opacity * 0.18;
+    this.ringPlateMaterial.opacity = ring.opacity * tuning.hudRingPlateOpacityScale;
     this.ringTickMaterial.color.copy(ring.color);
-    this.ringTickMaterial.opacity = ring.opacity;
+    this.ringTickMaterial.opacity = ring.opacity * tuning.hudRingTickOpacityScale;
   }
 
   animate(time: number, delta: number) {
-    this.ringRotor.rotation.z += Math.min(delta, 0.05) * 0.18;
+    this.ringRotor.rotation.z += Math.min(delta, 0.05) * this.tuning.hudRingRotationSpeed;
     if (!this.chaseCurve) return;
     const head = (time * this.tuning.boundarySpeed) % 1;
     const tailSpan = this.tuning.boundaryTailLength;
