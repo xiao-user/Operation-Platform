@@ -48,6 +48,7 @@ interface MemberRow {
 interface PreferenceRow {
   tenant_id: string;
   active_role_id: string | null;
+  visualization_theme_id: string | null;
 }
 
 interface LayoutRow {
@@ -67,6 +68,7 @@ export interface OperationPlatformBootstrap {
   configurations: Map<string, RemoteTenantConfiguration>;
   members: Map<string, TenantMemberRecord[]>;
   activeRoles: Map<string, string>;
+  visualizationThemes: Map<string, string>;
   workbenchLayouts: Map<string, UserWorkbenchLayout>;
 }
 
@@ -123,7 +125,7 @@ export class SupabaseOperationPlatformRepository {
       client.from("tenants").select("id,name,short_name,type,enabled").order("type").order("name"),
       client.from("tenant_configurations").select("tenant_id,revision,configuration"),
       client.from("tenant_members").select("id,tenant_id,auth_user_id,legacy_user_id,name,initials,account,phone,title,enabled,role_ids,source_created_at,source_updated_at,created_at,updated_at"),
-      client.from("user_tenant_preferences").select("tenant_id,active_role_id").eq("auth_user_id", user.id),
+      client.from("user_tenant_preferences").select("tenant_id,active_role_id,visualization_theme_id").eq("auth_user_id", user.id),
       client.from("workbench_layouts").select("tenant_id,profile,layout").eq("auth_user_id", user.id),
     ]);
     assertNoError(profileResult.error, "用户资料读取失败");
@@ -154,6 +156,13 @@ export class SupabaseOperationPlatformRepository {
         row.active_role_id ? [[row.tenant_id, row.active_role_id] as const] : [],
       ),
     );
+    const visualizationThemes = new Map(
+      (preferencesResult.data as PreferenceRow[]).flatMap((row) =>
+        row.visualization_theme_id
+          ? [[row.tenant_id, row.visualization_theme_id] as const]
+          : [],
+      ),
+    );
     const workbenchLayouts = new Map(
       (layoutsResult.data as LayoutRow[]).map((row) => [
         layoutKey(row.tenant_id, row.profile),
@@ -166,6 +175,7 @@ export class SupabaseOperationPlatformRepository {
       configurations,
       members,
       activeRoles,
+      visualizationThemes,
       workbenchLayouts,
     };
   }
@@ -235,6 +245,16 @@ export class SupabaseOperationPlatformRepository {
       active_role_id: roleId,
     }, { onConflict: "tenant_id,auth_user_id" });
     assertNoError(error, "当前角色保存失败");
+  }
+
+  async saveVisualizationTheme(tenantId: string, authUserId: string, themeId: string) {
+    const { error } = await getSupabaseClient().from("user_tenant_preferences").upsert({
+      tenant_id: tenantId,
+      auth_user_id: authUserId,
+      legacy_user_id: authUserId,
+      visualization_theme_id: themeId,
+    }, { onConflict: "tenant_id,auth_user_id" });
+    assertNoError(error, "可视化主题保存失败");
   }
 
   async saveWorkbenchLayout(authUserId: string, layout: UserWorkbenchLayout) {

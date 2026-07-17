@@ -1,6 +1,6 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
-import type { Session } from "@supabase/supabase-js";
+import type { Session, Subscription } from "@supabase/supabase-js";
 import { getSupabaseClient, isSupabaseAuthEnabled } from "@/lib/supabase";
 
 export const useAuthStore = defineStore("auth", () => {
@@ -8,11 +8,22 @@ export const useAuthStore = defineStore("auth", () => {
   const initialized = ref(!isSupabaseAuthEnabled);
   const loading = ref(false);
   const changingPassword = ref(false);
+  const authStateVersion = ref(0);
   const errorMessage = ref("");
   const isAuthenticated = computed(() => !isSupabaseAuthEnabled || Boolean(session.value));
   const canChangePassword = computed(() =>
     isSupabaseAuthEnabled && Boolean(session.value?.user.email),
   );
+  let authSubscription: Subscription | null = null;
+
+  function subscribeToAuthChanges() {
+    if (!isSupabaseAuthEnabled || authSubscription) return;
+    const { data } = getSupabaseClient().auth.onAuthStateChange((_event, nextSession) => {
+      session.value = nextSession;
+      authStateVersion.value += 1;
+    });
+    authSubscription = data.subscription;
+  }
 
   async function initialize() {
     if (!isSupabaseAuthEnabled || initialized.value) return;
@@ -21,6 +32,7 @@ export const useAuthStore = defineStore("auth", () => {
       const { data, error } = await getSupabaseClient().auth.getSession();
       if (error) throw error;
       session.value = data.session;
+      subscribeToAuthChanges();
       errorMessage.value = "";
     } catch (error) {
       errorMessage.value = error instanceof Error ? error.message : "登录状态读取失败";
@@ -91,6 +103,7 @@ export const useAuthStore = defineStore("auth", () => {
     initialized,
     loading,
     changingPassword,
+    authStateVersion,
     errorMessage,
     isAuthenticated,
     canChangePassword,

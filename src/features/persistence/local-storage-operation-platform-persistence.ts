@@ -112,6 +112,28 @@ export class LocalStorageOperationPlatformPersistence implements OperationPlatfo
     activeRoleRepository.set({ tenantId, userId }, roleId);
   }
 
+  getVisualizationTheme(tenantId: string, userId: string) {
+    try {
+      const scopedKey = `operation-platform:visualization-theme:v1:${tenantId}:${userId}`;
+      const scoped = window.localStorage.getItem(scopedKey);
+      if (scoped) return scoped;
+      const legacy = window.localStorage.getItem(
+        "operation-platform:regional-education-overview:theme:v1",
+      );
+      if (legacy) window.localStorage.setItem(scopedKey, legacy);
+      return legacy;
+    } catch {
+      return null;
+    }
+  }
+
+  async setVisualizationTheme(tenantId: string, userId: string, themeId: string) {
+    window.localStorage.setItem(
+      `operation-platform:visualization-theme:v1:${tenantId}:${userId}`,
+      themeId,
+    );
+  }
+
   loadWorkbenchLayout(context: WorkbenchLayoutContext, template: WorkbenchTemplate) {
     return workbenchLayoutRepository.list(context, template);
   }

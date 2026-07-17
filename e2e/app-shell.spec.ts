@@ -84,6 +84,8 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   await overviewPage.getByRole("button", { name: "用户 罗吴航" }).click();
   await expect(overviewPage.getByRole("menu", { name: "用户与角色" })).toBeVisible();
   await expect(overviewPage.getByRole("menuitemradio", { checked: true })).toHaveCount(1);
+  await expect(overviewPage.getByRole("menuitem", { name: "修改密码" })).toBeVisible();
+  await expect(overviewPage.getByRole("menuitem", { name: "退出登录" })).toBeVisible();
   await expect(overviewPage.getByRole("menuitem", { name: "退出大屏" })).toBeVisible();
   await overviewPage.keyboard.press("Escape");
   await expect(overviewPage.getByRole("menu", { name: "用户与角色" })).toHaveCount(0);

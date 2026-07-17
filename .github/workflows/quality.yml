@@ -11,6 +11,9 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      VITE_DATA_BACKEND: local
+      VITE_AUTH_PROVIDER: local
     steps:
       - name: Checkout
         uses: actions/checkout@v4

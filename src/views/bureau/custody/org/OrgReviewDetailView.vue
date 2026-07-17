@@ -173,13 +173,15 @@ import { useRouter, useRoute } from "vue-router";
 import { WarningFilled, Close, Check } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { orgReviewRepository } from "@/features/org-review/org-review-repository";
+import { useUserStore } from "@/stores/user";
 
 const router = useRouter();
 const route = useRoute();
+const userStore = useUserStore();
 
 const orgId = Number(route.params.id);
 
-// 详情数据（从 mock 获取基础信息，图片等扩展字段仍用虚拟数据）
+// 本地演示保留默认展示数据；Supabase 模式会用当前租户的详情记录覆盖。
 const detail = ref({
   id: 0,
   hasChange: true,
@@ -216,8 +218,9 @@ const detail = ref({
 });
 
 onMounted(async () => {
-  const row = await orgReviewRepository.detail(orgId);
+  const row = await orgReviewRepository.detail(userStore.currentTenant.id, orgId);
   if (row) {
+    Object.assign(detail.value, row.detail ?? {});
     detail.value.id = row.id;
     detail.value.orgFullName = row.orgName;
     detail.value.address = row.address;
@@ -238,7 +241,12 @@ function handleReject() {
     inputType: "textarea",
   })
     .then(async ({ value }) => {
-      await orgReviewRepository.updateStatus(orgId, "rejected", value);
+      await orgReviewRepository.updateStatus(
+        userStore.currentTenant.id,
+        orgId,
+        "rejected",
+        value,
+      );
       ElMessage.info("已拒绝");
       router.push("/bureau/custody/org/review");
     })
@@ -252,7 +260,7 @@ function handleApprove() {
     type: "success",
   })
     .then(async () => {
-      await orgReviewRepository.updateStatus(orgId, "approved");
+      await orgReviewRepository.updateStatus(userStore.currentTenant.id, orgId, "approved");
       ElMessage.success("审核通过");
       router.push("/bureau/custody/org/review");
     })

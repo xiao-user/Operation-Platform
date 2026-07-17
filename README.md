@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-项目处于可交互前端原型阶段，已接入 Supabase Auth、Postgres 和 RLS。配置 Supabase 环境变量后，组织、成员、租户菜单/角色配置、当前角色和个人工作台布局以云端数据库为事实源，可跨浏览器共享；`localStorage` 仅保留未配置 Supabase 时的本地演示和旧数据迁移能力。
+项目处于可交互前端原型阶段，已接入 Supabase Auth、Postgres 和 RLS。Supabase 模式下，组织、成员、租户菜单/角色配置、当前角色、个人工作台布局、可视化主题、机构审核与门禁设备数据以云端数据库为事实源，可跨浏览器共享；`localStorage` 仅保留显式本地演示、E2E 和旧数据迁移能力。
 
 当前已经实现：
 
@@ -215,12 +215,15 @@ Supabase 模式下的持久化边界：
 | 组织列表 | `tenants` |
 | 组织成员与角色归属 | `tenant_members` |
 | 租户菜单、工作台入口 Shell 与角色聚合 | `tenant_configurations` |
-| 当前激活角色 | `user_tenant_preferences` |
+| 当前激活角色、可视化主题偏好 | `user_tenant_preferences` |
 | 个人工作台布局 | `workbench_layouts` |
+| 机构审核申请与详情 | `org_review_applications` |
+| 门禁设备分组 | `gate_device_groups` |
+| 门禁设备 | `gate_devices` |
 
 新增组织使用数据库事务函数同时创建组织、当前管理员成员和初始配置；成员列表使用原子替换函数；租户配置带 `revision` 乐观并发控制，避免两个浏览器静默覆盖。删除组织由外键级联清理成员、配置、偏好和布局。跨浏览器在登录后或刷新页面时读取同一份数据；当前未启用 Realtime，因此另一个已经打开的页面不会无刷新即时推送变化。
 
-未配置 Supabase 或 E2E 显式设置 `VITE_DATA_BACKEND=local` 时，使用以下本地回退数据：
+只有在 E2E 或本地演示显式设置 `VITE_DATA_BACKEND=local` 与 `VITE_AUTH_PROVIDER=local` 时，才使用以下本地回退数据。未配置运行模式和 Supabase 环境变量会直接报错，不会在生产环境静默退回浏览器存储：
 
 | 数据 | localStorage key |
 | --- | --- |
@@ -228,6 +231,7 @@ Supabase 模式下的持久化边界：
 | 组织成员 | `operation-platform:tenant-members:v1:<tenantId>` |
 | 租户菜单、工作台入口 Shell 与角色聚合 | `operation-platform:tenant-configuration:v1:<tenantId>` |
 | 当前激活角色 | `operation-platform:active-role:v1:<tenantId>:<userId>` |
+| 可视化主题偏好 | `operation-platform:visualization-theme:v1:<tenantId>:<userId>` |
 | 个人工作台布局 | `operation-platform:workbench-layout:v1:<tenantId>:<userId>:<profile>` |
 
 旧版菜单、工作台入口和角色的三个独立 key 只用于首次迁移，迁移后运行时统一读写租户聚合 key。组织成员独立按租户保存，新增组织时会自动创建当前用户为启用管理员成员；当前激活角色按租户和用户保存，用于恢复上次使用的角色视角。删除组织时会随租户配置一起清理成员、当前角色和个人工作台布局，并保留失败回滚语义。工作台内容模板保存在代码中，个人布局仅保存用户 override；“恢复默认”会删除该 override 并重新加载当前模板。个人布局在读取时按 `widgetKey` 与当前模板合并，新增系统组件自动显示并追加到底部，已移除组件会被清理。JSON 损坏、版本不兼容或语义校验失败时，原值会先备份到带 `invalid` 和时间戳的 key；如果备份失败，则停止恢复，避免静默覆盖原数据。

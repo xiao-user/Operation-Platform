@@ -57,6 +57,8 @@ export interface OperationPlatformPersistence {
 
   getActiveRole(tenantId: string, userId: string): string | null;
   setActiveRole(tenantId: string, userId: string, roleId: string): Promise<void>;
+  getVisualizationTheme(tenantId: string, userId: string): string | null;
+  setVisualizationTheme(tenantId: string, userId: string, themeId: string): Promise<void>;
 
   loadWorkbenchLayout(
     context: WorkbenchLayoutContext,

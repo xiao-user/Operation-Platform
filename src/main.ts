@@ -1,4 +1,4 @@
-import { createApp } from "vue";
+import { createApp, watch } from "vue";
 import { createPinia } from "pinia";
 import "element-plus/es/components/message/style/css";
 import "element-plus/es/components/message-box/style/css";
@@ -14,6 +14,19 @@ const pinia = createPinia();
 app.use(pinia);
 const authStore = useAuthStore(pinia);
 await authStore.initialize();
-await useUserStore(pinia).initializePersistence(authStore.session?.user ?? null);
+const userStore = useUserStore(pinia);
+await userStore.initializePersistence(authStore.session?.user ?? null);
+watch(
+  () => authStore.authStateVersion,
+  () => {
+    const identity = authStore.session?.user ?? null;
+    if (!identity) {
+      userStore.resetPersistence();
+      return;
+    }
+    void userStore.initializePersistence(identity, true);
+  },
+  { flush: "post" },
+);
 app.use(router);
 app.mount("#app");

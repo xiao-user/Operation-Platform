@@ -7,6 +7,7 @@ const authApi = vi.hoisted(() => ({
   signInWithPassword: vi.fn(),
   signOut: vi.fn(),
   updateUser: vi.fn(),
+  onAuthStateChange: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase", () => ({
@@ -36,6 +37,9 @@ describe("auth store", () => {
       error: null,
     });
     authApi.updateUser.mockResolvedValue({ data: { user: session().user }, error: null });
+    authApi.onAuthStateChange.mockReturnValue({
+      data: { subscription: { unsubscribe: vi.fn() } },
+    });
   });
 
   it("verifies the current password before updating the new password", async () => {
@@ -65,5 +69,16 @@ describe("auth store", () => {
     );
     expect(authApi.updateUser).not.toHaveBeenCalled();
     expect(store.changingPassword).toBe(false);
+  });
+
+  it("tracks Supabase auth changes from another browser tab", async () => {
+    const store = useAuthStore();
+    await store.initialize();
+    const callback = authApi.onAuthStateChange.mock.calls[0]?.[0];
+
+    callback("SIGNED_OUT", null);
+
+    expect(store.session).toBeNull();
+    expect(store.authStateVersion).toBe(1);
   });
 });

@@ -27,6 +27,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   themeSelect: [themeId: DigitalTwinMapTheme["id"]];
   roleSelect: [roleId: string];
+  changePassword: [];
+  signOut: [];
   exit: [];
 }>();
 
@@ -59,6 +61,12 @@ function selectRole(roleId: string) {
 function exitPage() {
   userMenuOpen.value = false;
   emit("exit");
+}
+
+function emitUserAction(action: "changePassword" | "signOut") {
+  userMenuOpen.value = false;
+  if (action === "changePassword") emit("changePassword");
+  else emit("signOut");
 }
 
 function handleDocumentPointerDown(event: PointerEvent) {
@@ -151,6 +159,12 @@ onBeforeUnmount(() => {
             {{ role.name }}
           </button>
           <div class="user-menu-divider" aria-hidden="true" />
+          <button type="button" role="menuitem" @click="emitUserAction('changePassword')">
+            修改密码
+          </button>
+          <button type="button" role="menuitem" @click="emitUserAction('signOut')">
+            退出登录
+          </button>
           <button type="button" role="menuitem" class="exit-action" @click="exitPage">
             退出大屏
           </button>

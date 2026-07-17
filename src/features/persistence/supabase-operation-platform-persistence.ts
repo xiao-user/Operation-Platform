@@ -43,6 +43,7 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
   private configurationRevisions = new Map<string, number>();
   private members = new Map<string, TenantMemberRecord[]>();
   private activeRoles = new Map<string, string>();
+  private visualizationThemes = new Map<string, string>();
   private workbenchLayouts = new Map<string, UserWorkbenchLayout>();
 
   initialState() {
@@ -79,6 +80,7 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
       ]),
     );
     this.activeRoles = new Map(bootstrap.activeRoles);
+    this.visualizationThemes = new Map(bootstrap.visualizationThemes);
     this.workbenchLayouts = new Map(
       [...bootstrap.workbenchLayouts].map(([key, layout]) => [key, cloneWorkbenchLayout(layout)]),
     );
@@ -97,6 +99,7 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
     this.configurationRevisions.clear();
     this.members.clear();
     this.activeRoles.clear();
+    this.visualizationThemes.clear();
     this.workbenchLayouts.clear();
   }
 
@@ -139,6 +142,7 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
     this.configurationRevisions.delete(tenantId);
     this.members.delete(tenantId);
     this.activeRoles.delete(tenantId);
+    this.visualizationThemes.delete(tenantId);
     for (const key of this.workbenchLayouts.keys()) {
       if (key.startsWith(`${tenantId}:`)) this.workbenchLayouts.delete(key);
     }
@@ -183,6 +187,15 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
   async setActiveRole(tenantId: string, userId: string, roleId: string) {
     await supabaseOperationPlatformRepository.saveActiveRole(tenantId, userId, roleId);
     this.activeRoles.set(tenantId, roleId);
+  }
+
+  getVisualizationTheme(tenantId: string) {
+    return this.visualizationThemes.get(tenantId) ?? null;
+  }
+
+  async setVisualizationTheme(tenantId: string, userId: string, themeId: string) {
+    await supabaseOperationPlatformRepository.saveVisualizationTheme(tenantId, userId, themeId);
+    this.visualizationThemes.set(tenantId, themeId);
   }
 
   loadWorkbenchLayout(context: WorkbenchLayoutContext, template: WorkbenchTemplate) {

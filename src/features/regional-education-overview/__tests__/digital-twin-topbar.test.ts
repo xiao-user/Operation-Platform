@@ -35,6 +35,10 @@ describe("DigitalTwinTopbar user menu", () => {
     expect(wrapper.find('[role="menu"]').exists()).toBe(false);
 
     await userButton.trigger("click");
+    await wrapper.get('[role="menuitem"]:nth-of-type(3)').trigger("click");
+    expect(wrapper.emitted("changePassword")).toHaveLength(1);
+
+    await userButton.trigger("click");
     await wrapper.get(".exit-action").trigger("click");
     expect(wrapper.emitted("exit")).toHaveLength(1);
 

@@ -1,5 +1,7 @@
+export type DigitalTwinMapThemeId = "lime" | "cyan" | "amber" | "royal" | "spectrum";
+
 export interface DigitalTwinMapTheme {
-  id: "lime" | "cyan" | "amber" | "royal" | "spectrum";
+  id: DigitalTwinMapThemeId;
   name: string;
   description: string;
   primary: string;

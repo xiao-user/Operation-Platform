@@ -7,7 +7,8 @@ This directory contains the production persistence schema for the multi-tenant o
 - Supabase Auth is the source of truth for user identity.
 - `tenants` and `tenant_members` define tenant access.
 - `tenant_configurations` preserves the current atomic menu, shell, and role aggregate as JSONB.
-- `workbench_layouts` and `user_tenant_preferences` remain tenant/user scoped.
+- `workbench_layouts` and `user_tenant_preferences` remain tenant/user scoped; the latter stores the active role and visualization theme.
+- `org_review_applications`, `gate_device_groups`, and `gate_devices` store tenant-scoped business data behind RLS.
 - Every browser-exposed table has RLS enabled. Raw localStorage migration snapshots live in the private schema.
 - Personal workbench layouts and active-role preferences require both record ownership and tenant access.
 - New Supabase Auth users receive a basic `profiles` row automatically; tenant membership is still assigned separately.

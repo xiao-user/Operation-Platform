@@ -102,6 +102,73 @@ test.describe("Supabase persistence", () => {
     if (cleanupError) throw cleanupError;
   });
 
+  test("business data and the user visualization theme come from Supabase", async ({ browser }) => {
+    const { client, session } = await authenticatedSession();
+    const firstContext = await browserWithSession(() => browser.newContext(), session);
+    const secondContext = await browserWithSession(() => browser.newContext(), session);
+    const firstPage = await firstContext.newPage();
+    const secondPage = await secondContext.newPage();
+    const userId = environment("MIGRATION_AUTH_USER_ID");
+    let cleanupError: Error | null = null;
+    const { data: initialPreference, error: initialPreferenceError } = await client
+      .from("user_tenant_preferences")
+      .select("visualization_theme_id")
+      .eq("tenant_id", "bureau-001")
+      .eq("auth_user_id", userId)
+      .maybeSingle();
+    if (initialPreferenceError) throw initialPreferenceError;
+
+    try {
+      const [reviewResult, groupResult, deviceResult] = await Promise.all([
+        client.from("org_review_applications").select("id", { count: "exact", head: true }).eq("tenant_id", "bureau-001"),
+        client.from("gate_device_groups").select("id", { count: "exact", head: true }).eq("tenant_id", "school-001"),
+        client.from("gate_devices").select("id", { count: "exact", head: true }).eq("tenant_id", "school-001"),
+      ]);
+      if (reviewResult.error) throw reviewResult.error;
+      if (groupResult.error) throw groupResult.error;
+      if (deviceResult.error) throw deviceResult.error;
+      expect(reviewResult.count).toBe(30);
+      expect(groupResult.count).toBe(7);
+      expect(deviceResult.count).toBe(10);
+
+      await firstPage.goto(
+        "/bureau/visualization/regional-education-overview?tenantId=bureau-001",
+      );
+      await firstPage.getByRole("button", { name: "切换至城市琥珀" }).click();
+      await expect(firstPage.getByRole("button", { name: "切换至城市琥珀" }))
+        .toHaveClass(/is-active/);
+      await expect.poll(async () => {
+        const { data, error } = await client
+          .from("user_tenant_preferences")
+          .select("visualization_theme_id")
+          .eq("tenant_id", "bureau-001")
+          .eq("auth_user_id", userId)
+          .single();
+        if (error) throw error;
+        return data.visualization_theme_id;
+      }).toBe("amber");
+
+      await secondPage.goto(
+        "/bureau/visualization/regional-education-overview?tenantId=bureau-001",
+      );
+      await expect(secondPage.getByRole("button", { name: "切换至城市琥珀" }))
+        .toHaveClass(/is-active/);
+
+      await secondPage.getByRole("button", { name: "用户 罗吴航" }).click();
+      await expect(secondPage.getByRole("menuitem", { name: "修改密码" })).toBeVisible();
+      await expect(secondPage.getByRole("menuitem", { name: "退出登录" })).toBeVisible();
+    } finally {
+      const { error } = await client
+        .from("user_tenant_preferences")
+        .update({ visualization_theme_id: initialPreference?.visualization_theme_id ?? null })
+        .eq("tenant_id", "bureau-001")
+        .eq("auth_user_id", userId);
+      await Promise.all([firstContext.close(), secondContext.close()]);
+      cleanupError = error;
+    }
+    if (cleanupError) throw cleanupError;
+  });
+
   test("an organization member email is linked to Auth and the user can change password", async ({ browser }) => {
     const { admin, client, session } = await authenticatedSession();
     const context = await browserWithSession(() => browser.newContext(), session);

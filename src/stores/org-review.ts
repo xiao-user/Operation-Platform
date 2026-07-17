@@ -6,6 +6,7 @@ import {
   type OrgReviewRow,
   type ReviewStatus,
 } from "@/features/org-review/org-review-repository";
+import { useUserStore } from "@/stores/user";
 
 export function defaultOrgReviewFilter(): OrgReviewFilter {
   return {
@@ -17,6 +18,7 @@ export function defaultOrgReviewFilter(): OrgReviewFilter {
 }
 
 export const useOrgReviewStore = defineStore("org-review", () => {
+  const userStore = useUserStore();
   const loading = ref(false);
   const tableData = ref<OrgReviewRow[]>([]);
   const filterForm = reactive<OrgReviewFilter>(defaultOrgReviewFilter());
@@ -33,6 +35,7 @@ export const useOrgReviewStore = defineStore("org-review", () => {
     loading.value = true;
     try {
       const { list, total } = await orgReviewRepository.list(
+        userStore.currentTenant.id,
         { ...filterForm },
         pagination.currentPage,
         pagination.pageSize,
@@ -62,7 +65,7 @@ export const useOrgReviewStore = defineStore("org-review", () => {
   }
 
   async function updateStatus(id: number, status: ReviewStatus, remark?: string) {
-    await orgReviewRepository.updateStatus(id, status, remark);
+    await orgReviewRepository.updateStatus(userStore.currentTenant.id, id, status, remark);
     await loadList();
   }
 

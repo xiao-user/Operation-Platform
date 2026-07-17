@@ -197,7 +197,7 @@
                   <div class="col-location">{{ row.location }}</div>
                   <div class="col-group">{{ row.group }}</div>
                   <div class="col-action" @click.stop>
-                    <span class="action-link" @click="handleTiaozu(row)">调租</span>
+                    <span class="action-link" @click="handleTiaozu(row)">调组</span>
                     <span class="action-link" @click="handleRemove(row)">移除</span>
                     <span class="action-link" @click="handlePermission(row)">权限</span>
                     <el-icon class="action-arrow" :class="{ rotated: row.expanded }"><ArrowRight /></el-icon>
@@ -236,146 +236,249 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { Search, Plus, ArrowRight } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import MoreIcon from '@/components/MoreIcon.vue'
-import NewGatePageShell from '@/components/security/NewGatePageShell.vue'
+import { computed, onMounted, ref, watch } from "vue";
+import { Search, Plus, ArrowRight } from "@element-plus/icons-vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import MoreIcon from "@/components/MoreIcon.vue";
+import NewGatePageShell from "@/components/security/NewGatePageShell.vue";
+import {
+  gateDeviceRepository,
+  type GateDevice,
+  type GateDeviceGroup,
+} from "@/features/gate-devices/gate-device-repository";
+import { useUserStore } from "@/stores/user";
 
-const filterForm = ref({ vendor: 'zhongtuo', deviceName: '', location: '' })
-const handleSearch = () => { ElMessage.info('触发查询: ' + filterForm.value.deviceName) }
-
-// --- Tree ---
-const treeSearch = ref('')
-const selectedNode = ref('all')
-
-interface TreeNode {
-  id: string
-  name: string
-  expanded: boolean
-  children?: TreeNode[]
+interface TreeNode extends GateDeviceGroup {
+  expanded: boolean;
+  children?: TreeNode[];
 }
 
-const treeData = ref<TreeNode[]>([
-  {
-    id: 'all', name: '全部设备', expanded: true,
-    children: [
-      {
-        id: 'gate', name: '校门口', expanded: true,
-        children: [
-          { id: 'main-gate', name: '正门', expanded: false },
-          { id: 'side-gate', name: '侧门', expanded: false },
-        ]
-      },
-      { id: 'canteen', name: '食堂', expanded: false },
-      { id: 'dorm', name: '宿舍', expanded: false },
-      { id: 'more', name: '更多', expanded: false },
-    ]
+interface TableRow extends GateDevice {
+  expanded?: boolean;
+  checked: boolean;
+  group: string;
+}
+
+const userStore = useUserStore();
+const filterForm = ref({ vendor: "zhongtuo", deviceName: "", location: "" });
+const treeSearch = ref("");
+const selectedNode = ref("all");
+const groups = ref<GateDeviceGroup[]>([]);
+const treeData = ref<TreeNode[]>([]);
+const rawTableData = ref<TableRow[]>([]);
+const selectAll = ref(false);
+
+function buildTree(records: GateDeviceGroup[]): TreeNode[] {
+  const nodes = new Map(records.map((group) => [group.id, { ...group, expanded: true } as TreeNode]));
+  const roots: TreeNode[] = [];
+  for (const node of nodes.values()) {
+    const parent = node.parentId ? nodes.get(node.parentId) : undefined;
+    if (parent) (parent.children ??= []).push(node);
+    else roots.push(node);
   }
-])
+  const sortNodes = (items: TreeNode[]) => {
+    items.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "zh-CN"));
+    for (const item of items) if (item.children) sortNodes(item.children);
+  };
+  sortNodes(roots);
+  return roots;
+}
+
+async function loadData() {
+  try {
+    const snapshot = await gateDeviceRepository.load(userStore.currentTenant.id);
+    groups.value = snapshot.groups;
+    treeData.value = buildTree(snapshot.groups);
+    const names = new Map(snapshot.groups.map((group) => [group.id, group.name]));
+    rawTableData.value = snapshot.devices.map((device) => ({
+      ...device,
+      subInfo: device.subInfo.map((item) => ({ ...item })),
+      group: names.get(device.groupId) ?? "未分组",
+      checked: false,
+    }));
+    selectAll.value = false;
+    if (!snapshot.groups.some((group) => group.id === selectedNode.value)) selectedNode.value = "all";
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "门禁设备读取失败");
+  }
+}
+
+onMounted(() => void loadData());
+watch(() => userStore.currentTenant.id, () => void loadData());
 
 const filteredTree = computed(() => {
-  if (!treeSearch.value) return treeData.value
-  const q = treeSearch.value.toLowerCase()
+  if (!treeSearch.value) return treeData.value;
+  const query = treeSearch.value.toLowerCase();
   const matchNode = (node: TreeNode): boolean =>
-    node.name.toLowerCase().includes(q) ||
-    (node.children?.some(matchNode) ?? false)
-  return treeData.value.filter(matchNode)
-})
-
-function toggleNode(node: TreeNode) { node.expanded = !node.expanded }
-function selectNode(id: string) { selectedNode.value = id }
-
-function handleMenuAction(action: '添加子级' | '编辑' | '删除', node: TreeNode) {
-  if (action === '添加子级') {
-    ElMessageBox.prompt('请输入子节点名称', '添加子级', { confirmButtonText: '确定', cancelButtonText: '取消' })
-      .then(({ value }) => {
-        if (!value) return ElMessage.warning('名称不能为空')
-        if (!node.children) node.children = []
-        node.children.push({ id: Date.now().toString(), name: value, expanded: false })
-        node.expanded = true
-        ElMessage.success('添加成功')
-      })
-  } else if (action === '编辑') {
-    ElMessageBox.prompt('请输入节点名称', '编辑', { confirmButtonText: '确定', cancelButtonText: '取消', inputValue: node.name })
-      .then(({ value }) => {
-        if (!value) return ElMessage.warning('名称不能为空')
-        node.name = value
-        ElMessage.success('修改成功')
-      })
-  } else if (action === '删除') {
-    ElMessageBox.confirm('确认删除该节点吗?', '提示', { type: 'warning' })
-      .then(() => {
-        const removeNode = (nodes: TreeNode[]): boolean => {
-          for (let i = 0; i < nodes.length; i++) {
-            const n = nodes[i]
-            if (n && n.id === node.id) { nodes.splice(i, 1); return true }
-            if (n && n.children && removeNode(n.children as TreeNode[])) return true
-          }
-          return false
-        }
-        removeNode(treeData.value)
-        if (selectedNode.value === node.id) selectedNode.value = 'all'
-        ElMessage.success('删除成功')
-      })
-  }
-}
-
-// --- Table Data ---
-interface SubInfo { group: string; timezone: string }
-interface TableRow {
-  id: number; expanded?: boolean; name: string; channelType: 'dual' | 'single';
-  statusKey: 'online' | 'offline' | 'running'; statusLabel: string;
-  code: string; location: string; groupId: string; group: string; checked: boolean; subInfo?: SubInfo[];
-}
-
-const rawTableData = ref<TableRow[]>([
-  { id: 1, name: '校正门-人脸闸机1', channelType: 'dual', statusKey: 'online', statusLabel: '在线', code: 'G001-MAIN-01', location: '校正面左侧', groupId: 'main-gate', group: '正门', checked: false, subInfo: [{ group: '测试A组', timezone: '固定全天通行' }] },
-  { id: 2, name: '校正门-人脸闸机6', channelType: 'single', statusKey: 'online', statusLabel: '在线', code: 'G001-SIDE-02', location: '校正面右侧', groupId: 'side-gate', group: '侧门', checked: false, subInfo: [{ group: '测试B组', timezone: '晚上通行' }] },
-  { id: 3, name: '校正门-人脸闸机5', channelType: 'dual', statusKey: 'offline', statusLabel: '离线', code: 'G001-MAIN-05', location: '正门内测', groupId: 'main-gate', group: '正门', checked: false, subInfo: [{ group: '测试A组', timezone: '早班时区' }] },
-  { id: 4, name: '校正门-人脸闸机3', channelType: 'dual', statusKey: 'online', statusLabel: '在线', code: 'G001-MAIN-03', location: '正门北柱', groupId: 'all', group: '全部设备', checked: false, subInfo: [{ group: '测试C组', timezone: '特定通道时区' }] },
-  { id: 5, name: '食堂人脸闸机4', channelType: 'single', statusKey: 'online', statusLabel: '在线', code: 'C002-DOOR-01', location: '食堂侧门', groupId: 'canteen', group: '食堂', checked: false, subInfo: [{ group: '后勤组', timezone: '就餐时段通行' }] },
-  { id: 6, name: '树木园围墙闸机1', channelType: 'dual', statusKey: 'online', statusLabel: '在线', code: 'G002-SIDE-01', location: '后山入口', groupId: 'all', group: '全部设备', checked: false, subInfo: [{ group: '巡逻组', timezone: '特定工作时段' }] },
-  { id: 7, name: '后门通道闸机3', channelType: 'single', statusKey: 'offline', statusLabel: '离线', code: 'G003-BACK-03', location: '北门后墙', groupId: 'all', group: '全部设备', checked: false, subInfo: [{ group: '维保组', timezone: '维保测试时段' }] },
-  { id: 8, name: '宿舍闸机1', channelType: 'single', statusKey: 'online', statusLabel: '在线', code: 'D003-MAIN-01', location: '宿舍A座', groupId: 'dorm', group: '宿舍', checked: false, subInfo: [{ group: '宿管组', timezone: '查寝通行时段' }] },
-  { id: 9, name: '宿舍闸机2', channelType: 'dual', statusKey: 'online', statusLabel: '在线', code: 'D003-MAIN-02', location: '宿舍B座', groupId: 'dorm', group: '宿舍', checked: false, subInfo: [{ group: '学生组', timezone: '归寝限制时段' }] },
-  { id: 10, name: '体育馆人脸主入口', channelType: 'dual', statusKey: 'online', statusLabel: '在线', code: 'S004-MAIN-01', location: '体育馆正门', groupId: 'all', group: '全部设备', checked: false, subInfo: [{ group: '学生组', timezone: '课程及自由时间' }] },
-])
+    node.name.toLowerCase().includes(query) || (node.children?.some(matchNode) ?? false);
+  return treeData.value.filter(matchNode);
+});
 
 const filteredTableData = computed(() => {
-  let items = rawTableData.value
-  if (selectedNode.value !== 'all') {
-    items = items.filter(r => r.groupId === selectedNode.value)
-  }
-  if (filterForm.value.vendor) {
-    // vendor filter is a demo; in real scenario match against device vendor field
+  let items = rawTableData.value;
+  if (selectedNode.value !== "all") {
+    const visibleGroupIds = descendantGroupIds(selectedNode.value);
+    items = items.filter((row) => visibleGroupIds.has(row.groupId));
   }
   if (filterForm.value.deviceName) {
-    items = items.filter(r => r.name.includes(filterForm.value.deviceName))
+    items = items.filter((row) => row.name.includes(filterForm.value.deviceName));
   }
   if (filterForm.value.location) {
-    items = items.filter(r => r.location.includes(filterForm.value.location))
+    items = items.filter((row) => row.location.includes(filterForm.value.location));
   }
-  return items
-})
+  return items;
+});
 
-const getStatusType = (statusKey: string) => statusKey === 'online' ? 'success' : statusKey === 'offline' ? 'danger' : 'warning'
-const selectAll = ref(false)
-const handleSelectAll = () => { filteredTableData.value.forEach(r => r.checked = selectAll.value) }
-function toggleRow(row: TableRow) { if (row.subInfo && row.subInfo.length) row.expanded = !row.expanded }
-
-function handleBatchAction(name: string) {
-  const active = filteredTableData.value.filter(r => r.checked)
-  if (!active.length) return ElMessage.warning('请至少选择一条数据')
-  ElMessage.success(`${name} 操作成功 ${active.length} 条数据`)
+function descendantGroupIds(groupId: string) {
+  const ids = new Set([groupId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const group of groups.value) {
+      if (group.parentId && ids.has(group.parentId) && !ids.has(group.id)) {
+        ids.add(group.id);
+        changed = true;
+      }
+    }
+  }
+  return ids;
 }
 
-const handleOperationLog = () => ElMessage.info('触发操作日志')
-const handleExport = () => ElMessage.success('开始导出')
-const handleAdd = () => ElMessage.success('新增权限')
-const handleTiaozu = (row: TableRow) => ElMessage.info('调租: ' + row.name)
-const handleRemove = (row: TableRow) => ElMessage.error('移除: ' + row.name)
-const handlePermission = (row: TableRow) => ElMessage.info('分配权限: ' + row.name)
+function groupDepth(groupId: string) {
+  let depth = 0;
+  let current = groups.value.find((group) => group.id === groupId);
+  while (current?.parentId) {
+    depth += 1;
+    current = groups.value.find((group) => group.id === current?.parentId);
+  }
+  return depth;
+}
+
+const handleSearch = () => undefined;
+function toggleNode(node: TreeNode) { node.expanded = !node.expanded; }
+function selectNode(id: string) { selectedNode.value = id; }
+
+async function saveGroup(group: GateDeviceGroup) {
+  await gateDeviceRepository.saveGroup(userStore.currentTenant.id, group);
+  await loadData();
+}
+
+function handleMenuAction(action: "添加子级" | "编辑" | "删除", node: TreeNode) {
+  if (node.id === "all" && action !== "添加子级") {
+    ElMessage.warning("全部设备为系统根分组，不能编辑或删除");
+    return;
+  }
+  if (action === "添加子级") {
+    if (groupDepth(node.id) >= 2) {
+      ElMessage.warning("设备分组最多支持三级");
+      return;
+    }
+    void ElMessageBox.prompt("请输入子节点名称", "添加子级", {
+      confirmButtonText: "确定",
+      cancelButtonText: "取消",
+    }).then(async ({ value }) => {
+      const name = value.trim();
+      if (!name) return ElMessage.warning("名称不能为空");
+      const siblings = groups.value.filter((group) => group.parentId === node.id);
+      await saveGroup({
+        id: crypto.randomUUID(),
+        parentId: node.id,
+        name,
+        sortOrder: siblings.length,
+      });
+      ElMessage.success("添加成功");
+    }).catch(() => undefined);
+    return;
+  }
+  if (action === "编辑") {
+    void ElMessageBox.prompt("请输入节点名称", "编辑", {
+      confirmButtonText: "确定",
+      cancelButtonText: "取消",
+      inputValue: node.name,
+    }).then(async ({ value }) => {
+      const name = value.trim();
+      if (!name) return ElMessage.warning("名称不能为空");
+      await saveGroup({ ...node, name });
+      ElMessage.success("修改成功");
+    }).catch(() => undefined);
+    return;
+  }
+  void ElMessageBox.confirm("确认删除该分组及其空子分组吗？", "提示", { type: "warning" })
+    .then(async () => {
+      await gateDeviceRepository.deleteGroup(userStore.currentTenant.id, node.id);
+      if (selectedNode.value === node.id) selectedNode.value = "all";
+      await loadData();
+      ElMessage.success("删除成功");
+    })
+    .catch((error: unknown) => {
+      if (error instanceof Error) ElMessage.error(error.message);
+    });
+}
+
+const getStatusType = (statusKey: string) =>
+  statusKey === "online" ? "success" : statusKey === "offline" ? "danger" : "warning";
+const handleSelectAll = () => {
+  filteredTableData.value.forEach((row) => { row.checked = selectAll.value; });
+};
+function toggleRow(row: TableRow) {
+  if (row.subInfo.length) row.expanded = !row.expanded;
+}
+
+async function moveRows(rows: TableRow[]) {
+  const available = groups.value.filter((group) => group.id !== "all");
+  const groupNames = available.map((group) => group.name).join("、");
+  try {
+    const { value } = await ElMessageBox.prompt(`可选分组：${groupNames}`, "设备调组", {
+      confirmButtonText: "确定",
+      cancelButtonText: "取消",
+      inputPlaceholder: "请输入分组名称",
+    });
+    const target = available.find((group) => group.name === value.trim());
+    if (!target) return ElMessage.warning("未找到该设备分组");
+    await gateDeviceRepository.moveDevices(
+      userStore.currentTenant.id,
+      rows.map((row) => row.id),
+      target.id,
+    );
+    await loadData();
+    ElMessage.success(`已将 ${rows.length} 台设备移入「${target.name}」`);
+  } catch (error) {
+    if (error instanceof Error) ElMessage.error(error.message);
+  }
+}
+
+async function removeRows(rows: TableRow[]) {
+  try {
+    await ElMessageBox.confirm(`确认移除选中的 ${rows.length} 台设备吗？`, "移除设备", {
+      type: "warning",
+      confirmButtonText: "确认移除",
+      cancelButtonText: "取消",
+    });
+    await gateDeviceRepository.deleteDevices(
+      userStore.currentTenant.id,
+      rows.map((row) => row.id),
+    );
+    await loadData();
+    ElMessage.success("设备已移除");
+  } catch (error) {
+    if (error instanceof Error) ElMessage.error(error.message);
+  }
+}
+
+function handleBatchAction(name: string) {
+  const active = filteredTableData.value.filter((row) => row.checked);
+  if (!active.length) return ElMessage.warning("请至少选择一条数据");
+  if (name === "批量移除") return void removeRows(active);
+  if (name === "批量移入" || name === "批量调组") return void moveRows(active);
+  ElMessage.info(`${name}配置功能尚未接入`);
+}
+
+const handleOperationLog = () => ElMessage.info("操作日志功能尚未接入");
+const handleExport = () => ElMessage.info("导出功能尚未接入");
+const handleAdd = () => ElMessage.info("新增权限功能尚未接入");
+const handleTiaozu = (row: TableRow) => void moveRows([row]);
+const handleRemove = (row: TableRow) => void removeRows([row]);
+const handlePermission = (row: TableRow) => ElMessage.info(`「${row.name}」权限配置尚未接入`);
 </script>
 
 <style scoped>

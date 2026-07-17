@@ -132,6 +132,18 @@ export const useUserStore = defineStore("user", () => {
     activeRoleVersion.value += 1;
   }
 
+  function visualizationThemeIdForTenant(tenantId: string) {
+    return operationPlatformPersistence.getVisualizationTheme(tenantId, userInfo.value.id);
+  }
+
+  async function setVisualizationThemeForTenant(tenantId: string, themeId: string) {
+    await operationPlatformPersistence.setVisualizationTheme(
+      tenantId,
+      userInfo.value.id,
+      themeId,
+    );
+  }
+
   function refreshTenants() {
     tenantList.value = operationPlatformPersistence.listTenants();
     tenantRecoveryNotice.value = null;
@@ -178,6 +190,8 @@ export const useUserStore = defineStore("user", () => {
     canAccessTenant,
     hasAdminRoleForTenant,
     setActiveRoleForTenant,
+    visualizationThemeIdForTenant,
+    setVisualizationThemeForTenant,
     roleForTenant: activeRoleIdForTenant,
     roleIdsForTenant,
     switchTenant,

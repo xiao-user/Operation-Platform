@@ -16,7 +16,10 @@ import {
   digitalTwinMapThemes,
   getDigitalTwinMapTheme,
 } from "@/features/regional-education-overview/map-themes";
-import type { DigitalTwinMapTheme } from "@/features/regional-education-overview/map-themes";
+import type {
+  DigitalTwinMapTheme,
+  DigitalTwinMapThemeId,
+} from "@/features/regional-education-overview/map-themes";
 import type {
   EducationLocation,
   EducationLocationType,
@@ -29,12 +32,16 @@ import {
 } from "@/features/regional-education-overview/rendering/map-visual-tuning";
 import { useUserStore } from "@/stores/user";
 import { useNavigationStore } from "@/stores/navigation";
+import { useAuthStore } from "@/stores/auth";
+import ChangePasswordDialog from "@/components/ChangePasswordDialog.vue";
+import { ElMessage } from "element-plus";
 import "@/styles/digital-twin-design-system.css";
 
-const themeStorageKey = "operation-platform:regional-education-overview:theme:v1";
 const router = useRouter();
 const navigationStore = useNavigationStore();
+const authStore = useAuthStore();
 const userStore = useUserStore();
+const passwordDialogVisible = ref(false);
 const pageRoot = ref<HTMLElement>();
 const mapStage = ref<InstanceType<typeof RegionalMapStage>>();
 const selectedLocation = ref<EducationLocation | undefined>(rongchengEducationLocations[0]);
@@ -55,15 +62,11 @@ const timeFormatter = new Intl.DateTimeFormat("zh-CN", {
   hour12: false,
 });
 
-function restoreThemeId(): DigitalTwinMapTheme["id"] {
-  try {
-    const stored = window.localStorage.getItem(themeStorageKey);
-    return digitalTwinMapThemes.some((theme) => theme.id === stored)
-      ? stored as DigitalTwinMapTheme["id"]
-      : "cyan";
-  } catch {
-    return "cyan";
-  }
+function restoreThemeId(): DigitalTwinMapThemeId {
+  const stored = userStore.visualizationThemeIdForTenant(userStore.currentTenant.id);
+  return digitalTwinMapThemes.some((theme) => theme.id === stored)
+    ? stored as DigitalTwinMapThemeId
+    : "cyan";
 }
 
 const activeThemeId = ref<DigitalTwinMapTheme["id"]>(restoreThemeId());
@@ -140,12 +143,18 @@ async function exitStandalonePage() {
   await router.push("/workbench");
 }
 
+async function signOut() {
+  await authStore.signOut();
+  userStore.resetPersistence();
+  await router.replace("/");
+}
+
 watch(activeThemeId, (themeId) => {
-  try {
-    window.localStorage.setItem(themeStorageKey, themeId);
-  } catch {
-    // Theme persistence is optional; rendering remains functional when storage is unavailable.
-  }
+  void userStore
+    .setVisualizationThemeForTenant(userStore.currentTenant.id, themeId)
+    .catch((error: unknown) => {
+      ElMessage.error(error instanceof Error ? error.message : "可视化主题保存失败");
+    });
 });
 
 onMounted(() => {
@@ -225,8 +234,12 @@ onBeforeUnmount(() => {
         :active-theme-id="activeThemeId"
         @theme-select="activeThemeId = $event"
         @role-select="switchActiveRole"
+        @change-password="passwordDialogVisible = true"
+        @sign-out="signOut"
         @exit="exitStandalonePage"
       />
+
+      <ChangePasswordDialog v-model="passwordDialogVisible" />
 
       <div class="hud-content">
         <RegionalOverviewPanel
