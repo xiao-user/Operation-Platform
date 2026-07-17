@@ -94,6 +94,21 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   ).toBeVisible({ timeout: 20_000 });
   await expect(overviewPage.getByLabel("选择教育机构")).toHaveCount(0);
   await expect(overviewPage.getByLabel("选择镇街下钻")).toHaveCount(0);
+  const aiAssistantEntry = overviewPage.getByRole("link", {
+    name: "AI数据助手，新标签打开",
+  });
+  await expect(aiAssistantEntry).toBeVisible();
+  await expect(aiAssistantEntry).toHaveAttribute("target", "_blank");
+  await expect(aiAssistantEntry).toHaveAttribute("aria-disabled", "true");
+  await expect(aiAssistantEntry).toHaveCSS("left", "24px");
+  await expect(aiAssistantEntry).toHaveCSS("bottom", "148px");
+  const entryBorderBeforeHover = await aiAssistantEntry.evaluate(
+    (element) => element.ownerDocument.defaultView!.getComputedStyle(element).borderColor,
+  );
+  await aiAssistantEntry.hover();
+  await expect.poll(() => aiAssistantEntry.evaluate(
+    (element) => element.ownerDocument.defaultView!.getComputedStyle(element).borderColor,
+  )).toBe(entryBorderBeforeHover);
   expect(await overviewPage.locator(".school-list-item").count()).toBeGreaterThan(3);
   await expect(overviewPage.locator(".profile-meta")).toHaveCSS("align-items", "center");
   const profileMetaRows = overviewPage.locator(".profile-meta dl > div");
@@ -118,6 +133,20 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   await expect(overviewPage.getByRole("button", { name: "保存视角" })).toHaveCount(0);
   await expect(overviewPage.getByRole("button", { name: "恢复视角" })).toHaveCount(0);
   await expect(overviewPage.getByRole("button", { name: "重置视角" })).toBeVisible();
+  await expect(overviewPage.locator(".map-layer-switch")).toHaveCount(0);
+  await expect(overviewPage.locator(".map-camera-control > .map-layer-button"))
+    .toHaveCount(2);
+  const resetViewButton = overviewPage.getByRole("button", { name: "重置视角" });
+  const materialButton = overviewPage.getByRole("button", { name: "地图材质" });
+  const sharedControlStyle = async (button: typeof resetViewButton) => button.evaluate(
+    (element) => {
+      const style = element.ownerDocument.defaultView!.getComputedStyle(element);
+      return [style.height, style.borderColor, style.borderRadius, style.backgroundColor];
+    },
+  );
+  expect(await sharedControlStyle(materialButton)).toEqual(
+    await sharedControlStyle(resetViewButton),
+  );
   await overviewPage.getByRole("button", { name: "切换至多维光谱" }).click();
   await expect(overviewPage.getByRole("button", { name: "切换至多维光谱" }))
     .toHaveClass(/is-active/);
@@ -128,7 +157,14 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   await expect(overviewPage.getByText("折射率 IOR", { exact: true })).toHaveCount(0);
   await expect(overviewPage.getByText("金属度", { exact: true })).toHaveCount(0);
   await expect(overviewPage.getByText("锥峰透明度", { exact: true })).toBeVisible();
+  await expect(overviewPage.getByText("学校立标", { exact: true })).toBeVisible();
+  await expect(overviewPage.getByText("教育局信标", { exact: true })).toBeVisible();
+  await expect(overviewPage.getByText("学校飞线", { exact: true })).toBeVisible();
+  await expect(overviewPage.getByText("默认透明度", { exact: true })).toBeVisible();
+  await expect(overviewPage.getByText("学校轮播间隔", { exact: true })).toBeVisible();
+  await expect(overviewPage.getByText("离地高度", { exact: true })).toBeVisible();
   await expect(overviewPage.getByLabel("行政区顶面颜色")).toBeVisible();
+  await expect(overviewPage.getByText("分区明暗变化", { exact: true })).toBeVisible();
   await expect(overviewPage.getByLabel("外部地面颜色")).toBeVisible();
   await expect(overviewPage.getByText("外部地面透明度", { exact: true })).toBeVisible();
   await expect(overviewPage.getByLabel("侧边顶部颜色")).toBeVisible();
@@ -143,7 +179,14 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   await expect(
     overviewPage.getByRole("heading", { name: "西岐学校" }),
   ).toBeVisible();
-  const mapCanvas = overviewPage.locator("canvas");
+  const selectedInstitutionHeading = overviewPage
+    .getByRole("complementary", { name: "当前教育机构详情" })
+    .getByRole("heading", { level: 2 });
+  await expect.poll(
+    () => selectedInstitutionHeading.textContent(),
+    { timeout: 7_000 },
+  ).not.toBe("西岐学校");
+  const mapCanvas = overviewPage.locator(".regional-map-canvas");
   await expect(mapCanvas).toBeVisible();
   await overviewPage.getByRole("button", { name: "能量锥峰", exact: true }).click();
   await expect(overviewPage.getByRole("button", { name: "能量锥峰", exact: true })).toHaveAttribute("aria-pressed", "true");

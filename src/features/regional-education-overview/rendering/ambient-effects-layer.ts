@@ -32,6 +32,10 @@ export class AmbientEffectsLayer implements TuningAwareMapSceneLayer {
     boundaryZ: number,
   ) {
     this.tuning = tuning;
+    // Focused regions can use a higher group render order than their siblings.
+    // Keep boundary light in a later transparent group so region surfaces and
+    // translucent side walls cannot paint over part of the moving line.
+    this.root.renderOrder = 80;
     this.chasePositions = new Float32Array(this.chaseSegmentCount * 2 * 3);
     const tailProgress = new Float32Array(this.chaseSegmentCount * 2);
     for (let index = 0; index < this.chaseSegmentCount; index += 1) {

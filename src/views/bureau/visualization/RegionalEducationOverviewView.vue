@@ -4,8 +4,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import DigitalTwinStatusBar from "@/features/regional-education-overview/components/DigitalTwinStatusBar.vue";
 import DigitalTwinTopbar from "@/features/regional-education-overview/components/DigitalTwinTopbar.vue";
+import AiDataAssistantEntry from "@/features/regional-education-overview/components/AiDataAssistantEntry.vue";
 import LocationProfilePanel from "@/features/regional-education-overview/components/LocationProfilePanel.vue";
-import MapMaterialTuningPanel from "@/features/regional-education-overview/components/MapMaterialTuningPanel.vue";
 import RegionalMapStage from "@/features/regional-education-overview/components/RegionalMapStage.vue";
 import RegionalOverviewPanel from "@/features/regional-education-overview/components/RegionalOverviewPanel.vue";
 import { rongchengEducationLocations } from "@/features/regional-education-overview/education-locations";
@@ -95,10 +95,35 @@ const coverageLabel = computed(() => {
   return "公开镇街边界 · 原型数据";
 });
 let clockTimer: number | undefined;
+let schoolSelectionTimer: number | undefined;
+let pageMounted = false;
 let entranceMedia: ReturnType<typeof gsap.matchMedia> | undefined;
 
 function selectLocation(location: EducationLocation) {
   selectedLocation.value = location;
+  restartSchoolSelectionCycle();
+}
+
+function stopSchoolSelectionCycle() {
+  if (schoolSelectionTimer !== undefined) window.clearInterval(schoolSelectionTimer);
+  schoolSelectionTimer = undefined;
+}
+
+function cycleSelectedSchool() {
+  if (document.hidden || dataLayerMode.value !== "institutions") return;
+  const schools = activeLocations.value.filter((location) => location.type !== "bureau");
+  if (schools.length < 2) return;
+  const currentIndex = schools.findIndex(
+    (location) => location.id === selectedLocation.value?.id,
+  );
+  selectedLocation.value = schools[(currentIndex + 1 + schools.length) % schools.length];
+}
+
+function restartSchoolSelectionCycle() {
+  stopSchoolSelectionCycle();
+  if (!pageMounted || dataLayerMode.value !== "institutions") return;
+  const duration = Math.max(1, mapVisualTuning.value.institutionSelectionCycleSeconds);
+  schoolSelectionTimer = window.setInterval(cycleSelectedSchool, duration * 1000);
 }
 
 function updateActiveTheme(theme: DigitalTwinMapTheme) {
@@ -157,7 +182,19 @@ watch(activeThemeId, (themeId) => {
     });
 });
 
+watch(
+  [
+    activeLocations,
+    dataLayerMode,
+    () => mapVisualTuning.value.institutionSelectionCycleSeconds,
+  ],
+  restartSchoolSelectionCycle,
+  { flush: "post" },
+);
+
 onMounted(() => {
+  pageMounted = true;
+  restartSchoolSelectionCycle();
   clockTimer = window.setInterval(() => {
     now.value = new Date();
   }, 1000);
@@ -173,6 +210,7 @@ onMounted(() => {
       const targets = Array.from(pageRoot.value.querySelectorAll<HTMLElement>([
         ".page-topbar",
         ".left-panel",
+        ".ai-data-assistant-entry",
         ".spatial-trail",
         ".right-panel",
         ".map-camera-control",
@@ -181,7 +219,9 @@ onMounted(() => {
       const entranceTween = gsap.from(targets, {
         autoAlpha: 0,
         x: (_, target) => {
-          if (target.matches(".left-panel, .map-camera-control")) return -24;
+          if (target.matches(".left-panel, .ai-data-assistant-entry, .map-camera-control")) {
+            return -24;
+          }
           if (target.matches(".right-panel, .spatial-trail")) return 24;
           return 0;
         },
@@ -202,6 +242,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  pageMounted = false;
+  stopSchoolSelectionCycle();
   if (clockTimer !== undefined) window.clearInterval(clockTimer);
   entranceMedia?.revert();
 });
@@ -220,6 +262,8 @@ onBeforeUnmount(() => {
       @select="selectLocation"
       @scope-change="handleScopeChange"
       @update:data-layer-mode="dataLayerMode = $event"
+      @update:visual-tuning="mapVisualTuning = $event"
+      @update:theme="updateActiveTheme"
     />
 
     <div class="hud-layer">
@@ -262,12 +306,7 @@ onBeforeUnmount(() => {
         />
       </div>
 
-      <MapMaterialTuningPanel
-        :tuning="mapVisualTuning"
-        :theme="activeTheme"
-        @update:tuning="mapVisualTuning = $event"
-        @update:theme="updateActiveTheme"
-      />
+      <AiDataAssistantEntry />
 
       <DigitalTwinStatusBar
         :code="activeMapState.code"

@@ -23,6 +23,15 @@ describe("MapMaterialTuningPanel", () => {
       regionTerrainOpacity: 0.42,
     });
 
+    const surfaceVariationRow = wrapper.findAll(".material-tuning__row")
+      .find((row) => row.text().includes("分区明暗变化"));
+    expect(surfaceVariationRow).toBeDefined();
+    await surfaceVariationRow!.get('input[type="range"]').setValue("0.08");
+    tuningEvents = wrapper.emitted("update:tuning") ?? [];
+    expect(tuningEvents[tuningEvents.length - 1]?.[0]).toMatchObject({
+      regionTerrainVariationStrength: 0.08,
+    });
+
     await wrapper.get<HTMLInputElement>('[aria-label="行政区顶面颜色"]').setValue("#112233");
     let themeEvents = wrapper.emitted("update:theme") ?? [];
     expect(themeEvents[themeEvents.length - 1]?.[0]).toMatchObject({
@@ -83,6 +92,33 @@ describe("MapMaterialTuningPanel", () => {
     expect(wrapper.text()).not.toContain("折射率 IOR");
     expect(wrapper.text()).not.toContain("金属度");
 
+    const defaultMarkerOpacityRow = wrapper.findAll(".material-tuning__row")
+      .find((row) => row.text().includes("默认透明度"));
+    expect(defaultMarkerOpacityRow).toBeDefined();
+    await defaultMarkerOpacityRow!.get('input[type="range"]').setValue("0.6");
+    tuningEvents = wrapper.emitted("update:tuning") ?? [];
+    expect(tuningEvents[tuningEvents.length - 1]?.[0]).toMatchObject({
+      institutionDefaultOpacity: 0.6,
+    });
+
+    const schoolCycleRow = wrapper.findAll(".material-tuning__row")
+      .find((row) => row.text().includes("学校轮播间隔"));
+    expect(schoolCycleRow).toBeDefined();
+    await schoolCycleRow!.get('input[type="range"]').setValue("6.5");
+    tuningEvents = wrapper.emitted("update:tuning") ?? [];
+    expect(tuningEvents[tuningEvents.length - 1]?.[0]).toMatchObject({
+      institutionSelectionCycleSeconds: 6.5,
+    });
+
+    const connectionOffsetRow = wrapper.findAll(".material-tuning__row")
+      .find((row) => row.text().includes("离地高度"));
+    expect(connectionOffsetRow).toBeDefined();
+    await connectionOffsetRow!.get('input[type="range"]').setValue("1.4");
+    tuningEvents = wrapper.emitted("update:tuning") ?? [];
+    expect(tuningEvents[tuningEvents.length - 1]?.[0]).toMatchObject({
+      connectionSurfaceOffset: 1.4,
+    });
+
     const towerOpacityRow = wrapper.findAll(".material-tuning__row")
       .find((row) => row.text().includes("锥体基础透明度"));
     expect(towerOpacityRow).toBeDefined();
@@ -109,7 +145,11 @@ describe("MapMaterialTuningPanel", () => {
     tuningEvents = wrapper.emitted("update:tuning") ?? [];
     expect(tuningEvents[tuningEvents.length - 1]?.[0]).toMatchObject({
       regionTerrainEmissiveIntensity: 0,
+      regionTerrainVariationStrength: 0.05,
       energyTowerBaseOpacity: 0.9,
+      institutionDefaultOpacity: 0.56,
+      institutionSelectionCycleSeconds: 5,
+      connectionSurfaceOffset: 2.2,
     });
     themeEvents = wrapper.emitted("update:theme") ?? [];
     expect(themeEvents[themeEvents.length - 1]?.[0]).toMatchObject({

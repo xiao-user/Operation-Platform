@@ -45,9 +45,16 @@ describe("RongchengThreeMap controls", () => {
     });
 
     expect(wrapper.find(".map-camera-control > span").exists()).toBe(false);
+    expect(wrapper.find(".map-layer-switch").exists()).toBe(false);
+    expect(wrapper.findAll(".map-camera-control > .map-layer-button")).toHaveLength(2);
     expect(wrapper.findAll(".map-camera-control button").map((button) => button.text()))
-      .toEqual(["学校网络", "能量锥峰", "重置视角"]);
-    await wrapper.get(".map-camera-control > button").trigger("click");
+      .toEqual(["学校网络", "能量锥峰", "重置视角", ""]);
+    expect(wrapper.get(".material-tuning__trigger").attributes("aria-label"))
+      .toBe("地图材质");
+    const resetButton = wrapper.findAll(".map-camera-control > button")
+      .find((button) => button.text() === "重置视角");
+    expect(resetButton).toBeDefined();
+    await resetButton!.trigger("click");
     expect(engineMocks.animateCameraView).toHaveBeenCalledWith({
       fov: 30,
       position: [34, -760, 520],

@@ -27,6 +27,8 @@ import {
   GroundGridLayer,
 } from "../rendering/ground-grid-layer";
 import {
+  dampInstitutionElevation,
+  institutionMarkerElevation,
   institutionRippleFrame,
   InstitutionLayer,
 } from "../rendering/institution-layer";
@@ -182,6 +184,37 @@ describe("regional map render budget", () => {
     expect(institutionRippleFrame(1, 0, tuning)).toEqual({ scale: 0, opacity: 0 });
   });
 
+  it("uses scope-aware marker heights and dampens selected-school transitions", () => {
+    expect(institutionMarkerElevation(
+      "primary",
+      false,
+      "district",
+      defaultMapVisualTuning,
+    )).toBe(24);
+    expect(institutionMarkerElevation(
+      "primary",
+      false,
+      "township",
+      defaultMapVisualTuning,
+    )).toBe(14);
+    expect(institutionMarkerElevation(
+      "primary",
+      true,
+      "township",
+      defaultMapVisualTuning,
+    )).toBeCloseTo(34.3);
+    expect(institutionMarkerElevation(
+      "bureau",
+      true,
+      "district",
+      defaultMapVisualTuning,
+    )).toBe(64);
+    const firstFrame = dampInstitutionElevation(14, 34.3, 1 / 60, 8);
+    expect(firstFrame).toBeGreaterThan(14);
+    expect(firstFrame).toBeLessThan(34.3);
+    expect(dampInstitutionElevation(34.299, 34.3, 1 / 60, 8)).toBe(34.3);
+  });
+
   it("anchors points and connections above the active focused surface", () => {
     const connectionRoot = new THREE.Group();
     const institutionRoot = new THREE.Group();
@@ -202,9 +235,12 @@ describe("regional map render budget", () => {
       ...defaultMapVisualTuning,
       institutionPointSize: 21,
       institutionEmphasisPointSize: 27,
+      institutionDefaultOpacity: 0.58,
+      institutionSelectedOpacity: 0.96,
       connectionBaseOpacity: 0.13,
       connectionFlowSpeed: 0.31,
-      connectionTailLength: 0.27,
+      connectionPulseWidth: 0.12,
+      connectionSurfaceOffset: 1.8,
     };
     const institutions = new InstitutionLayer(
       locations,
@@ -216,28 +252,121 @@ describe("regional map render budget", () => {
     );
     const connections = new ConnectionLayer(locations, projection, theme, materialTuning);
     const points: THREE.Points[] = [];
+    const stems: THREE.LineSegments[] = [];
     const labels: CSS2DObject[] = [];
     institutions.root.traverse((object) => {
       if (object instanceof THREE.Points) points.push(object);
+      if (object instanceof THREE.LineSegments) stems.push(object);
       if (object instanceof CSS2DObject) labels.push(object);
     });
 
     expect(points).toHaveLength(1);
+    expect(stems).toHaveLength(1);
+    expect(stems[0]?.geometry.getAttribute("position").count).toBe(locations.length * 2);
     expect(labels.length).toBeLessThanOrEqual(2);
     expect(connections.root.children).toHaveLength(2);
     const pointMaterial = points[0]?.material as THREE.ShaderMaterial;
-    expect(pointMaterial.uniforms.uPointSize?.value).toBe(21);
+    expect(pointMaterial.uniforms.uPointSize?.value).toBeCloseTo(
+      21 * defaultMapVisualTuning.institutionDistrictPointScale,
+    );
     expect(pointMaterial.uniforms.uEmphasisPointSize?.value).toBe(27);
+    expect(pointMaterial.uniforms.uBureauPointSize?.value)
+      .toBe(defaultMapVisualTuning.institutionBureauPointSize);
+    expect(pointMaterial.fragmentShader)
+      .toContain("float schoolRing = ring * threeSegmentMask");
+    expect(pointMaterial.fragmentShader).toContain("float bureauSignal = max");
+    expect(pointMaterial.uniforms.uDefaultOpacity?.value).toBe(0.58);
+    expect(pointMaterial.uniforms.uSelectedOpacity?.value).toBe(0.96);
+    const stemMaterial = stems[0]!.material as THREE.ShaderMaterial;
+    expect(stemMaterial.uniforms.uDefaultOpacity?.value).toBe(0.58);
+    expect(stemMaterial.uniforms.uSelectedOpacity?.value).toBe(0.96);
     const connectionBase = (connections.root.children[0] as THREE.LineSegments)
       .material as THREE.LineBasicMaterial;
     const connectionFlow = (connections.root.children[1] as THREE.LineSegments)
       .material as THREE.ShaderMaterial;
-    expect(connectionBase.opacity).toBeCloseTo(0.76 * 0.13);
+    expect(connectionBase.opacity).toBe(0);
     expect(connectionFlow.uniforms.speed?.value).toBe(0.31);
-    expect(connectionFlow.uniforms.tailLength?.value).toBe(0.27);
+    expect(connectionFlow.uniforms.pulseWidth?.value).toBe(0.12);
+    const connectionPositions = (connections.root.children[0] as THREE.LineSegments)
+      .geometry.getAttribute("position");
+    expect(connectionPositions.getZ(0)).toBeCloseTo(regionTopZ + 1.8);
+    connections.animate(1, 1 / 60);
+    expect(connectionBase.opacity).toBeGreaterThan(0);
+    expect(connectionBase.opacity).toBeLessThan(0.76 * 0.13);
+    connections.settle();
+    expect(connectionBase.opacity).toBeCloseTo(0.76 * 0.13);
 
     institutions.dispose();
     connections.dispose();
+  });
+
+  it("uses each theme's scatter color for selected school beacons", () => {
+    const locations = rongchengEducationLocations.slice(0, 3);
+    const selectedIndex = locations.findIndex((location) => location.type !== "bureau");
+    const selected = locations[selectedIndex]!;
+    const spectrum = getDigitalTwinMapTheme("spectrum");
+    const institutions = new InstitutionLayer(
+      locations,
+      projection,
+      spectrum,
+      selected.id,
+      1,
+      defaultMapVisualTuning,
+    );
+    const points = institutions.root.children.find(
+      (object): object is THREE.Points => object instanceof THREE.Points,
+    )!;
+    const colors = points.geometry.getAttribute("pointColor");
+    const expected = new THREE.Color(spectrum.scatter);
+
+    expect(colors.getX(selectedIndex)).toBeCloseTo(expected.r);
+    expect(colors.getY(selectedIndex)).toBeCloseTo(expected.g);
+    expect(colors.getZ(selectedIndex)).toBeCloseTo(expected.b);
+    institutions.dispose();
+  });
+
+  it("animates a selected school stem to its configured emphasized height", () => {
+    const locations = rongchengEducationLocations.slice(0, 3);
+    const institutions = new InstitutionLayer(
+      locations,
+      projection,
+      theme,
+      undefined,
+      1,
+      defaultMapVisualTuning,
+      "district",
+    );
+    const points = institutions.root.children.find(
+      (object): object is THREE.Points => object instanceof THREE.Points,
+    )!;
+    const pointPositions = points.geometry.getAttribute("position");
+    const schoolIndex = locations.findIndex((location) => location.type !== "bureau");
+    const school = locations[schoolIndex]!;
+    const baseZ = pointPositions.getZ(schoolIndex);
+    expect(baseZ).toBeCloseTo(
+      regionTopZ + defaultMapVisualTuning.institutionStemStartHeight,
+    );
+
+    institutions.settleElevations();
+    const settledBaseZ = pointPositions.getZ(schoolIndex);
+
+    institutions.setSelected(school.id, theme);
+    institutions.animate(1);
+    const transitioningZ = pointPositions.getZ(schoolIndex);
+    expect(transitioningZ).toBeGreaterThan(settledBaseZ);
+    expect(transitioningZ).toBeLessThan(
+      regionTopZ
+        + defaultMapVisualTuning.institutionDistrictStemHeight
+        * defaultMapVisualTuning.institutionSelectedStemHeightScale,
+    );
+
+    institutions.settleElevations();
+    expect(pointPositions.getZ(schoolIndex)).toBeCloseTo(
+      regionTopZ
+        + defaultMapVisualTuning.institutionDistrictStemHeight
+        * defaultMapVisualTuning.institutionSelectedStemHeightScale,
+    );
+    institutions.dispose();
   });
 
   it("renders energy towers as a depth-independent map overlay", () => {
@@ -539,6 +668,7 @@ describe("regional map render budget", () => {
       45.5,
     );
     expect(effects.root.children).toHaveLength(3);
+    expect(effects.root.renderOrder).toBeGreaterThan(40);
     effects.dispose();
   });
 
@@ -610,6 +740,7 @@ describe("regional map render budget", () => {
     const lineMinimumZs: number[] = [];
     const lineDepthTests: boolean[] = [];
     const sideDepthPrepasses: THREE.MeshBasicMaterial[] = [];
+    const surfaceOverlayDepthTests: boolean[] = [];
     regions.root.traverse((object) => {
       if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshStandardMaterial) {
         terrainMaterials.push(object.material);
@@ -617,6 +748,13 @@ describe("regional map render budget", () => {
         sideMaterials.push(object.material);
       } else if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshBasicMaterial) {
         basicOpacities.add(object.material.opacity);
+        if (
+          object.material.transparent
+          && object.material.opacity === 0
+          && object.material.side === THREE.DoubleSide
+        ) {
+          surfaceOverlayDepthTests.push(object.material.depthTest);
+        }
         if (object.material.opacity === materialTuning.regionBaseOpacity) {
           baseColors.add(object.material.color.getHexString());
           baseSides.add(object.material.side);
@@ -634,8 +772,11 @@ describe("regional map render budget", () => {
     });
     expect(terrainMaterials.every((material) => material.roughness === 0.94)).toBe(true);
     expect(terrainMaterials.every((material) => material.metalness === 0.03)).toBe(true);
-    expect(terrainMaterials.every((material) => material.color.getHexString() === "112233"))
-      .toBe(true);
+    const terrainColors = new Set(
+      terrainMaterials.map((material) => material.color.getHexString()),
+    );
+    expect(terrainColors.has("112233")).toBe(true);
+    expect(terrainColors.size).toBe(2);
     expect(terrainMaterials.every((material) => material.map === null)).toBe(true);
     expect(terrainMaterials.every((material) => material.normalMap === null)).toBe(true);
     expect(terrainMaterials.every((material) => material.roughnessMap === null)).toBe(true);
@@ -655,6 +796,8 @@ describe("regional map render budget", () => {
     expect(sideDepthPrepasses.every((material) => material.polygonOffset)).toBe(true);
     expect(sideDepthPrepasses.every((material) => material.polygonOffsetFactor > 0)).toBe(true);
     expect(sideDepthPrepasses.every((material) => material.polygonOffsetUnits > 0)).toBe(true);
+    expect(surfaceOverlayDepthTests.length).toBeGreaterThan(0);
+    expect(surfaceOverlayDepthTests.every(Boolean)).toBe(true);
     regions.applyTheme(getDigitalTwinMapTheme("spectrum"), materialTuning);
     expect(sideMaterials.every((material) => (
       material.uniforms.bottomColor?.value.getHexString() === "1fdde0"

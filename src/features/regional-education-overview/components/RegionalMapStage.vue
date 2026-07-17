@@ -25,6 +25,8 @@ const emit = defineEmits<{
   select: [location: EducationLocation];
   scopeChange: [state: MapState, locations: EducationLocation[]];
   "update:dataLayerMode": [mode: MapDataLayerMode];
+  "update:visualTuning": [tuning: MapVisualTuning];
+  "update:theme": [theme: DigitalTwinMapTheme];
 }>();
 
 interface MapRendererApi {
@@ -123,6 +125,8 @@ defineExpose({ focusLocation, goBack });
       @feature-select="focusRegion"
       @scope-back="goBack"
       @update:data-layer-mode="emit('update:dataLayerMode', $event)"
+      @update:visual-tuning="emit('update:visualTuning', $event)"
+      @update:theme="emit('update:theme', $event)"
     />
   </section>
 </template>

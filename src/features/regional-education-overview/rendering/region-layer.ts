@@ -60,7 +60,10 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
   private readonly baseMaterial: THREE.MeshBasicMaterial;
   private readonly sideDepthMaterial: THREE.MeshBasicMaterial;
   private readonly sideMaterial: THREE.ShaderMaterial;
-  private readonly terrainMaterial: THREE.MeshStandardMaterial;
+  private readonly terrainMaterials: readonly [
+    THREE.MeshStandardMaterial,
+    THREE.MeshStandardMaterial,
+  ];
   private readonly internalBoundaryMaterial: THREE.LineBasicMaterial;
   private readonly topContourMaterial: THREE.LineBasicMaterial;
   private focusFeatureCode?: string;
@@ -123,7 +126,7 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
         }
       `,
     }));
-    this.terrainMaterial = this.owner.material(new THREE.MeshStandardMaterial({
+    const createTerrainMaterial = () => this.owner.material(new THREE.MeshStandardMaterial({
       roughness: 0.94,
       metalness: 0.03,
       transparent: false,
@@ -132,6 +135,7 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
       alphaTest: 0.02,
       emissiveIntensity: tuning.regionTerrainEmissiveIntensity,
     }));
+    this.terrainMaterials = [createTerrainMaterial(), createTerrainMaterial()];
     this.internalBoundaryMaterial = this.owner.material(new THREE.LineBasicMaterial({
       transparent: true,
       depthTest: true,
@@ -186,7 +190,14 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
   }
 
   private build(mapState: MapState) {
-    for (const feature of mapState.geoData.features) {
+    for (const [featureIndex, feature] of mapState.geoData.features.entries()) {
+      const featureCode = feature.properties.code;
+      const numericSuffix = typeof featureCode === "string"
+        ? Number(featureCode.charAt(featureCode.length - 1))
+        : Number.NaN;
+      const terrainToneIndex = Number.isFinite(numericSuffix)
+        ? numericSuffix % 2
+        : featureIndex % 2;
       for (const polygon of polygonsOf(feature)) {
         const outerRing = polygon[0];
         const shape = this.projection.makeShape(polygon);
@@ -196,7 +207,6 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
         regionGroup.userData.targetBaseZ = 0;
         regionGroup.userData.targetScaleZ = 1;
         this.regionGroups.add(regionGroup);
-        const featureCode = feature.properties.code;
         if (typeof featureCode === "string") {
           const groups = this.regionGroupsByCode.get(featureCode) ?? [];
           groups.push(regionGroup);
@@ -212,7 +222,7 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
 
         const terrain = new THREE.Mesh(
           this.owner.geometry(new THREE.ShapeGeometry(shape)),
-          this.terrainMaterial,
+          this.terrainMaterials[terrainToneIndex],
         );
         terrain.position.z = topZ;
         terrain.userData.regionGroup = regionGroup;
@@ -225,7 +235,7 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
           opacity: 0,
           blending: THREE.AdditiveBlending,
           side: THREE.DoubleSide,
-          depthTest: false,
+          depthTest: true,
           depthWrite: false,
         }));
         highlightMaterial.userData.targetOpacity = 0;
@@ -241,7 +251,7 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
           transparent: true,
           opacity: 0,
           side: THREE.DoubleSide,
-          depthTest: false,
+          depthTest: true,
           depthWrite: false,
         }));
         inactiveOverlayMaterial.userData.targetOpacity = 0;
@@ -273,6 +283,11 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
       outline,
     );
     const regionTop = mapVisualColor(tuning, "regionTop", theme.topFill);
+    const baseTerrainColor = new THREE.Color(regionTop);
+    const variedTerrainColor = baseTerrainColor.clone()
+      .convertLinearToSRGB()
+      .lerp(new THREE.Color(1, 1, 1), tuning.regionTerrainVariationStrength)
+      .convertSRGBToLinear();
     const bottom = themeColor(
       mapVisualColor(tuning, "sideBottom", theme.sideBottom),
       regionTop,
@@ -287,16 +302,20 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
     this.sideMaterial.uniforms.bottomOpacity!.value = (
       bottom.opacity * tuning.regionSideBottomOpacityScale
     );
-    this.terrainMaterial.color.set(regionTop);
-    this.terrainMaterial.emissive.set(regionTop);
-    this.terrainMaterial.opacity = tuning.regionTerrainOpacity;
+    const terrainColors = [baseTerrainColor, variedTerrainColor] as const;
     const terrainTransparent = tuning.regionTerrainOpacity < 0.999;
-    if (this.terrainMaterial.transparent !== terrainTransparent) {
-      this.terrainMaterial.transparent = terrainTransparent;
-      this.terrainMaterial.needsUpdate = true;
+    for (const [index, material] of this.terrainMaterials.entries()) {
+      const color = terrainColors[index] ?? baseTerrainColor;
+      material.color.copy(color);
+      material.emissive.copy(color);
+      material.opacity = tuning.regionTerrainOpacity;
+      if (material.transparent !== terrainTransparent) {
+        material.transparent = terrainTransparent;
+        material.needsUpdate = true;
+      }
+      material.depthWrite = !terrainTransparent;
+      material.emissiveIntensity = tuning.regionTerrainEmissiveIntensity;
     }
-    this.terrainMaterial.depthWrite = !terrainTransparent;
-    this.terrainMaterial.emissiveIntensity = tuning.regionTerrainEmissiveIntensity;
     this.internalBoundaryMaterial.color.copy(internal.color);
     this.internalBoundaryMaterial.opacity = (
       internal.opacity * tuning.regionInternalBoundaryOpacityScale

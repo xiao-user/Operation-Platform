@@ -15,11 +15,15 @@
     <div ref="canvasHost" class="map-canvas-host" />
 
     <div class="map-camera-control" aria-label="地图视角与点位控制">
-      <div class="map-layer-switch" role="group" aria-label="地图数据图层">
-        <button type="button" :class="{ 'is-active': dataLayerMode === 'institutions' }" :aria-pressed="dataLayerMode === 'institutions'" @click="emit('update:dataLayerMode', 'institutions')">学校网络</button>
-        <button type="button" :class="{ 'is-active': dataLayerMode === 'energy-towers' }" :aria-pressed="dataLayerMode === 'energy-towers'" @click="emit('update:dataLayerMode', 'energy-towers')">能量锥峰</button>
-      </div>
+      <button type="button" class="map-layer-button" :class="{ 'is-active': dataLayerMode === 'institutions' }" :aria-pressed="dataLayerMode === 'institutions'" @click="emit('update:dataLayerMode', 'institutions')">学校网络</button>
+      <button type="button" class="map-layer-button" :class="{ 'is-active': dataLayerMode === 'energy-towers' }" :aria-pressed="dataLayerMode === 'energy-towers'" @click="emit('update:dataLayerMode', 'energy-towers')">能量锥峰</button>
       <button type="button" @click="resetCameraView">重置视角</button>
+      <MapMaterialTuningPanel
+        :tuning="visualTuning"
+        :theme="theme"
+        @update:tuning="emit('update:visualTuning', $event)"
+        @update:theme="emit('update:theme', $event)"
+      />
     </div>
 
   </div>
@@ -27,6 +31,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import MapMaterialTuningPanel from "./MapMaterialTuningPanel.vue";
 import type { MapState } from "../map-data-adapter";
 import type { DigitalTwinMapTheme } from "../map-themes";
 import type { MapVisualTuning } from "../rendering/map-visual-tuning";
@@ -53,6 +58,8 @@ const emit = defineEmits<{
   featureSelect: [feature: MapState["geoData"]["features"][number]];
   scopeBack: [];
   "update:dataLayerMode": [mode: MapDataLayerMode];
+  "update:visualTuning": [tuning: MapVisualTuning];
+  "update:theme": [theme: DigitalTwinMapTheme];
 }>();
 const canvasHost = ref<HTMLElement>();
 let engine: RegionalMapEngine | undefined;
@@ -174,12 +181,6 @@ onBeforeUnmount(() => {
   z-index: var(--dt-z-map-hud);
   display: flex;
   min-height: var(--dt-control-height);
-  border: var(--dt-border-width) solid var(--dt-color-border-subtle);
-  border-radius: var(--dt-radius-xs);
-  padding: var(--dt-space-1);
-  background: var(--dt-color-panel);
-  box-shadow: var(--dt-panel-shadow);
-  backdrop-filter: blur(var(--dt-panel-blur));
   align-items: center;
   gap: var(--dt-space-1);
   color: color-mix(in srgb, var(--map-label-text) 72%, transparent);
@@ -205,17 +206,8 @@ onBeforeUnmount(() => {
   border-color: var(--map-primary);
 }
 
-.map-layer-switch {
-  display: flex;
-  margin-right: var(--dt-space-2);
-  border: var(--dt-border-width) solid color-mix(in srgb, var(--map-primary) 24%, transparent);
-  border-radius: var(--dt-radius-xs);
-  padding: 2px;
-  background: color-mix(in srgb, var(--dt-color-canvas) 78%, transparent);
-}
-
-.map-layer-switch button { border-color: transparent; background: transparent; color: color-mix(in srgb, var(--map-label-text) 58%, transparent); }
-.map-layer-switch button.is-active { border-color: color-mix(in srgb, var(--map-primary) 62%, transparent); background: color-mix(in srgb, var(--map-primary) 14%, var(--dt-color-panel)); color: var(--map-primary); box-shadow: inset 0 0 var(--dt-space-3) color-mix(in srgb, var(--map-primary) 18%, transparent), 0 0 var(--dt-space-3) color-mix(in srgb, var(--map-primary) 10%, transparent); }
+.map-camera-control .map-layer-button { color: color-mix(in srgb, var(--map-label-text) 58%, transparent); }
+.map-camera-control .map-layer-button.is-active { border-color: color-mix(in srgb, var(--map-primary) 62%, transparent); background: color-mix(in srgb, var(--map-primary) 14%, var(--dt-color-panel)); color: var(--map-primary); box-shadow: inset 0 0 var(--dt-space-3) color-mix(in srgb, var(--map-primary) 18%, transparent), 0 0 var(--dt-space-3) color-mix(in srgb, var(--map-primary) 10%, transparent); }
 
 
 .map-canvas-host :deep(.map-region-label) {

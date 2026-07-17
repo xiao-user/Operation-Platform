@@ -82,6 +82,10 @@
   --dt-tuning-color-width: 30px;
   --dt-tuning-color-height: 22px;
   --dt-tuning-color-action-width: 62px;
+  --dt-ai-entry-width: 161px;
+  --dt-ai-entry-height: 56px;
+  --dt-ai-entry-bottom: 148px;
+  --dt-ai-entry-blur: 10px;
 
   /* Figma color primitives */
   --dt-color-canvas: #20232d;

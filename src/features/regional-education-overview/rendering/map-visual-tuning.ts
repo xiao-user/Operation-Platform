@@ -52,6 +52,7 @@ export interface MapVisualTuning {
   directionalLightIntensity: number;
   regionBaseOpacity: number;
   regionTerrainOpacity: number;
+  regionTerrainVariationStrength: number;
   regionTerrainEmissiveIntensity: number;
   regionSideTopOpacity: number;
   regionSideBottomOpacityScale: number;
@@ -105,6 +106,17 @@ export interface MapVisualTuning {
   energyTowerHoverOpacity: number;
   institutionPointSize: number;
   institutionEmphasisPointSize: number;
+  institutionBureauPointSize: number;
+  institutionDistrictPointScale: number;
+  institutionStemStartHeight: number;
+  institutionDistrictStemHeight: number;
+  institutionTownshipStemHeight: number;
+  institutionSelectedStemHeightScale: number;
+  institutionBureauStemHeight: number;
+  institutionStemTransitionRate: number;
+  institutionSelectionCycleSeconds: number;
+  institutionDefaultOpacity: number;
+  institutionSelectedOpacity: number;
   institutionHaloInnerRadius: number;
   institutionCoreRadius: number;
   institutionHaloOpacity: number;
@@ -116,9 +128,11 @@ export interface MapVisualTuning {
   connectionBaseOpacity: number;
   connectionFlowOpacityScale: number;
   connectionFlowSpeed: number;
-  connectionTailLength: number;
-  connectionCoreLength: number;
-  connectionTailStrength: number;
+  connectionPulseWidth: number;
+  connectionRevealRate: number;
+  connectionSurfaceOffset: number;
+  connectionMinimumArcHeight: number;
+  connectionArcHeightFactor: number;
   hudRingPlateOpacityScale: number;
   hudRingTickOpacityScale: number;
   hudRingRotationSpeed: number;
@@ -149,6 +163,7 @@ export const defaultMapVisualTuning: Readonly<MapVisualTuning> = Object.freeze({
   directionalLightIntensity: 2.2,
   regionBaseOpacity: 0.75,
   regionTerrainOpacity: 1,
+  regionTerrainVariationStrength: 0.05,
   regionTerrainEmissiveIntensity: 0,
   regionSideTopOpacity: 0.86,
   regionSideBottomOpacityScale: 1,
@@ -202,20 +217,33 @@ export const defaultMapVisualTuning: Readonly<MapVisualTuning> = Object.freeze({
   energyTowerHoverOpacity: 0.08,
   institutionPointSize: 20,
   institutionEmphasisPointSize: 30,
+  institutionBureauPointSize: 27,
+  institutionDistrictPointScale: 0.72,
+  institutionStemStartHeight: 1.5,
+  institutionDistrictStemHeight: 24,
+  institutionTownshipStemHeight: 14,
+  institutionSelectedStemHeightScale: 2.45,
+  institutionBureauStemHeight: 64,
+  institutionStemTransitionRate: 8,
+  institutionSelectionCycleSeconds: 5,
+  institutionDefaultOpacity: 0.56,
+  institutionSelectedOpacity: 1,
   institutionHaloInnerRadius: 0.49,
   institutionCoreRadius: 0.17,
   institutionHaloOpacity: 0.1,
   institutionEmphasisHaloOpacity: 0.22,
   institutionRippleOpacityScale: 3,
   institutionRippleSpeed: 0.24,
-  institutionRippleStartScale: 0,
-  institutionRippleScaleRange: 1.45,
-  connectionBaseOpacity: 0.3,
+  institutionRippleStartScale: 0.5,
+  institutionRippleScaleRange: 1.7,
+  connectionBaseOpacity: 0.2,
   connectionFlowOpacityScale: 3,
-  connectionFlowSpeed: 0.18,
-  connectionTailLength: 0.18,
-  connectionCoreLength: 0.025,
-  connectionTailStrength: 0.52,
+  connectionFlowSpeed: 0.14,
+  connectionPulseWidth: 0.02,
+  connectionRevealRate: 4.5,
+  connectionSurfaceOffset: 2.2,
+  connectionMinimumArcHeight: 40,
+  connectionArcHeightFactor: 0.018,
   hudRingPlateOpacityScale: 0.18,
   hudRingTickOpacityScale: 1,
   hudRingRotationSpeed: 0.18,

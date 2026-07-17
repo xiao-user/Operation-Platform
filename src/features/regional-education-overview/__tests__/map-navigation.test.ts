@@ -97,6 +97,7 @@ describe("digital twin map themes", () => {
     expect(getDigitalTwinMapTheme("royal")).toMatchObject({
       name: "星河钴蓝",
       primary: "#2B67D1",
+      scatter: "#2B67D1",
     });
     expect(getDigitalTwinMapTheme("spectrum")).toMatchObject({
       name: "多维光谱",
@@ -110,7 +111,7 @@ describe("digital twin map themes", () => {
       sideBottom: "#1FDDE0",
       sideTop: "#0071DB",
       labelPointer: "#2B67D1",
-      scatter: "#2B67D1",
+      scatter: "#00FFD5",
       ripple: "rgba(43,103,209,0.38)",
       flyLine: "rgba(120,168,255,0.78)",
       hudRing: "rgba(43,103,209,0.2)",

@@ -170,7 +170,7 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     labelBorder: "rgba(120,168,255,0.58)",
     labelGlow: "rgba(43,103,209,0.3)",
     labelPointer: "#2B67D1",
-    scatter: "#2B67D1",
+    scatter: "#00FFD5",
     ripple: "rgba(43,103,209,0.38)",
     flyLine: "rgba(120,168,255,0.78)",
     hudRing: "rgba(43,103,209,0.2)",

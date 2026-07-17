@@ -439,6 +439,7 @@ export class RegionalMapEngine {
       this.selectedLocationId,
       this.renderer.getPixelRatio(),
       this.visualTuning,
+      this.mapState.scope,
     );
     this.connectionLayer = new ConnectionLayer(
       this.locations,
@@ -457,6 +458,8 @@ export class RegionalMapEngine {
       activeSurfaceZ,
       institutionOverlayRenderOrder,
     );
+    if (!this.motionEnabled) this.institutionLayer.settleElevations();
+    if (!this.motionEnabled) this.connectionLayer.settle();
     this.mapRoot.add(this.connectionLayer.root, this.institutionLayer.root);
     return undefined;
   }
@@ -543,7 +546,7 @@ export class RegionalMapEngine {
     const controlsDirty = this.controls.update(delta);
     const time = timestamp / 1000;
     if (this.motionEnabled) {
-      this.connectionLayer?.animate(time);
+      this.connectionLayer?.animate(time, delta);
       this.effectsLayer?.animate(time, delta);
       this.institutionLayer?.animate(time);
       this.energyTowerLayer?.animate(delta);
@@ -759,8 +762,8 @@ export class RegionalMapEngine {
 
   setSelectedLocation(locationId?: string) {
     this.selectedLocationId = locationId;
-    this.institutionLayer?.setSelected(locationId, this.theme);
-    this.requestRender();
+    this.institutionLayer?.setSelected(locationId, this.theme, this.motionEnabled);
+    this.requestHighFrameRate(scopeFrameBoostDuration);
   }
 
   setDataLayerMode(mode: MapDataLayerMode) {

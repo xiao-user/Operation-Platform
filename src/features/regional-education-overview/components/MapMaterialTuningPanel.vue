@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { SlidersHorizontal } from "@lucide/vue";
 import {
   cloneDigitalTwinMapTheme,
   getDigitalTwinMapTheme,
@@ -37,6 +38,7 @@ const expanded = ref(false);
 
 const surfaceControls: NumericControl[] = [
   { key: "regionTerrainOpacity", label: "表面透明度", min: 0.05, max: 1, step: 0.01 },
+  { key: "regionTerrainVariationStrength", label: "分区明暗变化", min: 0, max: 0.15, step: 0.01 },
   { key: "regionTerrainEmissiveIntensity", label: "自发光", min: 0, max: 1.5, step: 0.01 },
 ];
 
@@ -56,6 +58,44 @@ const towerOpacityControls: NumericControl[] = [
   { key: "energyTowerGridOpacity", label: "网格透明增量", min: 0, max: 1, step: 0.01 },
   { key: "energyTowerHoverOpacity", label: "悬停透明增量", min: 0, max: 1, step: 0.01 },
   { key: "energyTowerGlowOpacity", label: "底部光晕透明度", min: 0, max: 1, step: 0.01 },
+];
+
+const schoolMarkerControls: NumericControl[] = [
+  { key: "institutionDefaultOpacity", label: "默认透明度", min: 0.1, max: 1, step: 0.01 },
+  { key: "institutionSelectedOpacity", label: "选中透明度", min: 0.1, max: 1, step: 0.01 },
+  { key: "institutionPointSize", label: "普通顶标尺寸", min: 8, max: 40, step: 1 },
+  { key: "institutionEmphasisPointSize", label: "选中顶标尺寸", min: 10, max: 50, step: 1 },
+  { key: "institutionDistrictPointScale", label: "区级顶标缩放", min: 0.4, max: 1, step: 0.01 },
+  { key: "institutionStemStartHeight", label: "立杆起点高度", min: 0, max: 6, step: 0.1 },
+  { key: "institutionDistrictStemHeight", label: "区级立杆高度", min: 4, max: 60, step: 1 },
+  { key: "institutionTownshipStemHeight", label: "子级立杆高度", min: 4, max: 40, step: 1 },
+  { key: "institutionSelectedStemHeightScale", label: "选中高度倍数", min: 1, max: 3, step: 0.05 },
+  { key: "institutionStemTransitionRate", label: "高度生长速度", min: 1, max: 16, step: 0.5 },
+  { key: "institutionSelectionCycleSeconds", label: "学校轮播间隔", min: 1, max: 15, step: 0.5 },
+  { key: "institutionHaloInnerRadius", label: "顶标光晕半径", min: 0.2, max: 0.5, step: 0.01 },
+  { key: "institutionCoreRadius", label: "顶标核心半径", min: 0.05, max: 0.3, step: 0.01 },
+  { key: "institutionHaloOpacity", label: "默认光晕透明度", min: 0, max: 1, step: 0.01 },
+  { key: "institutionEmphasisHaloOpacity", label: "选中光晕透明度", min: 0, max: 1, step: 0.01 },
+];
+
+const bureauMarkerControls: NumericControl[] = [
+  { key: "institutionBureauPointSize", label: "教育局顶标尺寸", min: 12, max: 60, step: 1 },
+  { key: "institutionBureauStemHeight", label: "教育局立杆高度", min: 10, max: 80, step: 1 },
+  { key: "institutionRippleOpacityScale", label: "地面涟漪透明度", min: 0, max: 5, step: 0.1 },
+  { key: "institutionRippleSpeed", label: "地面涟漪速度", min: 0.05, max: 1, step: 0.01 },
+  { key: "institutionRippleStartScale", label: "地面涟漪起始尺寸", min: 0, max: 1, step: 0.05 },
+  { key: "institutionRippleScaleRange", label: "地面涟漪扩散范围", min: 0.2, max: 3, step: 0.05 },
+];
+
+const connectionControls: NumericControl[] = [
+  { key: "connectionSurfaceOffset", label: "离地高度", min: 0.2, max: 10, step: 0.1 },
+  { key: "connectionMinimumArcHeight", label: "最小弧高", min: 0, max: 60, step: 0.5 },
+  { key: "connectionArcHeightFactor", label: "距离弧高系数", min: 0, max: 0.08, step: 0.001 },
+  { key: "connectionBaseOpacity", label: "基础线透明度", min: 0, max: 1, step: 0.01 },
+  { key: "connectionFlowOpacityScale", label: "流动光点透明度", min: 0, max: 3, step: 0.05 },
+  { key: "connectionFlowSpeed", label: "流动速度", min: 0.02, max: 1, step: 0.01 },
+  { key: "connectionPulseWidth", label: "流动光点长度", min: 0.02, max: 0.3, step: 0.005 },
+  { key: "connectionRevealRate", label: "飞线淡入速度", min: 1, max: 12, step: 0.5 },
 ];
 
 type PaletteColorKey = "base" | "low" | "medium" | "high";
@@ -133,10 +173,11 @@ function resetMaterialTuning() {
       class="material-tuning__trigger"
       :aria-expanded="expanded"
       aria-controls="map-material-tuning-panel"
+      aria-label="地图材质"
+      title="地图材质"
       @click="expanded = !expanded"
     >
-      <span class="material-tuning__signal" aria-hidden="true" />
-      地图材质
+      <SlidersHorizontal :size="16" :stroke-width="1.8" aria-hidden="true" />
     </button>
 
     <aside
@@ -226,6 +267,33 @@ function resetMaterialTuning() {
         </section>
 
         <section>
+          <h3>学校立标</h3>
+          <label v-for="control in schoolMarkerControls" :key="control.key" class="material-tuning__row">
+            <span>{{ control.label }}</span>
+            <input type="range" :min="control.min" :max="control.max" :step="control.step" :value="tuning[control.key]" @input="updateNumber(control.key, $event)">
+            <output>{{ Number(tuning[control.key]).toFixed(2) }}</output>
+          </label>
+        </section>
+
+        <section>
+          <h3>教育局信标</h3>
+          <label v-for="control in bureauMarkerControls" :key="control.key" class="material-tuning__row">
+            <span>{{ control.label }}</span>
+            <input type="range" :min="control.min" :max="control.max" :step="control.step" :value="tuning[control.key]" @input="updateNumber(control.key, $event)">
+            <output>{{ Number(tuning[control.key]).toFixed(2) }}</output>
+          </label>
+        </section>
+
+        <section>
+          <h3>学校飞线</h3>
+          <label v-for="control in connectionControls" :key="control.key" class="material-tuning__row">
+            <span>{{ control.label }}</span>
+            <input type="range" :min="control.min" :max="control.max" :step="control.step" :value="tuning[control.key]" @input="updateNumber(control.key, $event)">
+            <output>{{ Number(tuning[control.key]).toFixed(3) }}</output>
+          </label>
+        </section>
+
+        <section>
           <h3>锥峰透明度</h3>
           <label v-for="control in towerOpacityControls" :key="control.key" class="material-tuning__row">
             <span>{{ control.label }}</span>
@@ -268,9 +336,9 @@ function resetMaterialTuning() {
 </template>
 
 <style scoped>
-.material-tuning { position: absolute; left: var(--dt-map-hud-left); bottom: calc(var(--dt-statusbar-height) + 54px); z-index: calc(var(--dt-z-hud) + 2); pointer-events: auto; }
-.material-tuning__trigger { display: inline-flex; height: var(--dt-control-height); border: var(--dt-border-width) solid color-mix(in srgb, var(--hud-primary) 38%, transparent); border-radius: var(--dt-radius-xs); padding: 0 var(--dt-space-3); background: color-mix(in srgb, var(--dt-color-canvas) 92%, transparent); box-shadow: var(--dt-panel-shadow); align-items: center; gap: var(--dt-space-2); color: var(--dt-color-text); font-size: var(--dt-font-size-xs); letter-spacing: var(--dt-letter-spacing-label); cursor: pointer; backdrop-filter: blur(var(--dt-panel-blur)); }
-.material-tuning__signal { width: 6px; height: 6px; border-radius: 50%; background: var(--hud-primary); box-shadow: 0 0 8px var(--hud-primary); }
+.material-tuning { position: relative; z-index: calc(var(--dt-z-hud) + 2); flex: 0 0 auto; pointer-events: auto; }
+.material-tuning__trigger { display: inline-grid; box-sizing: border-box; width: var(--dt-control-height); height: var(--dt-control-height); min-height: var(--dt-control-height); border: var(--dt-border-width) solid var(--dt-color-border-muted); border-radius: var(--dt-radius-xs); padding: 0; background: var(--dt-color-panel-soft); box-shadow: inset 0 0 var(--dt-space-3) color-mix(in srgb, var(--hud-primary) 8%, transparent); color: var(--dt-color-text); cursor: pointer; place-items: center; }
+.material-tuning__trigger:hover { border-color: var(--hud-primary); }
 .material-tuning.is-expanded .material-tuning__trigger { border-color: var(--hud-primary); }
 .material-tuning__panel { position: absolute; bottom: calc(100% + var(--dt-space-2)); left: 0; width: var(--dt-tuning-panel-width); max-height: var(--dt-tuning-panel-max-height); overflow: hidden; border: var(--dt-border-width) solid color-mix(in srgb, var(--hud-primary) 28%, transparent); border-radius: var(--dt-radius-xs); background: color-mix(in srgb, var(--dt-color-canvas) 94%, transparent); box-shadow: 0 24px 64px rgb(0 0 0 / 42%), inset 0 1px color-mix(in srgb, var(--hud-primary) 22%, transparent); backdrop-filter: blur(18px); }
 .material-tuning__panel header { display: flex; min-height: 52px; border-bottom: var(--dt-border-width) solid var(--dt-color-line-soft); padding: var(--dt-space-3); align-items: center; justify-content: space-between; }
