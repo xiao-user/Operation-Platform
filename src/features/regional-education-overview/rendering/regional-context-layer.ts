@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import type { GeoFeatureCollection, Position } from "../geo";
 import type { DigitalTwinMapTheme } from "../map-themes";
+import type { TuningAwareMapSceneLayer } from "./map-scene-layer";
 import type { MapProjection } from "./map-projection";
 import { featureCenter, polygonsOf } from "./map-projection";
 import type { MapVisualTuning } from "./map-visual-tuning";
@@ -10,7 +11,7 @@ import { ResourceOwner } from "./resource-owner";
 
 const contextZ = 12;
 
-export class RegionalContextLayer {
+export class RegionalContextLayer implements TuningAwareMapSceneLayer {
   readonly root = new THREE.Group();
   private readonly owner = new ResourceOwner();
   private readonly labelElements = new Set<HTMLElement>();
@@ -76,10 +77,20 @@ export class RegionalContextLayer {
   }
 
   applyTheme(theme: DigitalTwinMapTheme, tuning: MapVisualTuning) {
-    this.fillMaterial.color.set(mapVisualColor(tuning, "contextFill", theme.labelText));
-    this.fillMaterial.opacity = tuning.contextFillOpacity;
+    const transparent = theme.contextFillOpacity < 0.999;
+    if (this.fillMaterial.transparent !== transparent) {
+      this.fillMaterial.transparent = transparent;
+      this.fillMaterial.needsUpdate = true;
+    }
+    this.fillMaterial.depthWrite = !transparent;
+    this.fillMaterial.color.set(theme.contextFill);
+    this.fillMaterial.opacity = theme.contextFillOpacity;
     this.lineMaterial.color.set(mapVisualColor(tuning, "contextLine", theme.labelText));
     this.lineMaterial.opacity = tuning.contextLineOpacity;
+  }
+
+  applyTuning(theme: DigitalTwinMapTheme, tuning: MapVisualTuning) {
+    this.applyTheme(theme, tuning);
   }
 
   dispose() {

@@ -4,7 +4,7 @@ import { pageRegistryByKey } from "@/config/page-registry";
 import { resolveFirstTarget } from "@/features/menu-config/menu-tree";
 import type { MenuTreeNode } from "@/features/menu-config/types";
 import { workbenchDataSource } from "@/features/workbench/mock-workbench-data-source";
-import { workbenchLayoutRepository } from "@/features/workbench/local-storage-workbench-layout-repository";
+import { operationPlatformPersistence } from "@/features/persistence/runtime-operation-platform-persistence";
 import {
   cloneWorkbenchLayout,
   createDefaultWorkbenchLayout,
@@ -114,7 +114,7 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     const nextProfile = resolveWorkbenchProfile(roleIds);
     const nextContext: WorkbenchLayoutContext = { tenant, userId, profile: nextProfile };
     const nextTemplate = getWorkbenchTemplate(tenant.type, nextProfile);
-    const result = workbenchLayoutRepository.list(nextContext, nextTemplate);
+    const result = operationPlatformPersistence.loadWorkbenchLayout(nextContext, nextTemplate);
     context.value = { ...nextContext, tenant: { ...tenant } };
     template.value = nextTemplate;
     savedLayout.value = result.layout;
@@ -142,21 +142,19 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     isEditing.value = false;
   }
 
-  function saveEditing() {
+  async function saveEditing() {
     const loaded = requireLoaded();
     const draft = requireDraft();
     const defaultLayout = createDefaultWorkbenchLayout(loaded.context, loaded.template);
-    if (layoutsEqual(draft, defaultLayout)) {
-      savedLayout.value = workbenchLayoutRepository.reset(loaded.context, loaded.template);
-      hasOverride.value = false;
-    } else {
-      savedLayout.value = workbenchLayoutRepository.replace(
+    const isDefault = layoutsEqual(draft, defaultLayout);
+    savedLayout.value = isDefault
+      ? await operationPlatformPersistence.resetWorkbenchLayout(loaded.context, loaded.template)
+      : await operationPlatformPersistence.saveWorkbenchLayout(
         loaded.context,
         loaded.template,
         draft,
       );
-      hasOverride.value = true;
-    }
+    hasOverride.value = !isDefault;
     recoveryNotice.value = null;
     draftLayout.value = null;
     isEditing.value = false;

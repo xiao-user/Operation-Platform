@@ -309,7 +309,7 @@ describe("navigation store", () => {
     expect(store.deepMenus.map((node) => node.name)).toEqual(["班牌列表"]);
   });
 
-  it("uses the selected active role instead of merging all member roles", () => {
+  it("uses the selected active role instead of merging all member roles", async () => {
     const records = tenantMenuRepository.list(schoolA).records;
     const page = records.find((record) => record.name === "班牌列表")!;
     const leafIds = records
@@ -354,7 +354,7 @@ describe("navigation store", () => {
     expect(store.activeRoleRecord?.id).toBe(ADMIN_ROLE_ID);
     expect(store.moduleNodes.length).toBeGreaterThan(1);
 
-    userStore.setActiveRoleForTenant(schoolA.id, STAFF_ROLE_ID);
+    await userStore.setActiveRoleForTenant(schoolA.id, STAFF_ROLE_ID);
 
     expect(store.activeRoleRecord?.id).toBe(STAFF_ROLE_ID);
     expect(store.moduleNodes.map((node) => node.name)).toEqual(["平安校园"]);

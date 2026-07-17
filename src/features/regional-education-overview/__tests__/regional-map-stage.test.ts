@@ -5,6 +5,7 @@ import { rongchengEducationLocations } from "../education-locations";
 import RegionalMapStage from "../components/RegionalMapStage.vue";
 import { initialMapState } from "../map-data-adapter";
 import { getDigitalTwinMapTheme } from "../map-themes";
+import { defaultMapVisualTuning } from "../rendering/map-visual-tuning";
 import type { EducationLocation, MapCameraView } from "../types";
 
 const parentCamera: MapCameraView = {
@@ -32,6 +33,7 @@ describe("RegionalMapStage", () => {
         locations: rongchengEducationLocations,
         theme: getDigitalTwinMapTheme("lime"),
         dataLayerMode: "institutions",
+        visualTuning: defaultMapVisualTuning,
       },
       global: { stubs: { RongchengThreeMap: rendererStub } },
     });
@@ -69,6 +71,7 @@ describe("RegionalMapStage", () => {
         locations: rongchengEducationLocations,
         theme: getDigitalTwinMapTheme("lime"),
         dataLayerMode: "institutions",
+        visualTuning: defaultMapVisualTuning,
       },
       global: {
         stubs: { RongchengThreeMap: rendererStub },
@@ -128,6 +131,7 @@ describe("RegionalMapStage", () => {
         locations: rongchengEducationLocations,
         theme: getDigitalTwinMapTheme("lime"),
         dataLayerMode: "institutions",
+        visualTuning: defaultMapVisualTuning,
       },
       global: { stubs: { RongchengThreeMap: rendererStub } },
     });

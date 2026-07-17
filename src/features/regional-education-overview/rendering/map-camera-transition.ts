@@ -21,6 +21,8 @@ export interface MapCameraFraming {
   y: number;
 }
 
+export type MapCameraTransitionStatus = "completed" | "interrupted";
+
 interface MapCameraTransitionOptions {
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
@@ -70,11 +72,11 @@ export class MapCameraTransition {
     view: MapCameraView,
     framing: MapCameraFraming,
     motionEnabled: boolean,
-  ): Promise<void> {
+  ): Promise<MapCameraTransitionStatus> {
     this.cancel();
     if (!motionEnabled) {
       this.apply(view, framing);
-      return Promise.resolve();
+      return Promise.resolve("completed");
     }
 
     const { camera, controls, getFraming } = this.options;
@@ -93,10 +95,10 @@ export class MapCameraTransition {
     const duration = digitalTwinMotion.cameraDuration;
     this.options.requestHighFrameRate(duration * 1000 + 200);
     return new Promise((resolve) => {
-      const finish = () => {
+      const finish = (status: MapCameraTransitionStatus) => {
         if (this.tween === tween) this.tween = undefined;
         this.options.requestRender();
-        resolve();
+        resolve(status);
       };
       const tween = gsap.to(values, {
         cameraX: view.position[0],
@@ -112,8 +114,8 @@ export class MapCameraTransition {
         ease: digitalTwinMotion.cameraEase,
         overwrite: true,
         onUpdate: () => this.applyValues(values),
-        onComplete: finish,
-        onInterrupt: finish,
+        onComplete: () => finish("completed"),
+        onInterrupt: () => finish("interrupted"),
       });
       this.tween = tween;
     });

@@ -41,8 +41,9 @@ describe("MapCameraTransition", () => {
   it("applies a reduced-motion view atomically", async () => {
     const context = createTransition();
 
-    await context.transition.animate(targetView, { x: -108, y: -30 }, false);
+    const completion = context.transition.animate(targetView, { x: -108, y: -30 }, false);
 
+    await expect(completion).resolves.toBe("completed");
     expect(context.transition.getView()).toEqual(targetView);
     expect(context.getFraming()).toEqual({ x: -108, y: -30 });
     expect(context.requestHighFrameRate).not.toHaveBeenCalled();
@@ -55,7 +56,22 @@ describe("MapCameraTransition", () => {
     expect(context.getFraming()).toEqual({ x: 12, y: -8 });
     context.transition.cancel();
 
-    await expect(completion).resolves.toBeUndefined();
+    await expect(completion).resolves.toBe("interrupted");
     expect(context.requestHighFrameRate).toHaveBeenCalledOnce();
+  });
+
+  it("marks an older transition as interrupted when a newer transition replaces it", async () => {
+    const context = createTransition();
+    const first = context.transition.animate(targetView, { x: -108, y: -30 }, true);
+
+    const second = context.transition.animate({
+      fov: 32,
+      position: [10, -600, 420],
+      target: [-20, 12, 8],
+    }, { x: -80, y: 20 }, true);
+
+    await expect(first).resolves.toBe("interrupted");
+    context.transition.cancel();
+    await expect(second).resolves.toBe("interrupted");
   });
 });

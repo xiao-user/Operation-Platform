@@ -29,14 +29,14 @@ describe("tenant member store", () => {
     setActivePinia(createPinia());
   });
 
-  it("creates members with multiple roles and updates the current user role source", () => {
+  it("creates members with multiple roles and updates the current user role source", async () => {
     const userStore = useUserStore();
     userStore.replaceTenants([school, ...userStore.tenantList]);
     tenantMemberRepository.replace(school, []);
     const store = useTenantMemberStore();
     store.load(school);
 
-    store.createMember({
+    await store.createMember({
       name: userStore.userInfo.name,
       account: "current-account",
       phone: "",
@@ -54,7 +54,7 @@ describe("tenant member store", () => {
     expect(userStore.role).toBe(ADMIN_ROLE_ID);
     expect(userStore.isAdmin).toBe(true);
 
-    userStore.setActiveRoleForTenant(school.id, STAFF_ROLE_ID);
+    await userStore.setActiveRoleForTenant(school.id, STAFF_ROLE_ID);
 
     expect(userStore.role).toBe(STAFF_ROLE_ID);
     expect(userStore.isAdmin).toBe(false);
@@ -65,7 +65,7 @@ describe("tenant member store", () => {
     ).toBe(STAFF_ROLE_ID);
   });
 
-  it("falls back when the stored active role is no longer effective", () => {
+  it("falls back when the stored active role is no longer effective", async () => {
     const userStore = useUserStore();
     userStore.replaceTenants([school, ...userStore.tenantList]);
     tenantMemberRepository.replace(school, [
@@ -75,7 +75,7 @@ describe("tenant member store", () => {
       },
     ]);
     userStore.switchTenant(school.id);
-    userStore.setActiveRoleForTenant(school.id, STAFF_ROLE_ID);
+    await userStore.setActiveRoleForTenant(school.id, STAFF_ROLE_ID);
     const configuration = createDefaultTenantConfiguration(school);
     tenantConfigurationRepository.replace(school, {
       ...configuration,
@@ -119,7 +119,7 @@ describe("role references from members", () => {
     setActivePinia(createPinia());
   });
 
-  it("blocks disabling or deleting a role used by enabled members", () => {
+  it("blocks disabling or deleting a role used by enabled members", async () => {
     const configuration = createDefaultTenantConfiguration(school);
     const customRole = {
       ...configuration.roles[1]!,
@@ -137,7 +137,7 @@ describe("role references from members", () => {
     ]);
     const memberStore = useTenantMemberStore();
     memberStore.load(school);
-    memberStore.createMember({
+    await memberStore.createMember({
       name: "审核成员",
       account: "auditor",
       phone: "",

@@ -10,7 +10,7 @@
       />
 
       <section class="member-toolbar">
-        <el-input v-model="keyword" clearable placeholder="搜索姓名、账号或手机号" />
+        <el-input v-model="keyword" clearable :placeholder="searchPlaceholder" />
         <el-select v-model="statusFilter" placeholder="全部状态">
           <el-option label="全部状态" value="" />
           <el-option label="启用" value="enabled" />
@@ -39,7 +39,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="account" label="账号" min-width="150" />
+        <el-table-column prop="account" :label="accountLabel" min-width="190" />
         <el-table-column prop="phone" label="手机号" min-width="140" />
         <el-table-column label="角色" min-width="220">
           <template #default="{ row }">
@@ -79,8 +79,12 @@
       <el-form-item label="姓名" required>
         <el-input v-model="draft.name" maxlength="20" placeholder="请输入成员姓名" />
       </el-form-item>
-      <el-form-item label="账号" required>
-        <el-input v-model="draft.account" maxlength="32" placeholder="用于本地 demo 的账号标识" />
+      <el-form-item :label="accountLabel" required>
+        <el-input
+          v-model="draft.account"
+          :maxlength="memberAccountKind === 'email' ? 254 : 32"
+          :placeholder="accountPlaceholder"
+        />
       </el-form-item>
       <el-form-item label="手机号">
         <el-input v-model="draft.phone" maxlength="20" placeholder="请输入手机号" />
@@ -134,7 +138,7 @@ const emit = defineEmits<{
 const router = useRouter();
 const navigationStore = useNavigationStore();
 const memberStore = useTenantMemberStore();
-const { members, roleOptions, recoveryNotice } = storeToRefs(memberStore);
+const { members, roleOptions, recoveryNotice, memberAccountKind } = storeToRefs(memberStore);
 
 const keyword = ref("");
 const statusFilter = ref<"" | "enabled" | "disabled">("");
@@ -156,6 +160,17 @@ const visible = computed({
 });
 const drawerTitle = computed(() =>
   props.tenant ? `${props.tenant.name} · 成员管理` : "成员管理",
+);
+const accountLabel = computed(() => memberAccountKind.value === "email" ? "登录邮箱" : "账号");
+const accountPlaceholder = computed(() =>
+  memberAccountKind.value === "email"
+    ? "请输入已在 Supabase Auth 创建的邮箱"
+    : "用于本地 demo 的账号标识",
+);
+const searchPlaceholder = computed(() =>
+  memberAccountKind.value === "email"
+    ? "搜索姓名、登录邮箱或手机号"
+    : "搜索姓名、账号或手机号",
 );
 const editingMember = computed(() =>
   editingMemberId.value
@@ -209,8 +224,8 @@ async function validateCurrentRouteAfterMemberChange() {
 
 async function handleSave() {
   try {
-    if (editingMemberId.value) memberStore.updateMember(editingMemberId.value, draft);
-    else memberStore.createMember(draft);
+    if (editingMemberId.value) await memberStore.updateMember(editingMemberId.value, draft);
+    else await memberStore.createMember(draft);
     dialogVisible.value = false;
     await validateCurrentRouteAfterMemberChange();
     ElMessage.success("成员已保存");
@@ -221,7 +236,7 @@ async function handleSave() {
 
 async function handleEnabledChange(memberId: string, enabled: boolean) {
   try {
-    memberStore.setMemberEnabled(memberId, enabled);
+    await memberStore.setMemberEnabled(memberId, enabled);
     await validateCurrentRouteAfterMemberChange();
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "成员状态更新失败");
@@ -239,7 +254,7 @@ async function handleRemove(member: TenantMemberRecord) {
     return;
   }
   try {
-    memberStore.removeMember(member.id);
+    await memberStore.removeMember(member.id);
     await validateCurrentRouteAfterMemberChange();
     ElMessage.success("成员已删除");
   } catch (error) {

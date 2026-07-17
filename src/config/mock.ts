@@ -5,8 +5,9 @@ import type { TenantInfo, UserInfo } from "@/types/user";
 // ==========================================
 export const MOCK_USER_INFO: UserInfo = {
   id: "user-demo",
-  name: "罗吾航",
-  initials: "吾航",
+  email: "luowuhang@example.local",
+  name: "罗吴航",
+  initials: "吴航",
   platformAdmin: false,
   tenantRoleIds: {
     "school-001": "admin",

@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { gsap } from "gsap";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import DigitalTwinStatusBar from "@/features/regional-education-overview/components/DigitalTwinStatusBar.vue";
 import DigitalTwinTopbar from "@/features/regional-education-overview/components/DigitalTwinTopbar.vue";
 import LocationProfilePanel from "@/features/regional-education-overview/components/LocationProfilePanel.vue";
+import MapMaterialTuningPanel from "@/features/regional-education-overview/components/MapMaterialTuningPanel.vue";
 import RegionalMapStage from "@/features/regional-education-overview/components/RegionalMapStage.vue";
 import RegionalOverviewPanel from "@/features/regional-education-overview/components/RegionalOverviewPanel.vue";
 import { rongchengEducationLocations } from "@/features/regional-education-overview/education-locations";
 import { initialMapState } from "@/features/regional-education-overview/map-data-adapter";
 import type { MapState } from "@/features/regional-education-overview/map-data-adapter";
 import {
+  cloneDigitalTwinMapTheme,
   digitalTwinMapThemes,
   getDigitalTwinMapTheme,
 } from "@/features/regional-education-overview/map-themes";
@@ -20,10 +23,17 @@ import type {
   MapDataLayerMode,
 } from "@/features/regional-education-overview/types";
 import { digitalTwinMotion } from "@/features/regional-education-overview/motion";
+import {
+  cloneMapVisualTuning,
+  defaultMapVisualTuning,
+} from "@/features/regional-education-overview/rendering/map-visual-tuning";
 import { useUserStore } from "@/stores/user";
+import { useNavigationStore } from "@/stores/navigation";
 import "@/styles/digital-twin-design-system.css";
 
 const themeStorageKey = "operation-platform:regional-education-overview:theme:v1";
+const router = useRouter();
+const navigationStore = useNavigationStore();
 const userStore = useUserStore();
 const pageRoot = ref<HTMLElement>();
 const mapStage = ref<InstanceType<typeof RegionalMapStage>>();
@@ -31,6 +41,7 @@ const selectedLocation = ref<EducationLocation | undefined>(rongchengEducationLo
 const activeLocations = ref<EducationLocation[]>([...rongchengEducationLocations]);
 const activeMapState = ref<MapState>(initialMapState);
 const dataLayerMode = ref<MapDataLayerMode>("institutions");
+const mapVisualTuning = ref(cloneMapVisualTuning(defaultMapVisualTuning));
 const now = ref(new Date());
 const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
   year: "numeric",
@@ -56,7 +67,11 @@ function restoreThemeId(): DigitalTwinMapTheme["id"] {
 }
 
 const activeThemeId = ref<DigitalTwinMapTheme["id"]>(restoreThemeId());
-const activeTheme = computed(() => getDigitalTwinMapTheme(activeThemeId.value));
+const themeDrafts = ref<Partial<Record<DigitalTwinMapTheme["id"], DigitalTwinMapTheme>>>({});
+const activeTheme = computed(() => themeDrafts.value[activeThemeId.value]
+  ?? getDigitalTwinMapTheme(activeThemeId.value));
+const availableThemes = computed(() => digitalTwinMapThemes.map((theme) =>
+  themeDrafts.value[theme.id] ?? theme));
 const pageThemeStyle = computed(() => ({
   "--hud-primary": activeTheme.value.primary,
   "--hud-accent-strong": activeTheme.value.outline,
@@ -83,6 +98,13 @@ function selectLocation(location: EducationLocation) {
   selectedLocation.value = location;
 }
 
+function updateActiveTheme(theme: DigitalTwinMapTheme) {
+  themeDrafts.value = {
+    ...themeDrafts.value,
+    [theme.id]: cloneDigitalTwinMapTheme(theme),
+  };
+}
+
 function navigateToSchool(location: EducationLocation) {
   void mapStage.value?.focusLocation(location);
 }
@@ -102,6 +124,20 @@ function handleScopeChange(state: MapState, locations: EducationLocation[]) {
 
 function returnToParentScope() {
   void mapStage.value?.goBack();
+}
+
+async function switchActiveRole(roleId: string) {
+  if (roleId === userStore.role) return;
+  await userStore.setActiveRoleForTenant(userStore.currentTenant.id, roleId);
+  await navigationStore.ensureValidCurrentRoute(router);
+}
+
+async function exitStandalonePage() {
+  if (window.opener) {
+    window.close();
+    return;
+  }
+  await router.push("/workbench");
 }
 
 watch(activeThemeId, (themeId) => {
@@ -171,6 +207,7 @@ onBeforeUnmount(() => {
       :selected-location-id="selectedLocation?.id"
       :theme="activeTheme"
       :data-layer-mode="dataLayerMode"
+      :visual-tuning="mapVisualTuning"
       @select="selectLocation"
       @scope-change="handleScopeChange"
       @update:data-layer-mode="dataLayerMode = $event"
@@ -179,11 +216,16 @@ onBeforeUnmount(() => {
     <div class="hud-layer">
       <DigitalTwinTopbar
         :tenant-name="userStore.currentTenant.name"
+        :user-name="userStore.userInfo.name"
+        :active-role-id="navigationStore.activeRoleRecord?.id"
+        :roles="navigationStore.availableRoleRecords"
         :formatted-date="formattedDate"
         :formatted-time="formattedTime"
-        :themes="digitalTwinMapThemes"
+        :themes="availableThemes"
         :active-theme-id="activeThemeId"
         @theme-select="activeThemeId = $event"
+        @role-select="switchActiveRole"
+        @exit="exitStandalonePage"
       />
 
       <div class="hud-content">
@@ -206,6 +248,13 @@ onBeforeUnmount(() => {
           @school-navigate="navigateToSchool"
         />
       </div>
+
+      <MapMaterialTuningPanel
+        :tuning="mapVisualTuning"
+        :theme="activeTheme"
+        @update:tuning="mapVisualTuning = $event"
+        @update:theme="updateActiveTheme"
+      />
 
       <DigitalTwinStatusBar
         :code="activeMapState.code"

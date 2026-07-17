@@ -18,7 +18,12 @@ const emit = defineEmits<{
       :key="theme.id"
       type="button"
       :class="{ 'is-active': theme.id === activeThemeId }"
-      :style="{ '--theme-swatch': theme.primary }"
+      :style="{
+        '--theme-swatch': theme.primary,
+        '--theme-swatch-fill': theme.swatches
+          ? `conic-gradient(${theme.swatches.join(',')})`
+          : theme.primary,
+      }"
       :aria-label="`切换至${theme.name}`"
       :aria-pressed="theme.id === activeThemeId"
       :title="`${theme.name} · ${theme.description}`"
@@ -39,6 +44,7 @@ const emit = defineEmits<{
 
 button {
   --theme-swatch: var(--dt-color-accent);
+  --theme-swatch-fill: var(--theme-swatch);
   display: grid;
   width: var(--dt-theme-swatch-size);
   height: var(--dt-theme-swatch-size);
@@ -55,7 +61,7 @@ button i {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--theme-swatch);
+  background: var(--theme-swatch-fill);
   box-shadow: 0 0 var(--dt-space-2) color-mix(in srgb, var(--theme-swatch) 58%, transparent);
 }
 

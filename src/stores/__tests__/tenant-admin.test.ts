@@ -22,36 +22,36 @@ describe("tenant admin store", () => {
     vi.restoreAllMocks();
   });
 
-  it("restores the organization list when tenant configuration cleanup fails", () => {
+  it("restores the organization list when tenant configuration cleanup fails", async () => {
     const store = useTenantAdminStore();
     const target = store.tenants.find((tenant) => tenant.type !== "platform")!;
     vi.spyOn(tenantConfigurationRepository, "remove").mockImplementation(() => {
       throw new Error("cleanup failed");
     });
 
-    expect(() => store.remove(target.id)).toThrow("cleanup failed");
+    await expect(store.remove(target.id)).rejects.toThrow("cleanup failed");
     expect(store.tenants.some((tenant) => tenant.id === target.id)).toBe(true);
 
     const persisted = JSON.parse(localStorage.getItem(tenantStorageKey)!) as Array<{ id: string }>;
     expect(persisted.some((tenant) => tenant.id === target.id)).toBe(true);
   });
 
-  it("deletes the organization and its complete configuration together", () => {
+  it("deletes the organization and its complete configuration together", async () => {
     const store = useTenantAdminStore();
     const target = store.tenants.find((tenant) => tenant.type === "org")!;
     tenantConfigurationRepository.list(target);
     tenantMemberRepository.list(target);
 
-    store.remove(target.id);
+    await store.remove(target.id);
 
     expect(store.tenants.some((tenant) => tenant.id === target.id)).toBe(false);
     expect(localStorage.getItem(tenantConfigurationStorageKey(target.id))).toBeNull();
     expect(localStorage.getItem(tenantMemberStorageKey(target.id))).toBeNull();
   });
 
-  it("creates the current user as the first enabled admin member for a new organization", () => {
+  it("creates the current user as the first enabled admin member for a new organization", async () => {
     const store = useTenantAdminStore();
-    const tenant = store.create({
+    const tenant = await store.create({
       id: "school-member-create",
       name: "成员初始化学校",
       shortName: "成员学校",

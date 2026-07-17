@@ -1,7 +1,16 @@
-import { ADMIN_ROLE_ID } from "@/features/access-control/types";
 import { MOCK_USER_INFO } from "@/config/mock";
 import type { TenantMemberLoadResult, TenantMemberRecord } from "@/features/tenant-members/types";
-import type { TenantInfo, UserInfo } from "@/types/user";
+import type { TenantInfo } from "@/types/user";
+import {
+  cloneTenantMember,
+  createDefaultTenantMembers,
+} from "@/features/tenant-members/tenant-member-factories";
+
+export {
+  cloneTenantMember,
+  createCurrentUserAdminMember,
+  createDefaultTenantMembers,
+} from "@/features/tenant-members/tenant-member-factories";
 
 export function tenantMemberStorageKey(tenantId: string) {
   return `operation-platform:tenant-members:v1:${tenantId}`;
@@ -38,11 +47,6 @@ function initialsForName(name: string) {
   return chars.slice(Math.max(0, chars.length - 2)).join("") || "成员";
 }
 
-function roleTitle(roleIds: readonly string[], tenant: TenantInfo) {
-  if (roleIds.includes(ADMIN_ROLE_ID)) return "组织管理员";
-  return tenant.type === "school" ? "老师" : "职员";
-}
-
 function isTenantMember(value: unknown, tenantId: string): value is TenantMemberRecord {
   if (!value || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
@@ -65,10 +69,6 @@ function isTenantMember(value: unknown, tenantId: string): value is TenantMember
 
 function normalizeRoleIds(roleIds: readonly string[]) {
   return Array.from(new Set(roleIds.map((roleId) => roleId.trim()).filter(Boolean)));
-}
-
-export function cloneTenantMember(member: TenantMemberRecord): TenantMemberRecord {
-  return { ...member, roleIds: [...member.roleIds] };
 }
 
 function normalizeTenantMember(member: TenantMemberRecord): TenantMemberRecord {
@@ -99,53 +99,6 @@ function isValidMemberSet(value: unknown, tenantId: string): value is TenantMemb
   if (ids.size !== value.length) return false;
   const accounts = new Set(value.map((member) => member.account.trim().toLowerCase()));
   return accounts.size === value.length;
-}
-
-export function createCurrentUserAdminMember(
-  tenant: TenantInfo,
-  user: UserInfo = MOCK_USER_INFO,
-  now = Date.now(),
-): TenantMemberRecord {
-  return {
-    id: `member-${tenant.id}-${user.id}`,
-    tenantId: tenant.id,
-    userId: user.id,
-    name: user.name,
-    initials: user.initials || initialsForName(user.name),
-    account: user.id,
-    phone: "",
-    title: "组织管理员",
-    enabled: true,
-    roleIds: [ADMIN_ROLE_ID],
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-export function createDefaultTenantMembers(
-  tenant: TenantInfo,
-  user: UserInfo = MOCK_USER_INFO,
-  now = Date.now(),
-): TenantMemberRecord[] {
-  const legacyRoleId = user.platformAdmin ? ADMIN_ROLE_ID : user.tenantRoleIds[tenant.id];
-  if (!legacyRoleId) return [];
-  const roleIds = [legacyRoleId];
-  return [
-    {
-      id: `member-${tenant.id}-${user.id}`,
-      tenantId: tenant.id,
-      userId: user.id,
-      name: user.name,
-      initials: user.initials || initialsForName(user.name),
-      account: user.id,
-      phone: "",
-      title: roleTitle(roleIds, tenant),
-      enabled: true,
-      roleIds,
-      createdAt: now,
-      updatedAt: now,
-    },
-  ];
 }
 
 export class LocalStorageTenantMemberRepository {

@@ -9,15 +9,23 @@ import {
   initialMapState,
   loadMapLevel,
 } from "../map-data-adapter";
-import { getDigitalTwinMapTheme } from "../map-themes";
+import { digitalTwinMapThemes, getDigitalTwinMapTheme } from "../map-themes";
 import { AmbientEffectsLayer } from "../rendering/ambient-effects-layer";
 import { ConnectionLayer } from "../rendering/connection-layer";
 import {
   energyTowerDimensions,
   energyTowerHeight,
   energyTowerRenderOrder,
+  energyTowerValueBand,
   EnergyTowerLayer,
 } from "../rendering/energy-tower-layer";
+import {
+  groundGridCellSize,
+  groundGridFadeEnd,
+  groundGridFadeStart,
+  groundPlaneSize,
+  GroundGridLayer,
+} from "../rendering/ground-grid-layer";
 import {
   institutionRippleFrame,
   InstitutionLayer,
@@ -72,6 +80,13 @@ describe("regional map render budget", () => {
     expect(energyTowerDimensions("township").maximumHeight).toBeLessThan(
       energyTowerDimensions("district").maximumHeight,
     );
+  });
+
+  it("classifies tower counts into relative low, medium, and high bands", () => {
+    expect(energyTowerValueBand(2, 2, 8)).toBe("low");
+    expect(energyTowerValueBand(4.5, 2, 8)).toBe("medium");
+    expect(energyTowerValueBand(8, 2, 8)).toBe("high");
+    expect(energyTowerValueBand(3, 3, 3)).toBe("low");
   });
 
   it("keeps screen framing separate from the geographic orbit pivot", () => {
@@ -243,6 +258,8 @@ describe("regional map render budget", () => {
     );
     const towerMaterials: THREE.ShaderMaterial[] = [];
     const glowMaterials: THREE.MeshBasicMaterial[] = [];
+    const glowMeshes: THREE.Mesh[] = [];
+    const towerLabels: HTMLElement[] = [];
     layer.root.traverse((object) => {
       if (object instanceof THREE.Mesh && object.material instanceof THREE.ShaderMaterial) {
         towerMaterials.push(object.material);
@@ -253,10 +270,16 @@ describe("regional map render budget", () => {
         && object.material.map
       ) {
         glowMaterials.push(object.material);
+        glowMeshes.push(object);
       }
+      if (object instanceof CSS2DObject) towerLabels.push(object.element);
     });
 
     expect(towerMaterials.length).toBeGreaterThan(0);
+    expect(glowMeshes.length).toBeGreaterThan(1);
+    expect(new Set(glowMeshes.map((mesh) => mesh.geometry)).size).toBe(1);
+    expect(new Set(glowMaterials).size).toBe(1);
+    expect(new Set(glowMaterials.map((material) => material.map)).size).toBe(1);
     expect(towerMaterials.every((material) => !material.depthTest && !material.depthWrite)).toBe(true);
     expect(layer.root.renderOrder).toBe(energyTowerRenderOrder);
     expect(layer.root.children.every((group) => group.renderOrder === energyTowerRenderOrder)).toBe(true);
@@ -286,7 +309,33 @@ describe("regional map render budget", () => {
       .toBe(true);
     expect(glowMaterials.every((material) => material.color.getHexString() === "04e86c"))
       .toBe(true);
+    const spectrumTheme = getDigitalTwinMapTheme("spectrum");
+    const spectrumPalette = spectrumTheme.energyTowerPalette!;
+    layer.applyTheme(spectrumTheme);
+    expect(towerMaterials.every((material) => (
+      material.uniforms.uBottomOpacity?.value
+      === spectrumPalette.bottomOpacity
+    ))).toBe(true);
+    expect(towerMaterials.every((material) => (
+      material.uniforms.uBaseColor?.value.getHexString()
+      === spectrumPalette.base.slice(1).toLowerCase()
+    ))).toBe(true);
+    expect(towerMaterials.every((material) => [
+      spectrumPalette.low,
+      spectrumPalette.medium,
+      spectrumPalette.high,
+    ].map((color) => color.slice(1).toLowerCase()).includes(
+      material.uniforms.uTopColor?.value.getHexString(),
+    ))).toBe(true);
+    expect(glowMaterials.every((material) => material.color.getHexString() === "0d2ac2"))
+      .toBe(true);
     layer.applyTheme(getDigitalTwinMapTheme("cyan"));
+    expect(towerMaterials.every((material) => material.uniforms.uBottomOpacity?.value === 0))
+      .toBe(true);
+    expect(towerMaterials.every((material) => (
+      material.uniforms.uBaseColor?.value.getHexString()
+      === material.uniforms.uTopColor?.value.getHexString()
+    ))).toBe(true);
     expect(glowMaterials.every((material) => material.color.getHexString() === "2ffefe"))
       .toBe(true);
     expect(gradient.addColorStop).toHaveBeenCalledWith(0, "#FFFFFF");
@@ -297,6 +346,10 @@ describe("regional map render budget", () => {
     for (let index = 0; index < 180; index += 1) layer.animate(1 / 60);
     expect(layer.root.children.every((group) => group.scale.z === 1)).toBe(true);
     expect(towerMaterials.every((material) => material.uniforms.uReveal?.value === 1)).toBe(true);
+    const revealStyleWrite = vi.spyOn(towerLabels[0]!.style, "setProperty");
+    layer.animate(1 / 60);
+    expect(revealStyleWrite).not.toHaveBeenCalled();
+    revealStyleWrite.mockRestore();
     layer.startExit();
     for (let index = 0; index < 180; index += 1) layer.animate(1 / 60);
     expect(layer.isHidden()).toBe(true);
@@ -362,6 +415,84 @@ describe("regional map render budget", () => {
     contextSpy.mockRestore();
   });
 
+  it("releases energy-tower resources once across repeated scope and theme cycles", () => {
+    const gradient = { addColorStop: vi.fn() };
+    const context = {
+      createRadialGradient: vi.fn(() => gradient),
+      fillRect: vi.fn(),
+      fillStyle: "",
+    } as unknown as CanvasRenderingContext2D;
+    const contextSpy = vi.spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue(context);
+    const geometryDispose = vi.spyOn(THREE.BufferGeometry.prototype, "dispose");
+    const materialDispose = vi.spyOn(THREE.Material.prototype, "dispose");
+    const textureDispose = vi.spyOn(THREE.Texture.prototype, "dispose");
+    const townshipState = loadMapLevel("445202013");
+    const scopes = [
+      {
+        state: initialMapState,
+        locations: rongchengEducationLocations,
+      },
+      {
+        state: townshipState,
+        locations: filterLocationsForMapState(rongchengEducationLocations, townshipState),
+      },
+    ] as const;
+
+    try {
+      for (let cycle = 0; cycle < 4; cycle += 1) {
+        const scope = scopes[cycle % scopes.length]!;
+        const layer = new EnergyTowerLayer(
+          scope.state,
+          scope.locations,
+          projection,
+          theme,
+          defaultMapVisualTuning,
+        );
+        const towerMaterials = new Set<THREE.ShaderMaterial>();
+        layer.root.traverse((object) => {
+          if (object instanceof THREE.Mesh && object.material instanceof THREE.ShaderMaterial) {
+            towerMaterials.add(object.material);
+          }
+        });
+        for (const nextTheme of digitalTwinMapThemes) layer.applyTheme(nextTheme);
+        layer.applyTuning(getDigitalTwinMapTheme("spectrum"), {
+          ...defaultMapVisualTuning,
+          energyTowerBaseOpacity: 0.74,
+          energyTowerGlowOpacity: 0.52,
+        });
+        layer.settle(true);
+
+        const beforeDispose = {
+          geometries: geometryDispose.mock.calls.length,
+          materials: materialDispose.mock.calls.length,
+          textures: textureDispose.mock.calls.length,
+        };
+        layer.dispose();
+        const afterDispose = {
+          geometries: geometryDispose.mock.calls.length,
+          materials: materialDispose.mock.calls.length,
+          textures: textureDispose.mock.calls.length,
+        };
+        expect(afterDispose.geometries - beforeDispose.geometries)
+          .toBe(towerMaterials.size + 1);
+        expect(afterDispose.materials - beforeDispose.materials)
+          .toBe(towerMaterials.size + 1);
+        expect(afterDispose.textures - beforeDispose.textures).toBe(1);
+
+        layer.dispose();
+        expect(geometryDispose).toHaveBeenCalledTimes(afterDispose.geometries);
+        expect(materialDispose).toHaveBeenCalledTimes(afterDispose.materials);
+        expect(textureDispose).toHaveBeenCalledTimes(afterDispose.textures);
+      }
+    } finally {
+      textureDispose.mockRestore();
+      materialDispose.mockRestore();
+      geometryDispose.mockRestore();
+      contextSpy.mockRestore();
+    }
+  });
+
   it("matches institution hit testing to the marker's screen-space radius", () => {
     const locations = rongchengEducationLocations.slice(0, 3);
     const institutions = new InstitutionLayer(locations, projection, theme, undefined, 1);
@@ -411,18 +542,36 @@ describe("regional map render budget", () => {
     effects.dispose();
   });
 
+  it("renders the extended ground and procedural grid in one draw object", () => {
+    const ground = new GroundGridLayer(theme, defaultMapVisualTuning);
+    expect(ground.root.children).toHaveLength(1);
+    const plane = ground.root.children.find(
+      (object): object is THREE.Mesh => object instanceof THREE.Mesh,
+    );
+    if (!plane) throw new Error("Procedural ground grid is required");
+    expect(plane.geometry).toBeInstanceOf(THREE.PlaneGeometry);
+    expect((plane.geometry as THREE.PlaneGeometry).parameters).toMatchObject({
+      width: groundPlaneSize,
+      height: groundPlaneSize,
+    });
+    const material = plane.material as THREE.ShaderMaterial;
+    expect(material).toBeInstanceOf(THREE.ShaderMaterial);
+    expect(material.uniforms.uFillColor?.value.getHexString()).toBe("23252f");
+    expect(material.uniforms.uGridColor?.value.getHexString()).toBe("ffffff");
+    expect(material.uniforms.uFillOpacity?.value).toBe(0);
+    expect(material.uniforms.uGridOpacity?.value).toBe(0.3);
+    expect(material.uniforms.uCellSize?.value).toBe(groundGridCellSize);
+    expect(material.uniforms.uFadeStart?.value).toBe(groundGridFadeStart);
+    expect(material.uniforms.uFadeEnd?.value).toBe(groundGridFadeEnd);
+    expect(material.fragmentShader).toContain("gridStrength = line * uGridOpacity * edgeFade");
+    ground.dispose();
+  });
+
   it("updates a theme without rebuilding administrative geometry", () => {
-    const textures = {
-      diffuse: new THREE.Texture(),
-      normal: new THREE.Texture(),
-      roughness: new THREE.Texture(),
-      dispose: vi.fn(),
-    };
     const regions = new RegionLayer(
       initialMapState,
       projection,
       theme,
-      textures,
       defaultMapVisualTuning,
     );
     const geometryIdsBefore: number[] = [];
@@ -436,15 +585,15 @@ describe("regional map render budget", () => {
     const materialTuning = {
       ...defaultMapVisualTuning,
       regionBaseOpacity: 0.41,
-      regionTerrainRoughness: 0.62,
-      regionTerrainMetalness: 0.24,
-      regionTerrainNormalScale: 1.7,
       regionTerrainEmissiveIntensity: 0.36,
       regionSideTopOpacity: 0.67,
       regionTopContourOpacity: 0.73,
-      regionBottomContourOpacity: 0.29,
     };
-    regions.applyTheme(getDigitalTwinMapTheme("cyan"), materialTuning);
+    regions.applyTheme({
+      ...getDigitalTwinMapTheme("cyan"),
+      topFill: "#112233",
+      bottomFill: "#445566",
+    }, materialTuning);
     regions.root.traverse((object) => {
       if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
         geometryIdsAfter.push(object.geometry.id);
@@ -455,7 +604,12 @@ describe("regional map render budget", () => {
     const terrainMaterials: THREE.MeshStandardMaterial[] = [];
     const sideMaterials: THREE.ShaderMaterial[] = [];
     const basicOpacities = new Set<number>();
+    const baseColors = new Set<string>();
+    const baseSides = new Set<THREE.Side>();
     const lineOpacities = new Set<number>();
+    const lineMinimumZs: number[] = [];
+    const lineDepthTests: boolean[] = [];
+    const sideDepthPrepasses: THREE.MeshBasicMaterial[] = [];
     regions.root.traverse((object) => {
       if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshStandardMaterial) {
         terrainMaterials.push(object.material);
@@ -463,37 +617,67 @@ describe("regional map render budget", () => {
         sideMaterials.push(object.material);
       } else if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshBasicMaterial) {
         basicOpacities.add(object.material.opacity);
+        if (object.material.opacity === materialTuning.regionBaseOpacity) {
+          baseColors.add(object.material.color.getHexString());
+          baseSides.add(object.material.side);
+        }
+        if (!object.material.colorWrite && object.material.depthWrite) {
+          sideDepthPrepasses.push(object.material);
+        }
       } else if (object instanceof THREE.Line && object.material instanceof THREE.LineBasicMaterial) {
         lineOpacities.add(object.material.opacity);
+        lineDepthTests.push(object.material.depthTest);
+        const positions = object.geometry.getAttribute("position");
+        lineMinimumZs.push(Math.min(...Array.from({ length: positions.count }, (_, index) =>
+          positions.getZ(index))));
       }
     });
-    expect(terrainMaterials.every((material) => material.roughness === 0.62)).toBe(true);
-    expect(terrainMaterials.every((material) => material.metalness === 0.24)).toBe(true);
-    expect(terrainMaterials.every((material) => material.normalScale.x === 1.7)).toBe(true);
+    expect(terrainMaterials.every((material) => material.roughness === 0.94)).toBe(true);
+    expect(terrainMaterials.every((material) => material.metalness === 0.03)).toBe(true);
+    expect(terrainMaterials.every((material) => material.color.getHexString() === "112233"))
+      .toBe(true);
+    expect(terrainMaterials.every((material) => material.map === null)).toBe(true);
+    expect(terrainMaterials.every((material) => material.normalMap === null)).toBe(true);
+    expect(terrainMaterials.every((material) => material.roughnessMap === null)).toBe(true);
     expect(terrainMaterials.every((material) => material.emissiveIntensity === 0.36)).toBe(true);
+    expect(terrainMaterials.every((material) => !(material instanceof THREE.MeshPhysicalMaterial)))
+      .toBe(true);
     expect(sideMaterials.every((material) => material.uniforms.topOpacity?.value === 0.67))
       .toBe(true);
     expect(basicOpacities.has(0.41)).toBe(true);
+    expect(baseColors.has("445566")).toBe(true);
+    expect(baseSides).toEqual(new Set([THREE.BackSide]));
     expect(lineOpacities.has(0.73)).toBe(true);
-    expect(lineOpacities.has(0.29)).toBe(true);
+    expect(lineMinimumZs.every((z) => z > 0)).toBe(true);
+    expect(lineDepthTests.every(Boolean)).toBe(true);
+    expect(sideDepthPrepasses.length).toBeGreaterThan(0);
+    expect(sideDepthPrepasses.every((material) => material.depthTest)).toBe(true);
+    expect(sideDepthPrepasses.every((material) => material.polygonOffset)).toBe(true);
+    expect(sideDepthPrepasses.every((material) => material.polygonOffsetFactor > 0)).toBe(true);
+    expect(sideDepthPrepasses.every((material) => material.polygonOffsetUnits > 0)).toBe(true);
+    regions.applyTheme(getDigitalTwinMapTheme("spectrum"), materialTuning);
+    expect(sideMaterials.every((material) => (
+      material.uniforms.bottomColor?.value.getHexString() === "1fdde0"
+    ))).toBe(true);
+    expect(sideMaterials.every((material) => (
+      material.uniforms.topColor?.value.getHexString() === "0071db"
+    ))).toBe(true);
+    expect(terrainMaterials.every((material) => !material.transparent && material.depthWrite))
+      .toBe(true);
+    regions.applyTheme(getDigitalTwinMapTheme("spectrum"), {
+      ...materialTuning,
+      regionTerrainOpacity: 0.72,
+    });
+    expect(terrainMaterials.every((material) => material.transparent && !material.depthWrite))
+      .toBe(true);
     regions.dispose();
-    textures.diffuse.dispose();
-    textures.normal.dispose();
-    textures.roughness.dispose();
   });
 
   it("flattens non-focused townships while preserving the focused 3D region", () => {
-    const textures = {
-      diffuse: new THREE.Texture(),
-      normal: new THREE.Texture(),
-      roughness: new THREE.Texture(),
-      dispose: vi.fn(),
-    };
     const regions = new RegionLayer(
       initialMapState,
       projection,
       theme,
-      textures,
       defaultMapVisualTuning,
     );
     regions.setFocus("445202001", defaultMapVisualTuning);
@@ -535,30 +719,17 @@ describe("regional map render budget", () => {
     expect(inactive?.renderOrder).toBeGreaterThan(20);
 
     regions.dispose();
-    textures.diffuse.dispose();
-    textures.normal.dispose();
-    textures.roughness.dispose();
   });
 
   it("keeps region elevation continuous and frame-rate independent", () => {
-    const makeRegions = () => {
-      const textures = {
-        diffuse: new THREE.Texture(),
-        normal: new THREE.Texture(),
-        roughness: new THREE.Texture(),
-        dispose: vi.fn(),
-      };
-      return {
-        textures,
-        regions: new RegionLayer(
-          initialMapState,
-          projection,
-          theme,
-          textures,
-          defaultMapVisualTuning,
-        ),
-      };
-    };
+    const makeRegions = () => ({
+      regions: new RegionLayer(
+        initialMapState,
+        projection,
+        theme,
+        defaultMapVisualTuning,
+      ),
+    });
     const thirtyFps = makeRegions();
     const sixtyFps = makeRegions();
     const raisedFocusTuning = {
@@ -581,9 +752,6 @@ describe("regional map render budget", () => {
 
     for (const entry of [thirtyFps, sixtyFps]) {
       entry.regions.dispose();
-      entry.textures.diffuse.dispose();
-      entry.textures.normal.dispose();
-      entry.textures.roughness.dispose();
     }
   });
 

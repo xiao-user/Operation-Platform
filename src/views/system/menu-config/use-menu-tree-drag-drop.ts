@@ -128,7 +128,7 @@ export function useMenuTreeDragDrop(
     dropPreview.value = null;
   }
 
-  function handleNodeDrop(
+  async function handleNodeDrop(
     draggingNode: MenuTreeNodeLike,
     dropNode: MenuTreeNodeLike,
     dropType: TreeDropType,
@@ -136,7 +136,7 @@ export function useMenuTreeDragDrop(
     clearDropPreview();
     const placement = resolveDropPlacement(draggingNode.data.id, dropNode.data, dropType);
     try {
-      menuConfigStore.move(draggingNode.data.id, placement.parentId, placement.index);
+      await menuConfigStore.move(draggingNode.data.id, placement.parentId, placement.index);
       void navigationStore.ensureValidCurrentRoute(router);
       ElMessage.success("菜单排序已更新");
     } catch (error) {

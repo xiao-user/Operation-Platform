@@ -57,11 +57,11 @@ describe("menu configuration store", () => {
     expect(userStore.currentTenant.id).not.toBe(schoolB.id);
   });
 
-  it("creates and persists a top-level module", () => {
+  it("creates and persists a top-level module", async () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
 
-    const created = store.create(moduleInput("自定义模块"));
+    const created = await store.create(moduleInput("自定义模块"));
 
     expect(created.tenantId).toBe(schoolA.id);
     expect(store.records.some((record) => record.id === created.id)).toBe(true);
@@ -69,17 +69,17 @@ describe("menu configuration store", () => {
     expect(store.records.some((record) => record.name === "自定义模块")).toBe(true);
   });
 
-  it("updates records after validation", () => {
+  it("updates records after validation", async () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
     const moduleRecord = store.records.find((record) => record.type === "module")!;
 
-    store.update(moduleRecord.id, { ...moduleInput("重命名模块"), sort: moduleRecord.sort });
+    await store.update(moduleRecord.id, { ...moduleInput("重命名模块"), sort: moduleRecord.sort });
 
     expect(store.records.find((record) => record.id === moduleRecord.id)?.name).toBe("重命名模块");
   });
 
-  it("removes a menu and every descendant", () => {
+  it("removes a menu and every descendant", async () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
     const moduleRecord = store.records.find((record) => record.type === "module")!;
@@ -87,29 +87,29 @@ describe("menu configuration store", () => {
       .filter((record) => record.parentId === moduleRecord.id)
       .map((record) => record.id);
 
-    const removedCount = store.removeCascade(moduleRecord.id);
+    const removedCount = await store.removeCascade(moduleRecord.id);
 
     expect(removedCount).toBeGreaterThan(1);
     expect(store.records.some((record) => record.id === moduleRecord.id)).toBe(false);
     expect(store.records.some((record) => descendantIds.includes(record.id))).toBe(false);
   });
 
-  it("resets only the selected tenant", () => {
+  it("resets only the selected tenant", async () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
-    store.create(moduleInput("学校 A 自定义"));
+    await store.create(moduleInput("学校 A 自定义"));
     store.load(schoolB);
-    store.create(moduleInput("学校 B 自定义"));
+    await store.create(moduleInput("学校 B 自定义"));
 
     store.load(schoolA);
-    store.reset();
+    await store.reset();
 
     expect(store.records.some((record) => record.name === "学校 A 自定义")).toBe(false);
     store.load(schoolB);
     expect(store.records.some((record) => record.name === "学校 B 自定义")).toBe(true);
   });
 
-  it("refreshes runtime navigation only when editing the current tenant", () => {
+  it("refreshes runtime navigation only when editing the current tenant", async () => {
     const userStore = useUserStore();
     const navigationStore = useNavigationStore();
     const store = useMenuConfigStore();
@@ -118,7 +118,7 @@ describe("menu configuration store", () => {
     store.load(currentTenant);
     const moduleRecord = store.records.find((record) => record.type === "module")!;
 
-    store.update(moduleRecord.id, {
+    await store.update(moduleRecord.id, {
       ...moduleInput("运行时已刷新"),
       sort: moduleRecord.sort,
     });
@@ -126,7 +126,7 @@ describe("menu configuration store", () => {
     expect(navigationStore.moduleNodes.map((node) => node.name)).toContain("运行时已刷新");
   });
 
-  it("updates workbench config and refreshes current tenant navigation", () => {
+  it("updates workbench config and refreshes current tenant navigation", async () => {
     const userStore = useUserStore();
     const navigationStore = useNavigationStore();
     const store = useMenuConfigStore();
@@ -134,7 +134,7 @@ describe("menu configuration store", () => {
     navigationStore.loadTenant(currentTenant);
     store.load(currentTenant);
 
-    store.updateWorkbench({ enabled: false, label: "首页", icon: "House", sort: 50 });
+    await store.updateWorkbench({ enabled: false, label: "首页", icon: "House", sort: 50 });
 
     expect(store.shellConfig.workbench).toEqual({
       enabled: false,
@@ -151,24 +151,24 @@ describe("menu configuration store", () => {
     expect(navigationStore.topLevelNavItems.some((item) => item.kind === "workbench")).toBe(false);
   });
 
-  it("resets workbench config together with the selected tenant menu", () => {
+  it("resets workbench config together with the selected tenant menu", async () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
-    store.updateWorkbench({ enabled: false, label: "首页", sort: 30 });
+    await store.updateWorkbench({ enabled: false, label: "首页", sort: 30 });
 
-    store.reset();
+    await store.reset();
 
     expect(store.shellConfig).toEqual(defaultTenantShellConfig());
   });
 
-  it("moves a page across levels and normalizes sibling order", () => {
+  it("moves a page across levels and normalizes sibling order", async () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
     const securityModule = store.records.find((record) => record.name === "平安校园")!;
     const smartSafetyDirectory = store.records.find((record) => record.name === "班牌管理")!;
     const visitorPage = store.records.find((record) => record.name === "班牌列表")!;
 
-    store.move(visitorPage.id, securityModule.id, 0);
+    await store.move(visitorPage.id, securityModule.id, 0);
 
     const moved = store.records.find((record) => record.id === visitorPage.id)!;
     const siblings = store.records
@@ -196,11 +196,11 @@ describe("menu configuration store", () => {
     expect(store.canMove(smartSafetyDirectory.id, smartSafetyDirectory.id)).toBe(false);
   });
 
-  it("supports four-level menu configuration", () => {
+  it("supports four-level menu configuration", async () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
     const securityModule = store.records.find((record) => record.name === "平安校园")!;
-    const secondLevel = store.create({
+    const secondLevel = await store.create({
       parentId: securityModule.id,
       type: "directory",
       name: "二级业务",
@@ -211,7 +211,7 @@ describe("menu configuration store", () => {
       sort: 999,
       visible: true,
     });
-    const thirdLevel = store.create({
+    const thirdLevel = await store.create({
       parentId: secondLevel.id,
       type: "directory",
       name: "三级目录",
@@ -222,7 +222,7 @@ describe("menu configuration store", () => {
       sort: 10,
       visible: true,
     });
-    const fourthLevel = store.create({
+    const fourthLevel = await store.create({
       parentId: thirdLevel.id,
       type: "page",
       name: "四级页面",
@@ -242,7 +242,7 @@ describe("menu configuration store", () => {
     );
   });
 
-  it("allows multiple menus to use the developing placeholder page", () => {
+  it("allows multiple menus to use the developing placeholder page", async () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
     const securityModule = store.records.find((record) => record.name === "平安校园")!;
@@ -250,7 +250,7 @@ describe("menu configuration store", () => {
       (record) => record.pageKey === DEVELOPING_PAGE_KEY,
     ).length;
 
-    store.create({
+    await store.create({
       parentId: securityModule.id,
       type: "page",
       name: "占位页面一",
@@ -261,7 +261,7 @@ describe("menu configuration store", () => {
       sort: 991,
       visible: true,
     });
-    store.create({
+    await store.create({
       parentId: securityModule.id,
       type: "page",
       name: "占位页面二",
@@ -278,7 +278,7 @@ describe("menu configuration store", () => {
     ).toHaveLength(existingPlaceholderCount + 2);
   });
 
-  it("configures role visibility from menu configuration and applies parent nodes in batch", () => {
+  it("configures role visibility from menu configuration and applies parent nodes in batch", async () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
     const familyModule = store.records.find((record) => record.name === "家校共育")!;
@@ -286,11 +286,11 @@ describe("menu configuration store", () => {
 
     expect(store.roleIdsForRecord(existingPage.id)).toContain(STAFF_ROLE_ID);
 
-    store.setRecordRoleVisibility(existingPage.id, []);
+    await store.setRecordRoleVisibility(existingPage.id, []);
     expect(store.roleIdsForRecord(existingPage.id)).not.toContain(STAFF_ROLE_ID);
 
-    store.setRecordRoleVisibility(familyModule.id, []);
-    const created = store.create({
+    await store.setRecordRoleVisibility(familyModule.id, []);
+    const created = await store.create({
       parentId: familyModule.id,
       type: "page",
       name: "继承权限页面",
@@ -304,20 +304,20 @@ describe("menu configuration store", () => {
 
     expect(store.roleIdsForRecord(created.id)).not.toContain(STAFF_ROLE_ID);
 
-    store.setRecordRoleVisibility(familyModule.id, [STAFF_ROLE_ID]);
+    await store.setRecordRoleVisibility(familyModule.id, [STAFF_ROLE_ID]);
     expect(store.roleIdsForRecord(created.id)).toContain(STAFF_ROLE_ID);
   });
 
-  it("keeps custom roles without expanding grants when restoring the default template", () => {
+  it("keeps custom roles without expanding grants when restoring the default template", async () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
     const deniedPage = store.records.find((record) => record.type === "page")!;
     const allowedPage = store.records.find(
       (record) => record.type === "page" && record.id !== deniedPage.id,
     )!;
-    store.setRecordRoleVisibility(deniedPage.id, []);
+    await store.setRecordRoleVisibility(deniedPage.id, []);
 
-    store.reset();
+    await store.reset();
 
     const deniedPageAfterReset = store.records.find(
       (record) => record.type === "page" &&
@@ -333,12 +333,12 @@ describe("menu configuration store", () => {
     expect(store.roleIdsForRecord(allowedPageAfterReset.id)).toContain(STAFF_ROLE_ID);
   });
 
-  it("keeps page resources after deleting a menu so they can be rebound later", () => {
+  it("keeps page resources after deleting a menu so they can be rebound later", async () => {
     const store = useMenuConfigStore();
     store.load(schoolA);
     const moduleRecord = store.records.find((record) => record.type === "module")!;
 
-    const created = store.create({
+    const created = await store.create({
       parentId: moduleRecord.id,
       type: "page",
       name: "设备入口",
@@ -354,7 +354,7 @@ describe("menu configuration store", () => {
         .some((page) => page.key === "device-list"),
     ).toBe(false);
 
-    store.removeCascade(created.id);
+    await store.removeCascade(created.id);
 
     expect(pageRegistryByKey.get("device-list")).toMatchObject({
       title: "设备列表",
@@ -365,7 +365,7 @@ describe("menu configuration store", () => {
         .some((page) => page.key === "device-list"),
     ).toBe(true);
 
-    const rebound = store.create({
+    const rebound = await store.create({
       parentId: moduleRecord.id,
       type: "page",
       name: "设备入口重建",

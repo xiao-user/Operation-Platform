@@ -186,7 +186,7 @@ function validateDraft() {
   return "";
 }
 
-function handleSave() {
+async function handleSave() {
   const error = validateDraft();
   if (error) {
     ElMessage.warning(error);
@@ -195,9 +195,9 @@ function handleSave() {
 
   try {
     if (editingRoleId.value) {
-      accessControlStore.updateRole(editingRoleId.value, draft);
+      await accessControlStore.updateRole(editingRoleId.value, draft);
     } else {
-      accessControlStore.createRole(draft);
+      await accessControlStore.createRole(draft);
     }
     dialogVisible.value = false;
     ElMessage.success("角色已保存");
@@ -206,9 +206,9 @@ function handleSave() {
   }
 }
 
-function handleEnabledChange(roleId: string, enabled: boolean) {
+async function handleEnabledChange(roleId: string, enabled: boolean) {
   try {
-    accessControlStore.setRoleEnabled(roleId, enabled);
+    await accessControlStore.setRoleEnabled(roleId, enabled);
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "角色状态更新失败");
   }
@@ -226,7 +226,7 @@ async function handleRemove(role: RoleRecord) {
     return;
   }
   try {
-    accessControlStore.removeRole(role.id);
+    await accessControlStore.removeRole(role.id);
     ElMessage.success("角色已删除");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "角色删除失败");
@@ -244,7 +244,7 @@ async function handleReset() {
     return;
   }
   try {
-    accessControlStore.resetRoles();
+    await accessControlStore.resetRoles();
     ElMessage.success("默认角色已恢复");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "默认角色恢复失败");

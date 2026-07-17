@@ -4,6 +4,9 @@ import type {
 } from "@/features/shell-config/shell-config-repository";
 import type { TenantShellConfig, WorkbenchConfig } from "@/features/shell-config/types";
 import type { TenantInfo } from "@/types/user";
+import { defaultTenantShellConfig } from "@/features/shell-config/default-shell-config";
+
+export { defaultTenantShellConfig } from "@/features/shell-config/default-shell-config";
 
 const SHELL_CONFIG_VERSION = 1;
 const DEFAULT_WORKBENCH_ICON = "LayoutGrid";
@@ -24,18 +27,6 @@ export function tenantShellConfigStorageKey(tenantId: string) {
 
 function invalidShellConfigStorageKey(tenantId: string, timestamp: number) {
   return `operation-platform:tenant-shell:invalid:${tenantId}:${timestamp}`;
-}
-
-export function defaultTenantShellConfig(): TenantShellConfig {
-  return {
-    version: SHELL_CONFIG_VERSION,
-    workbench: {
-      enabled: true,
-      label: "工作台",
-      icon: DEFAULT_WORKBENCH_ICON,
-      sort: 0,
-    },
-  };
 }
 
 function cloneConfig(config: TenantShellConfig): TenantShellConfig {

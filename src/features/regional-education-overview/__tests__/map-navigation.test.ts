@@ -69,22 +69,59 @@ describe("regional education map navigation", () => {
 });
 
 describe("digital twin map themes", () => {
-  it("provides four complete switchable themes", () => {
+  it("provides five complete switchable themes including the spectrum palette", () => {
     expect(digitalTwinMapThemes.map((theme) => theme.id)).toEqual([
       "lime",
       "cyan",
       "amber",
       "royal",
+      "spectrum",
     ]);
     for (const theme of digitalTwinMapThemes) {
       expect(theme.primary).toMatch(/^#[0-9A-F]{6}$/i);
       expect(theme.topFill).not.toBe(theme.primary);
+      expect(theme.bottomFill).toMatch(/^#[0-9A-F]{6}$/i);
+      expect(theme.contextFill).toMatch(/^#[0-9A-F]{6}$/i);
+      expect(theme.contextFillOpacity).toBeGreaterThanOrEqual(0);
+      expect(theme.contextFillOpacity).toBeLessThanOrEqual(1);
       expect(theme.pageBackground).toMatch(/^#[0-9A-F]{6}$/i);
     }
+    expect(digitalTwinMapThemes.map((theme) => ({
+      fill: theme.contextFill,
+      opacity: theme.contextFillOpacity,
+    }))).toEqual(Array.from({ length: 5 }, () => ({
+      fill: "#707070",
+      opacity: 0.06,
+    })));
     expect(getDigitalTwinMapTheme("cyan").name).toBe("深海矩阵");
     expect(getDigitalTwinMapTheme("royal")).toMatchObject({
       name: "星河钴蓝",
       primary: "#2B67D1",
+    });
+    expect(getDigitalTwinMapTheme("spectrum")).toMatchObject({
+      name: "多维光谱",
+      primary: "#2B67D1",
+      outline: "#78A8FF",
+      internalLine: "rgba(120,168,255,0.42)",
+      topFill: "#0A0B0F",
+      bottomFill: "#0A0B0F",
+      contextFill: "#707070",
+      contextFillOpacity: 0.06,
+      sideBottom: "#1FDDE0",
+      sideTop: "#0071DB",
+      labelPointer: "#2B67D1",
+      scatter: "#2B67D1",
+      ripple: "rgba(43,103,209,0.38)",
+      flyLine: "rgba(120,168,255,0.78)",
+      hudRing: "rgba(43,103,209,0.2)",
+      pageLine: "rgba(43,103,209,0.3)",
+      energyTowerPalette: {
+        base: "#0D2AC2",
+        low: "#00FFD5",
+        medium: "#FFC800",
+        high: "#FFA97A",
+        bottomOpacity: 0.24,
+      },
     });
   });
 });

@@ -6,14 +6,9 @@ import {
   MenuValidationError,
   validateMenuRecord,
 } from "@/features/menu-config/menu-validation";
-import {
-  defaultTenantShellConfig,
-} from "@/features/shell-config/local-storage-shell-config-repository";
+import { defaultTenantShellConfig } from "@/features/shell-config/default-shell-config";
 import { ADMIN_ROLE_ID, type RoleRecord } from "@/features/access-control/types";
-import {
-  createDefaultTenantConfiguration,
-  tenantConfigurationRepository,
-} from "@/features/tenant-config/local-storage-tenant-configuration-repository";
+import { createDefaultTenantConfiguration } from "@/features/tenant-config/default-tenant-configuration";
 import type {
   MenuConfigRecord,
   MenuRecordInput,
@@ -21,6 +16,9 @@ import type {
 import type { TenantShellConfig, WorkbenchConfig } from "@/features/shell-config/types";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
+import { cloneJson } from "@/lib/clone-json";
+import { operationPlatformPersistence } from "@/features/persistence/runtime-operation-platform-persistence";
+import type { TenantConfiguration } from "@/features/tenant-config/types";
 import type { TenantInfo } from "@/types/user";
 
 export const useMenuConfigStore = defineStore("menu-config", () => {
@@ -42,7 +40,10 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
   );
 
   function load(tenant: TenantInfo) {
-    const result = tenantConfigurationRepository.list(tenant);
+    const result = operationPlatformPersistence.loadConfiguration(tenant) ?? {
+      configuration: createDefaultTenantConfiguration(tenant),
+      recoveryNotice: null,
+    };
     selectedTenant.value = { ...tenant };
     records.value = result.configuration.menuRecords;
     roles.value = result.configuration.roles;
@@ -62,23 +63,33 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
     }
   }
 
-  function persist(
+  async function persist(
     nextRecords: MenuConfigRecord[],
     nextRoles: RoleRecord[] = roles.value,
     nextShellConfig: TenantShellConfig = shellConfig.value,
   ) {
     const tenant = requireTenant();
-    const saved = tenantConfigurationRepository.replace(tenant, {
+    const next: TenantConfiguration = {
       version: 1,
       menuRecords: nextRecords,
       shellConfig: nextShellConfig,
       roles: nextRoles,
-    });
+    };
+    const saved = cloneJson(await operationPlatformPersistence.saveConfiguration(tenant, next));
     records.value = saved.menuRecords;
     roles.value = saved.roles;
     shellConfig.value = saved.shellConfig;
+    recoveryNotice.value = null;
+    useUserStore().refreshMemberRoles();
     refreshRuntimeIfCurrent(tenant);
     return saved;
+  }
+
+  function mapPersisted<T>(
+    value: Promise<TenantConfiguration>,
+    mapper: (configuration: TenantConfiguration) => T,
+  ) {
+    return value.then(mapper);
   }
 
   function allLeafMenuIds(source = records.value) {
@@ -175,11 +186,14 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
         menuIds: Array.from(new Set(menuIds)),
       };
     });
-    return persist(records.value, normalizedRoles).roles;
+    return mapPersisted(persist(records.value, normalizedRoles), (saved) => saved.roles);
   }
 
   function persistShellConfig(nextConfig: TenantShellConfig) {
-    return persist(records.value, roles.value, nextConfig).shellConfig;
+    return mapPersisted(
+      persist(records.value, roles.value, nextConfig),
+      (saved) => saved.shellConfig,
+    );
   }
 
   function validate(record: MenuConfigRecord, source = records.value) {
@@ -231,8 +245,7 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
     const nextRoles = created.type === "page" || created.type === "external"
       ? rolesWithRecordVisibility(created.id, selectedRoleIds, nextRecords)
       : roles.value;
-    persist(nextRecords, nextRoles);
-    return { ...created };
+    return mapPersisted(persist(nextRecords, nextRoles), () => ({ ...created }));
   }
 
   function update(id: string, input: MenuRecordInput, visibleRoleIds?: string[]) {
@@ -249,8 +262,7 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
     const nextRoles = visibleRoleIds
       ? rolesWithRecordVisibility(id, visibleRoleIds, nextRecords)
       : roles.value;
-    persist(nextRecords, nextRoles);
-    return { ...updated };
+    return mapPersisted(persist(nextRecords, nextRoles), () => ({ ...updated }));
   }
 
   function removeCascade(id: string) {
@@ -265,8 +277,7 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
         ? [...availableMenuIds]
         : role.menuIds.filter((menuId) => availableMenuIds.has(menuId)),
     }));
-    persist(nextRecords, nextRoles);
-    return removedIds.size;
+    return mapPersisted(persist(nextRecords, nextRoles), () => removedIds.size);
   }
 
   function roleIdsForRecord(recordId: string) {
@@ -289,7 +300,7 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
     const existing = records.value.find((record) => record.id === id);
     if (!existing) return;
     const input: MenuRecordInput = { ...existing, visible };
-    update(id, input);
+    return update(id, input);
   }
 
   function updateWorkbench(input: Partial<WorkbenchConfig>) {
@@ -297,7 +308,7 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
     const label = input.label !== undefined ? input.label.trim() : current.label;
     const sort = input.sort !== undefined ? Number(input.sort) : current.sort;
     const icon = input.icon ?? current.icon;
-    return persistShellConfig({
+    const saved = persistShellConfig({
       version: 1,
       workbench: {
         enabled: input.enabled ?? current.enabled,
@@ -305,7 +316,8 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
         icon,
         sort,
       },
-    }).workbench;
+    });
+    return saved.then((config) => config.workbench);
   }
 
   function canMove(id: string, nextParentId: string | null) {
@@ -365,21 +377,25 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
       );
     }
 
-    persist(nextRecords);
-    return { ...moved, sort: (safeIndex + 1) * 10 };
+    return mapPersisted(
+      persist(nextRecords),
+      () => ({ ...moved, sort: (safeIndex + 1) * 10 }),
+    );
   }
 
   function reset() {
     const tenant = requireTenant();
     const defaults = createDefaultTenantConfiguration(tenant);
-    persist(
+    const saved = persist(
       defaults.menuRecords,
       rolesForDefaultMenu(defaults.menuRecords),
       defaults.shellConfig,
     );
-    recoveryNotice.value = null;
-    refreshRuntimeIfCurrent(tenant);
-    return records.value;
+    return mapPersisted(saved, () => {
+      recoveryNotice.value = null;
+      refreshRuntimeIfCurrent(tenant);
+      return records.value;
+    });
   }
 
   return {

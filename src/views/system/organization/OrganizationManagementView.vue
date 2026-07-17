@@ -16,7 +16,16 @@
         <span>组织名称</span>
         <el-input v-model="keyword" clearable placeholder="搜索组织名称" />
       </div>
-      <el-button type="primary" :icon="Plus" @click="openCreate">新增组织</el-button>
+      <div class="filter-actions">
+        <el-button
+          v-if="operationPlatformPersistenceCapabilities.localDataExport"
+          :icon="Download"
+          @click="handleExportLocalData"
+        >
+          导出本地数据
+        </el-button>
+        <el-button type="primary" :icon="Plus" @click="openCreate">新增组织</el-button>
+      </div>
     </section>
 
     <el-alert
@@ -115,11 +124,16 @@
 import { computed, reactive, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Plus } from "@element-plus/icons-vue";
+import { Download, Plus } from "@element-plus/icons-vue";
 import { TENANT_TAG_TYPE, TENANT_TYPE_LABEL, TENANT_TYPE_OPTIONS } from "@/config/tenant";
+import {
+  createLocalStorageExportSnapshot,
+  downloadLocalStorageExportSnapshot,
+} from "@/features/data-migration/local-storage-export";
 import { useTenantAdminStore, type TenantDraft } from "@/stores/tenant-admin";
 import TenantMemberDrawer from "@/views/system/organization/TenantMemberDrawer.vue";
 import type { TenantInfo, TenantType } from "@/types/user";
+import { operationPlatformPersistenceCapabilities } from "@/features/persistence/runtime-operation-platform-persistence";
 
 const tenantAdminStore = useTenantAdminStore();
 const { tenants, recoveryNotice } = storeToRefs(tenantAdminStore);
@@ -189,7 +203,7 @@ function tenantTypeLabel(type: TenantType) {
   return TENANT_TYPE_LABEL[type];
 }
 
-function handleSave() {
+async function handleSave() {
   const error = validateDraft();
   if (error) {
     ElMessage.warning(error);
@@ -198,9 +212,9 @@ function handleSave() {
 
   try {
     if (editingId.value) {
-      tenantAdminStore.update(editingId.value, draft);
+      await tenantAdminStore.update(editingId.value, draft);
     } else {
-      tenantAdminStore.create(draft);
+      await tenantAdminStore.create(draft);
     }
     dialogVisible.value = false;
     ElMessage.success("组织已保存");
@@ -209,9 +223,15 @@ function handleSave() {
   }
 }
 
-function handleEnabledChange(tenantId: string, enabled: boolean) {
+function handleExportLocalData() {
+  const snapshot = createLocalStorageExportSnapshot(window.localStorage);
+  downloadLocalStorageExportSnapshot(snapshot);
+  ElMessage.success(`已导出 ${Object.keys(snapshot.entries).length} 项本地数据`);
+}
+
+async function handleEnabledChange(tenantId: string, enabled: boolean) {
   try {
-    tenantAdminStore.setEnabled(tenantId, enabled);
+    await tenantAdminStore.setEnabled(tenantId, enabled);
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "组织状态更新失败");
   }
@@ -229,7 +249,7 @@ async function handleRemove(tenant: TenantInfo) {
     return;
   }
   try {
-    tenantAdminStore.remove(tenant.id);
+    await tenantAdminStore.remove(tenant.id);
     ElMessage.success("组织已删除");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "组织删除失败");
@@ -265,6 +285,12 @@ async function handleRemove(tenant: TenantInfo) {
   min-width: 180px;
   color: var(--color-secondary);
   font-size: var(--font-size-sm);
+}
+
+.filter-actions {
+  display: flex;
+  gap: var(--spacing-8);
+  margin-left: auto;
 }
 
 .table-toolbar {

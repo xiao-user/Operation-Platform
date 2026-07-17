@@ -1,13 +1,14 @@
 import * as THREE from "three";
 import type { Position } from "../geo";
 import type { DigitalTwinMapTheme } from "../map-themes";
+import type { TuningAwareMapSceneLayer } from "./map-scene-layer";
 import type { MapProjection } from "./map-projection";
 import { mapVisualColor } from "./map-visual-tuning";
 import type { MapVisualTuning } from "./map-visual-tuning";
 import { ResourceOwner } from "./resource-owner";
 import { themeColor } from "./theme-color";
 
-export class AmbientEffectsLayer {
+export class AmbientEffectsLayer implements TuningAwareMapSceneLayer {
   readonly root = new THREE.Group();
   private readonly owner = new ResourceOwner();
   private readonly chaseGeometry: THREE.BufferGeometry;
@@ -155,6 +156,10 @@ export class AmbientEffectsLayer {
     this.ringPlateMaterial.opacity = ring.opacity * tuning.hudRingPlateOpacityScale;
     this.ringTickMaterial.color.copy(ring.color);
     this.ringTickMaterial.opacity = ring.opacity * tuning.hudRingTickOpacityScale;
+  }
+
+  applyTuning(theme: DigitalTwinMapTheme, tuning: MapVisualTuning) {
+    this.applyTheme(theme, tuning);
   }
 
   animate(time: number, delta: number) {

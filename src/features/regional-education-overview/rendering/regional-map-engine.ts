@@ -15,9 +15,12 @@ import type { EducationLocation, MapCameraView, MapDataLayerMode } from "../type
 import { AmbientEffectsLayer } from "./ambient-effects-layer";
 import { ConnectionLayer } from "./connection-layer";
 import { energyTowerRenderOrder, EnergyTowerLayer } from "./energy-tower-layer";
+import { GroundGridLayer } from "./ground-grid-layer";
 import { InstitutionLayer } from "./institution-layer";
 import { MapCameraTransition } from "./map-camera-transition";
 import type { MapCameraFraming } from "./map-camera-transition";
+import { disposeMapSceneLayers } from "./map-scene-layer";
+import type { TuningAwareMapSceneLayer } from "./map-scene-layer";
 import {
   createMapProjection,
   featureCenter,
@@ -33,8 +36,6 @@ import {
   mapVisualTuningWithCameraView,
 } from "./map-visual-tuning";
 import type { MapVisualTuning } from "./map-visual-tuning";
-import { createTerrainTextureSet } from "./terrain-texture-set";
-import type { TerrainTextureSet } from "./terrain-texture-set";
 
 const mapWidth = 860;
 const mapHeight = 520;
@@ -169,7 +170,7 @@ export class RegionalMapEngine {
   private readonly pointer = new THREE.Vector2();
   private readonly ambientLight: THREE.AmbientLight;
   private readonly directionLight: THREE.DirectionalLight;
-  private readonly textures: TerrainTextureSet;
+  private readonly groundLayer: GroundGridLayer;
   private readonly resizeObserver?: ResizeObserver;
   private viewport: MapViewport = { left: 0, top: 0, width: 1, height: 1 };
   private regionLayer?: RegionLayer;
@@ -205,6 +206,7 @@ export class RegionalMapEngine {
     theme: DigitalTwinMapTheme,
     selectedLocationId: string | undefined,
     dataLayerMode: MapDataLayerMode,
+    visualTuning: Readonly<MapVisualTuning>,
     private readonly events: RegionalMapEngineEvents,
   ) {
     this.mapState = mapState;
@@ -212,6 +214,7 @@ export class RegionalMapEngine {
     this.theme = theme;
     this.selectedLocationId = selectedLocationId;
     this.dataLayerMode = dataLayerMode;
+    this.visualTuning = cloneMapVisualTuning(visualTuning);
     this.viewport = this.measureHost();
     const { width, height } = this.viewport;
     this.camera = new THREE.PerspectiveCamera(defaultRegionalMapCameraView.fov, width / height, 1, 2400);
@@ -269,7 +272,8 @@ export class RegionalMapEngine {
     this.directionLight.position.set(120, -240, 420);
     this.scene.add(this.ambientLight, this.directionLight, this.mapRoot);
     this.applyMapTransform();
-    this.textures = createTerrainTextureSet(this.renderer);
+    this.groundLayer = new GroundGridLayer(theme, this.visualTuning);
+    this.mapRoot.add(this.groundLayer.root);
     this.buildScopeLayers();
     this.alignOrbitPivot(true);
     this.applyCameraFraming(mapScreenFraming(this.mapState, this.visualTuning));
@@ -377,9 +381,7 @@ export class RegionalMapEngine {
   }
 
   private buildScopeLayers() {
-    this.regionLayer?.dispose();
-    this.contextLayer?.dispose();
-    this.effectsLayer?.dispose();
+    this.disposeScopeLayers();
     this.disposeDynamicLayers();
     this.projection = createMapProjection(this.mapState.geoData, mapWidth, mapHeight, mapPadding);
     this.contextLayer = new RegionalContextLayer(
@@ -392,7 +394,6 @@ export class RegionalMapEngine {
       this.mapState,
       this.projection,
       this.theme,
-      this.textures,
       this.visualTuning,
     );
     this.regionLayer.setFocus(this.mapState.focusFeatureCode, this.visualTuning);
@@ -461,19 +462,33 @@ export class RegionalMapEngine {
   }
 
   private disposeDynamicLayers(animateEnergyExit = false) {
-    this.institutionLayer?.dispose();
-    this.connectionLayer?.dispose();
-    if (this.energyTowerLayer) {
-      if (animateEnergyExit && this.motionEnabled) {
-        this.energyTowerLayer.startExit();
-        this.exitingEnergyTowerLayers.push(this.energyTowerLayer);
-      } else {
-        this.energyTowerLayer.dispose();
-      }
-    }
+    disposeMapSceneLayers([this.institutionLayer, this.connectionLayer]);
     this.institutionLayer = undefined;
     this.connectionLayer = undefined;
+    const energyTowerLayer = this.energyTowerLayer;
     this.energyTowerLayer = undefined;
+    if (energyTowerLayer) {
+      if (animateEnergyExit && this.motionEnabled) {
+        energyTowerLayer.startExit();
+        this.exitingEnergyTowerLayers.push(energyTowerLayer);
+      } else {
+        energyTowerLayer.dispose();
+      }
+    }
+  }
+
+  private disposeScopeLayers() {
+    this.clearRegionLabels();
+    disposeMapSceneLayers([this.regionLayer, this.contextLayer, this.effectsLayer]);
+    this.regionLayer = undefined;
+    this.contextLayer = undefined;
+    this.effectsLayer = undefined;
+    this.projection = undefined;
+  }
+
+  private disposeExitingEnergyTowerLayers() {
+    disposeMapSceneLayers(this.exitingEnergyTowerLayers);
+    this.exitingEnergyTowerLayers.length = 0;
   }
 
   private processPointer() {
@@ -597,7 +612,15 @@ export class RegionalMapEngine {
     this.pointerDirty = true;
   }
 
+  private isMapPointerTarget(event: PointerEvent | MouseEvent) {
+    return event.target === this.renderer.domElement;
+  }
+
   private onPointerMove = (event: PointerEvent) => {
+    if (!this.isMapPointerTarget(event)) {
+      this.onPointerLeave();
+      return;
+    }
     this.updatePointer(event);
     this.requestRender();
   };
@@ -614,7 +637,7 @@ export class RegionalMapEngine {
   };
 
   private onPointerDown = (event: PointerEvent) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || !this.isMapPointerTarget(event)) return;
     this.renderer.domElement.focus({ preventScroll: true });
     this.pointerDownPosition = [event.clientX, event.clientY];
   };
@@ -640,6 +663,7 @@ export class RegionalMapEngine {
   };
 
   private onClick = (event: MouseEvent) => {
+    if (!this.isMapPointerTarget(event)) return;
     const pointerDownPosition = this.pointerDownPosition;
     this.pointerDownPosition = undefined;
     if (pointerDownPosition) {
@@ -680,8 +704,7 @@ export class RegionalMapEngine {
       window.cancelAnimationFrame(this.frameId);
       this.frameId = 0;
       this.energyTowerLayer?.settle(true);
-      for (const layer of this.exitingEnergyTowerLayers) layer.dispose();
-      this.exitingEnergyTowerLayers.length = 0;
+      this.disposeExitingEnergyTowerLayers();
       this.requestRender();
     } else {
       this.previousFrameTime = 0;
@@ -759,7 +782,8 @@ export class RegionalMapEngine {
         ...currentView,
         target: [currentView.target[0], currentView.target[1], targetZ],
       }, this.currentFraming, this.motionEnabled)
-        .then(() => {
+        .then((status) => {
+          if (status === "interrupted") return;
           this.pauseAutoRotation();
           this.syncVisualTuningFromCamera();
         });
@@ -767,20 +791,40 @@ export class RegionalMapEngine {
     this.requestHighFrameRate();
   }
 
+  setVisualTuning(tuning: Readonly<MapVisualTuning>) {
+    this.visualTuning = cloneMapVisualTuning(tuning);
+    this.applyMapTransform();
+    this.applyCameraFraming(mapScreenFraming(this.mapState, this.visualTuning));
+    for (const layer of this.activeLayers()) {
+      layer.applyTuning(this.theme, this.visualTuning);
+    }
+    this.ambientLight.intensity = this.visualTuning.ambientLightIntensity;
+    this.directionLight.intensity = this.visualTuning.directionalLightIntensity;
+    this.requestHighFrameRate();
+  }
+
   setTheme(theme: DigitalTwinMapTheme) {
     this.theme = theme;
-    this.regionLayer?.applyTheme(theme, this.visualTuning);
-    this.contextLayer?.applyTheme(theme, this.visualTuning);
-    this.institutionLayer?.applyTheme(theme, this.visualTuning);
-    this.connectionLayer?.applyTheme(theme, this.visualTuning);
-    this.energyTowerLayer?.applyTheme(theme, this.visualTuning);
-    for (const layer of this.exitingEnergyTowerLayers) {
+    for (const layer of this.activeLayers()) {
       layer.applyTheme(theme, this.visualTuning);
     }
-    this.effectsLayer?.applyTheme(theme, this.visualTuning);
     this.ambientLight.color.set(theme.sideTop);
     this.directionLight.color.set(theme.labelText);
     this.requestRender();
+  }
+
+  private activeLayers(): TuningAwareMapSceneLayer[] {
+    const layers: Array<TuningAwareMapSceneLayer | undefined> = [
+      this.groundLayer,
+      this.regionLayer,
+      this.contextLayer,
+      this.institutionLayer,
+      this.connectionLayer,
+      this.energyTowerLayer,
+      ...this.exitingEnergyTowerLayers,
+      this.effectsLayer,
+    ];
+    return layers.filter((layer): layer is TuningAwareMapSceneLayer => Boolean(layer));
   }
 
   getCameraView(): MapCameraView {
@@ -873,7 +917,8 @@ export class RegionalMapEngine {
       fov: this.visualTuning.cameraFov,
       position: [position.x, position.y, position.z],
       target: [framedTarget.x, framedTarget.y, framedTarget.z],
-    }, mapScreenFraming(this.mapState, this.visualTuning), this.motionEnabled).then(() => {
+    }, mapScreenFraming(this.mapState, this.visualTuning), this.motionEnabled).then((status) => {
+      if (status === "interrupted") return;
       this.pauseAutoRotation();
       this.syncVisualTuningFromCamera();
     });
@@ -885,7 +930,8 @@ export class RegionalMapEngine {
       view,
       mapScreenFraming(this.mapState, this.visualTuning),
       this.motionEnabled,
-    ).then(() => {
+    ).then((status) => {
+      if (status === "interrupted") return;
       this.pauseAutoRotation();
       this.controls.minDistance = minimumCameraDistanceForScope(this.mapState.scope);
       this.controls.update();
@@ -909,16 +955,14 @@ export class RegionalMapEngine {
     this.controls.removeEventListener("change", this.requestRender);
     this.controls.removeEventListener("start", this.onControlsStart);
     this.controls.removeEventListener("end", this.onControlsEnd);
-    this.controls.dispose();
     this.cameraTransition.cancel();
-    this.clearRegionLabels();
-    this.regionLayer?.dispose();
-    this.contextLayer?.dispose();
-    this.effectsLayer?.dispose();
+    this.controls.dispose();
+    disposeMapSceneLayers([this.groundLayer]);
+    this.disposeScopeLayers();
     this.disposeDynamicLayers();
-    for (const layer of this.exitingEnergyTowerLayers) layer.dispose();
-    this.exitingEnergyTowerLayers.length = 0;
-    this.textures.dispose();
+    this.disposeExitingEnergyTowerLayers();
+    this.mapRoot.clear();
+    this.scene.clear();
     this.renderer.dispose();
     this.renderer.domElement.remove();
     this.labelRenderer.domElement.remove();

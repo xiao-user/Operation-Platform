@@ -8,8 +8,9 @@ export type MapVisualColorKey =
   | "internalLine"
   | "hover"
   | "inactiveRegion"
-  | "contextFill"
   | "contextLine"
+  | "groundFill"
+  | "groundGrid"
   | "boundaryHead"
   | "boundaryTail"
   | "hudRing"
@@ -44,21 +45,18 @@ export interface MapVisualTuning {
   cameraTargetY: number;
   cameraTargetZ: number;
   districtFramingOffsetX: number;
-  contextFillOpacity: number;
   contextLineOpacity: number;
+  groundFillOpacity: number;
+  groundGridOpacity: number;
   ambientLightIntensity: number;
   directionalLightIntensity: number;
   regionBaseOpacity: number;
   regionTerrainOpacity: number;
-  regionTerrainRoughness: number;
-  regionTerrainMetalness: number;
-  regionTerrainNormalScale: number;
   regionTerrainEmissiveIntensity: number;
   regionSideTopOpacity: number;
   regionSideBottomOpacityScale: number;
   regionInternalBoundaryOpacityScale: number;
   regionTopContourOpacity: number;
-  regionBottomContourOpacity: number;
   districtThickness: number;
   districtHoverThickness: number;
   districtHoverOpacity: number;
@@ -144,21 +142,18 @@ export const defaultMapVisualTuning: Readonly<MapVisualTuning> = Object.freeze({
   cameraTargetY: -42,
   cameraTargetZ: 8,
   districtFramingOffsetX: -160,
-  contextFillOpacity: 0.07,
   contextLineOpacity: 0.18,
+  groundFillOpacity: 0,
+  groundGridOpacity: 0.3,
   ambientLightIntensity: 1.35,
   directionalLightIntensity: 2.2,
   regionBaseOpacity: 0.75,
   regionTerrainOpacity: 1,
-  regionTerrainRoughness: 0.94,
-  regionTerrainMetalness: 0.8,
-  regionTerrainNormalScale: 1,
-  regionTerrainEmissiveIntensity: 0.12,
+  regionTerrainEmissiveIntensity: 0,
   regionSideTopOpacity: 0.86,
   regionSideBottomOpacityScale: 1,
   regionInternalBoundaryOpacityScale: 1,
   regionTopContourOpacity: 0.7,
-  regionBottomContourOpacity: 0.52,
   districtThickness: 7,
   districtHoverThickness: 12,
   districtHoverOpacity: 0.4,
@@ -201,7 +196,7 @@ export const defaultMapVisualTuning: Readonly<MapVisualTuning> = Object.freeze({
   energyTowerTipGlowExponent: 2,
   energyTowerTipGlowStrength: 1.8,
   energyTowerHoverColorStrength: 0.55,
-  energyTowerBaseOpacity: 0.48,
+  energyTowerBaseOpacity: 0.9,
   energyTowerHeightOpacity: 0.3,
   energyTowerGridOpacity: 0.18,
   energyTowerHoverOpacity: 0.08,
@@ -227,8 +222,9 @@ export const defaultMapVisualTuning: Readonly<MapVisualTuning> = Object.freeze({
   boundarySpeed: 0.055,
   boundaryTailLength: 0.09,
   colorOverrides: Object.freeze({
-    contextFill: "#8A8A8A",
     contextLine: "#ABABAB",
+    groundFill: "#23252F",
+    groundGrid: "#FFFFFF",
     inactiveRegion: "#0F131F",
     institutionDefault: "#FFFFFF",
     internalLine: "#2B2D31",

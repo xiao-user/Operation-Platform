@@ -1,11 +1,8 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
-import { tenantRepository } from "@/features/tenant/local-storage-tenant-repository";
-import {
-  createCurrentUserAdminMember,
-  tenantMemberRepository,
-} from "@/features/tenant-members/local-storage-tenant-member-repository";
-import { tenantConfigurationRepository } from "@/features/tenant-config/local-storage-tenant-configuration-repository";
+import { createCurrentUserAdminMember } from "@/features/tenant-members/tenant-member-factories";
+import { createDefaultTenantConfiguration } from "@/features/tenant-config/default-tenant-configuration";
+import { operationPlatformPersistence } from "@/features/persistence/runtime-operation-platform-persistence";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
 import type { TenantInfo, TenantType } from "@/types/user";
@@ -17,25 +14,19 @@ function nextTenantId(type: TenantType) {
 }
 
 export const useTenantAdminStore = defineStore("tenant-admin", () => {
-  const loadResult = tenantRepository.list();
-  const tenants = ref<TenantInfo[]>(loadResult.tenants);
-  const recoveryNotice = ref(loadResult.recoveryNotice);
+  const userStore = useUserStore();
+  const tenants = ref<TenantInfo[]>(userStore.tenantList.map((tenant) => ({ ...tenant })));
+  const recoveryNotice = ref(userStore.tenantRecoveryNotice);
   const enabledTenants = computed(() => tenants.value.filter((tenant) => tenant.enabled !== false));
-
-  function persist(nextTenants: TenantInfo[]) {
-    tenants.value = tenantRepository.replace(nextTenants);
-    syncRuntimeStores();
-  }
 
   function syncRuntimeStores() {
     recoveryNotice.value = null;
-    const userStore = useUserStore();
     userStore.refreshTenants();
-    const navigationStore = useNavigationStore();
-    navigationStore.loadTenant(userStore.currentTenant);
+    tenants.value = userStore.tenantList.map((tenant) => ({ ...tenant }));
+    useNavigationStore().loadTenant(userStore.currentTenant);
   }
 
-  function create(input: TenantDraft) {
+  async function create(input: TenantDraft) {
     const name = input.name.trim();
     if (tenants.value.some((tenant) => tenant.name === name)) {
       throw new Error("组织名称不能重复");
@@ -47,78 +38,45 @@ export const useTenantAdminStore = defineStore("tenant-admin", () => {
       type: input.type,
       enabled: input.enabled !== false,
     };
-    const previousTenants = tenants.value.map((item) => ({ ...item }));
-    const savedTenants = tenantRepository.replace([...tenants.value, tenant]);
-    try {
-      const userStore = useUserStore();
-      tenantMemberRepository.replace(tenant, [
-        createCurrentUserAdminMember(tenant, userStore.userInfo),
-      ]);
-    } catch (error) {
-      tenantRepository.replace(previousTenants);
-      throw error;
-    }
-    tenants.value = savedTenants;
+    const member = createCurrentUserAdminMember(tenant, userStore.userInfo);
+    const configuration = createDefaultTenantConfiguration(tenant);
+    const saved = await operationPlatformPersistence.createTenant(tenant, configuration, member);
     syncRuntimeStores();
-    return tenant;
+    return saved;
   }
 
-  function update(tenantId: string, input: TenantDraft) {
+  async function update(tenantId: string, input: TenantDraft) {
     const name = input.name.trim();
     if (tenants.value.some((tenant) => tenant.id !== tenantId && tenant.name === name)) {
       throw new Error("组织名称不能重复");
     }
-    persist(
-      tenants.value.map((tenant) =>
-        tenant.id === tenantId
-          ? {
-              ...tenant,
-              name,
-              shortName: input.shortName.trim(),
-              type: tenant.type,
-              enabled: tenant.type === "platform" ? true : input.enabled !== false,
-            }
-          : tenant,
-      ),
-    );
+    const existing = tenants.value.find((tenant) => tenant.id === tenantId);
+    if (!existing) throw new Error("组织不存在或已被删除");
+    await operationPlatformPersistence.updateTenant({
+      ...existing,
+      name,
+      shortName: input.shortName.trim(),
+      enabled: existing.type === "platform" ? true : input.enabled !== false,
+    });
+    syncRuntimeStores();
   }
 
-  function setEnabled(tenantId: string, enabled: boolean) {
-    persist(
-      tenants.value.map((tenant) =>
-        tenant.id === tenantId
-          ? { ...tenant, enabled: tenant.type === "platform" ? true : enabled }
-          : tenant,
-      ),
-    );
+  async function setEnabled(tenantId: string, enabled: boolean) {
+    const existing = tenants.value.find((tenant) => tenant.id === tenantId);
+    if (!existing) return;
+    await update(tenantId, { ...existing, enabled });
   }
 
-  function remove(tenantId: string) {
+  async function remove(tenantId: string) {
     const target = tenants.value.find((tenant) => tenant.id === tenantId);
     if (!target || target.type === "platform") return;
-    const previousTenants = tenants.value.map((tenant) => ({ ...tenant }));
-    const nextTenants = previousTenants.filter((tenant) => tenant.id !== tenantId);
-    const savedTenants = tenantRepository.replace(nextTenants);
-    try {
-      tenantConfigurationRepository.remove(tenantId);
-    } catch (error) {
-      try {
-        tenantRepository.replace(previousTenants);
-      } catch (rollbackError) {
-        throw new Error(
-          `组织删除失败且组织列表回滚失败（原始错误：${error instanceof Error ? error.message : "未知错误"}；回滚错误：${rollbackError instanceof Error ? rollbackError.message : "未知错误"}）`,
-        );
-      }
-      throw error;
-    }
-    tenants.value = savedTenants;
+    await operationPlatformPersistence.deleteTenant(tenantId);
     syncRuntimeStores();
   }
 
   function reload() {
-    const result = tenantRepository.list();
-    tenants.value = result.tenants;
-    recoveryNotice.value = result.recoveryNotice;
+    tenants.value = operationPlatformPersistence.listTenants();
+    recoveryNotice.value = null;
   }
 
   return {

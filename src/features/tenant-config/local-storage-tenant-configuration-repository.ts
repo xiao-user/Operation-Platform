@@ -1,6 +1,4 @@
-import { cloneTenantTemplate } from "@/config/menu-templates";
 import {
-  createDefaultRoles,
   tenantRoleRepository,
   tenantRoleStorageKey,
 } from "@/features/access-control/local-storage-role-repository";
@@ -9,7 +7,6 @@ import {
   tenantMenuStorageKey,
 } from "@/features/menu-config/local-storage-menu-repository";
 import {
-  defaultTenantShellConfig,
   tenantShellConfigRepository,
   tenantShellConfigStorageKey,
 } from "@/features/shell-config/local-storage-shell-config-repository";
@@ -22,6 +19,9 @@ import type { TenantInfo } from "@/types/user";
 import { workbenchLayoutStorageKeysForTenant } from "@/features/workbench/local-storage-workbench-layout-repository";
 import { tenantMemberStorageKey } from "@/features/tenant-members/local-storage-tenant-member-repository";
 import { activeRoleStorageKeysForTenant } from "@/features/access-control/local-storage-active-role-repository";
+import { createDefaultTenantConfiguration } from "@/features/tenant-config/default-tenant-configuration";
+
+export { createDefaultTenantConfiguration } from "@/features/tenant-config/default-tenant-configuration";
 
 const CONFIGURATION_VERSION = 1;
 
@@ -52,16 +52,6 @@ function cloneConfiguration(configuration: TenantConfiguration): TenantConfigura
       workbench: { ...configuration.shellConfig.workbench },
     },
     roles: configuration.roles.map((role) => ({ ...role, menuIds: [...role.menuIds] })),
-  };
-}
-
-export function createDefaultTenantConfiguration(tenant: TenantInfo): TenantConfiguration {
-  const menuRecords = cloneTenantTemplate(tenant);
-  return {
-    version: CONFIGURATION_VERSION,
-    menuRecords,
-    shellConfig: defaultTenantShellConfig(),
-    roles: createDefaultRoles(tenant, menuRecords),
   };
 }
 

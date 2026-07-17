@@ -60,7 +60,7 @@ describe("workbench store", () => {
     expect(store.totalCount).toBe(9);
   });
 
-  it("cancels a draft without persistence and saves one override atomically", () => {
+  it("cancels a draft without persistence and saves one override atomically", async () => {
     const store = useWorkbenchStore();
     store.load(school, "user-a", ADMIN_ROLE_ID, emptyTree);
     const widgetKey = store.items[0]!.widgetKey;
@@ -74,7 +74,7 @@ describe("workbench store", () => {
 
     store.beginEditing();
     store.setVisible(widgetKey, false);
-    store.saveEditing();
+    await store.saveEditing();
     expect(store.isEditing).toBe(false);
     expect(store.hasOverride).toBe(true);
     expect(localStorage.getItem(workbenchLayoutStorageKey(store.context!))).not.toBeNull();
@@ -83,20 +83,37 @@ describe("workbench store", () => {
     expect(store.items.find((item) => item.widgetKey === widgetKey)!.visible).toBe(false);
   });
 
-  it("restores the current template and removes the personal override after saving", () => {
+  it("restores the current template and removes the personal override after saving", async () => {
     const store = useWorkbenchStore();
     store.load(school, "user-a", ADMIN_ROLE_ID, emptyTree);
     const widgetKey = store.items[0]!.widgetKey;
     store.beginEditing();
     store.setVisible(widgetKey, false);
-    store.saveEditing();
+    await store.saveEditing();
 
     store.beginEditing();
     store.restoreDefaultDraft();
     expect(store.visibleCount).toBe(store.totalCount);
-    store.saveEditing();
+    await store.saveEditing();
 
     expect(store.hasOverride).toBe(false);
     expect(localStorage.getItem(workbenchLayoutStorageKey(store.context!))).toBeNull();
+  });
+
+  it("keeps personal layouts isolated when the signed-in user changes", async () => {
+    const store = useWorkbenchStore();
+    store.load(school, "user-a", ADMIN_ROLE_ID, emptyTree);
+    const widgetKey = store.items[0]!.widgetKey;
+    store.beginEditing();
+    store.setVisible(widgetKey, false);
+    await store.saveEditing();
+
+    store.load(school, "user-b", ADMIN_ROLE_ID, emptyTree);
+    expect(store.items.find((item) => item.widgetKey === widgetKey)!.visible).toBe(true);
+    expect(store.hasOverride).toBe(false);
+
+    store.load(school, "user-a", ADMIN_ROLE_ID, emptyTree);
+    expect(store.items.find((item) => item.widgetKey === widgetKey)!.visible).toBe(false);
+    expect(store.hasOverride).toBe(true);
   });
 });

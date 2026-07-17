@@ -55,7 +55,7 @@
       {{ activeRoleLabel }}
     </el-tag>
 
-    <el-dropdown v-if="canOpenPlatformConfig" trigger="click" @command="handleUserCommand">
+    <el-dropdown trigger="click" @command="handleUserCommand">
       <button class="user-info" type="button">
         <el-avatar :size="32" class="user-avatar">{{ userInfo.initials }}</el-avatar>
         <span class="user-name">{{ userInfo.name }}</span>
@@ -63,33 +63,39 @@
       </button>
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item command="menu-config">菜单配置</el-dropdown-item>
+          <el-dropdown-item v-if="canOpenPlatformConfig" command="menu-config">菜单配置</el-dropdown-item>
+          <el-dropdown-item v-if="authStore.canChangePassword" command="change-password">
+            修改密码
+          </el-dropdown-item>
+          <el-dropdown-item divided command="sign-out">退出登录</el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>
-    <div v-else class="user-info is-static">
-      <el-avatar :size="32" class="user-avatar">{{ userInfo.initials }}</el-avatar>
-      <span class="user-name">{{ userInfo.name }}</span>
-    </div>
+
+    <ChangePasswordDialog v-model="passwordDialogVisible" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { ElMessageBox } from "element-plus";
 import { ArrowDown } from "@element-plus/icons-vue";
+import ChangePasswordDialog from "@/components/ChangePasswordDialog.vue";
 import { TENANT_TAG_TYPE, TENANT_TYPE_LABEL } from "@/config/tenant";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
 import { useWorkbenchStore } from "@/stores/workbench";
+import { useAuthStore } from "@/stores/auth";
 import type { TenantType } from "@/types/user";
 
 const router = useRouter();
 const navigationStore = useNavigationStore();
 const userStore = useUserStore();
 const workbenchStore = useWorkbenchStore();
+const authStore = useAuthStore();
+const passwordDialogVisible = ref(false);
 const { userInfo, currentTenant, availableTenants, isAdmin } = storeToRefs(userStore);
 const { activeRoleRecord, availableRoleRecords } = storeToRefs(navigationStore);
 
@@ -126,7 +132,7 @@ async function handleTenantSwitch(tenantId: string) {
 async function handleRoleSwitch(roleId: string) {
   if (roleId === activeRoleRecord.value?.id) return;
   if (!(await confirmDiscardWorkbenchChanges())) return;
-  userStore.setActiveRoleForTenant(currentTenant.value.id, roleId);
+  await userStore.setActiveRoleForTenant(currentTenant.value.id, roleId);
   if (router.currentRoute.value.name === "menu-unavailable") {
     await navigationStore.navigateToDefault(router);
     return;
@@ -135,6 +141,17 @@ async function handleRoleSwitch(roleId: string) {
 }
 
 async function handleUserCommand(command: string) {
+  if (command === "change-password") {
+    passwordDialogVisible.value = true;
+    return;
+  }
+  if (command === "sign-out") {
+    if (!(await confirmDiscardWorkbenchChanges())) return;
+    await authStore.signOut();
+    userStore.resetPersistence();
+    await router.replace("/");
+    return;
+  }
   if (command !== "menu-config") return;
   if (!(await confirmDiscardWorkbenchChanges())) return;
   const platformTenant = platformAdminTenant.value;

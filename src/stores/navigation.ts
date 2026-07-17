@@ -10,8 +10,8 @@ import {
 } from "@/features/access-control/menu-permissions";
 import type { RoleRecord } from "@/features/access-control/types";
 import { buildMenuTree, resolveFirstTarget } from "@/features/menu-config/menu-tree";
-import { defaultTenantShellConfig } from "@/features/shell-config/local-storage-shell-config-repository";
-import { tenantConfigurationRepository } from "@/features/tenant-config/local-storage-tenant-configuration-repository";
+import { defaultTenantShellConfig } from "@/features/shell-config/default-shell-config";
+import { operationPlatformPersistence } from "@/features/persistence/runtime-operation-platform-persistence";
 import {
   resolveFirstTenantInternalPath,
   resolveTenantRouteAccess,
@@ -172,7 +172,10 @@ export const useNavigationStore = defineStore("navigation", () => {
   });
 
   function loadTenant(tenant: TenantInfo) {
-    const result = tenantConfigurationRepository.list(tenant);
+    const result = operationPlatformPersistence.loadConfiguration(tenant) ?? {
+      configuration: createUnavailableConfiguration(),
+      recoveryNotice: null,
+    };
     const configuration = result.configuration;
     currentTenant.value = { ...tenant };
     records.value = configuration.menuRecords;
@@ -184,6 +187,15 @@ export const useNavigationStore = defineStore("navigation", () => {
       activeModuleId.value = moduleNodes.value[0]?.id ?? "";
       activeMenuId.value = "";
     }
+  }
+
+  function createUnavailableConfiguration() {
+    return {
+      version: 1 as const,
+      menuRecords: [],
+      roles: [],
+      shellConfig: defaultTenantShellConfig(),
+    };
   }
 
   function rootModuleIdFor(record: MenuConfigRecord) {

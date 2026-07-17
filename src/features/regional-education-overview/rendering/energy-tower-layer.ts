@@ -5,6 +5,7 @@ import type { EnergyTowerDatum } from "../energy-tower-data";
 import type { MapState } from "../map-data-adapter";
 import type { DigitalTwinMapTheme } from "../map-themes";
 import type { EducationLocation } from "../types";
+import type { TuningAwareMapSceneLayer } from "./map-scene-layer";
 import type { MapProjection } from "./map-projection";
 import { defaultMapVisualTuning, mapVisualColor } from "./map-visual-tuning";
 import type { MapVisualTuning } from "./map-visual-tuning";
@@ -14,6 +15,24 @@ import { regionTopZ } from "./region-layer";
 const verticalSegments = 24;
 const radialSegments = 32;
 export const energyTowerRenderOrder = 80;
+
+export type EnergyTowerValueBand = "low" | "medium" | "high";
+
+export function energyTowerValueBand(
+  value: number,
+  minimumValue: number,
+  maximumValue: number,
+): EnergyTowerValueBand {
+  if (maximumValue <= minimumValue) return "low";
+  const progress = THREE.MathUtils.clamp(
+    (value - minimumValue) / (maximumValue - minimumValue),
+    0,
+    1,
+  );
+  if (progress <= 1 / 3) return "low";
+  if (progress <= 2 / 3) return "medium";
+  return "high";
+}
 
 export function energyTowerDimensions(
   scope: MapState["scope"],
@@ -60,6 +79,7 @@ const vertexShader = `
 `;
 
 const fragmentShader = `
+  uniform vec3 uBaseColor;
   uniform vec3 uTopColor;
   uniform float uHeight;
   uniform float uHover;
@@ -79,6 +99,7 @@ const fragmentShader = `
   uniform float uHeightOpacity;
   uniform float uGridOpacity;
   uniform float uHoverOpacity;
+  uniform float uBottomOpacity;
   varying vec2 vUv;
   varying float vHeight;
   void main() {
@@ -88,18 +109,20 @@ const fragmentShader = `
     float ringGrid = step(gridStart, mod(vUv.y * uRingGridCount, 1.0));
     float grid = max(verticalGrid, ringGrid);
     float verticalFade = smoothstep(0.0, uFadeEnd, h);
-    vec3 color = uTopColor * (uBaseColorStrength + h * uHeightColorStrength);
-    color += uTopColor * grid * h * uGridColorStrength;
+    vec3 gradientColor = mix(uBaseColor, uTopColor, h);
+    vec3 color = gradientColor * (uBaseColorStrength + h * uHeightColorStrength);
+    color += gradientColor * grid * h * uGridColorStrength;
     color += uTopColor * (
       pow(h, uTipGlowExponent) * uTipGlowStrength
       + uHover * uHoverColorStrength
     );
-    float alpha = (
+    float bodyAlpha = (
       uBaseOpacity
       + h * uHeightOpacity
       + grid * uGridOpacity
       + uHover * uHoverOpacity
-    ) * verticalFade;
+    );
+    float alpha = mix(uBottomOpacity, bodyAlpha, verticalFade);
     gl_FragColor = vec4(color, alpha * uReveal);
   }
 `;
@@ -108,7 +131,12 @@ export interface EnergyTowerHit {
   datum: EnergyTowerDatum;
 }
 
-export class EnergyTowerLayer {
+interface EnergyTowerGlowResources {
+  geometry: THREE.CircleGeometry;
+  material: THREE.MeshBasicMaterial;
+}
+
+export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
   readonly root = new THREE.Group();
   private readonly owner = new ResourceOwner();
   private readonly meshes: THREE.Mesh[] = [];
@@ -139,30 +167,39 @@ export class EnergyTowerLayer {
     )
       .sort((left, right) => right.value - left.value || left.name.localeCompare(right.name, "zh-CN"));
     const maximumValue = Math.max(1, ...data.map((datum) => datum.value));
-    for (const datum of data) {
-      const height = energyTowerHeight(datum.value, maximumValue, mapState.scope, tuning);
-      this.createTower(
-        datum,
-        height,
-        dimensions.radius,
-        projection,
-        theme,
-        tuning,
-        mapState.scope === "township",
-      );
+    const minimumValue = Math.min(maximumValue, ...data.map((datum) => datum.value));
+    if (data.length > 0) {
+      const glowResources = this.createGlowResources(dimensions.radius, theme, tuning);
+      for (const datum of data) {
+        const height = energyTowerHeight(datum.value, maximumValue, mapState.scope, tuning);
+        this.createTower(
+          datum,
+          energyTowerValueBand(datum.value, minimumValue, maximumValue),
+          height,
+          dimensions.radius,
+          projection,
+          theme,
+          tuning,
+          mapState.scope === "township",
+          glowResources,
+        );
+      }
     }
     this.syncPinnedLabel();
   }
 
   private createTower(
     datum: EnergyTowerDatum,
+    band: EnergyTowerValueBand,
     height: number,
     radius: number,
     projection: MapProjection,
     theme: DigitalTwinMapTheme,
     tuning: Readonly<MapVisualTuning>,
     showSchoolDetails: boolean,
+    glowResources: EnergyTowerGlowResources,
   ) {
+    const colors = this.resolveColors(theme, tuning, band);
     const group = new THREE.Group();
     // Three.js resets groupOrder at every nested Group. Keep the explicit overlay
     // order on each tower so RegionLayer's district renderOrder cannot draw over it.
@@ -180,9 +217,8 @@ export class EnergyTowerLayer {
     geometry.rotateX(Math.PI / 2);
     const material = this.owner.material(new THREE.ShaderMaterial({
       uniforms: {
-        uTopColor: { value: new THREE.Color(
-          mapVisualColor(tuning, "energyTower", theme.primary),
-        ) },
+        uBaseColor: { value: new THREE.Color(colors.base) },
+        uTopColor: { value: new THREE.Color(colors.top) },
         uHeight: { value: height },
         uHover: { value: 0 },
         uReveal: { value: 0 },
@@ -201,6 +237,9 @@ export class EnergyTowerLayer {
         uHeightOpacity: { value: tuning.energyTowerHeightOpacity },
         uGridOpacity: { value: tuning.energyTowerGridOpacity },
         uHoverOpacity: { value: tuning.energyTowerHoverOpacity },
+        uBottomOpacity: {
+          value: theme.energyTowerPalette?.bottomOpacity ?? 0,
+        },
       },
       vertexShader,
       fragmentShader,
@@ -210,6 +249,7 @@ export class EnergyTowerLayer {
       depthTest: false,
       depthWrite: false,
     }));
+    material.userData.energyTowerValueBand = band;
     const mesh = new THREE.Mesh(geometry, material);
     mesh.userData.energyTowerDatum = datum;
     mesh.renderOrder = 2;
@@ -218,29 +258,9 @@ export class EnergyTowerLayer {
     this.materials.set(datum.id, material);
     group.add(mesh);
 
-    const glow = this.createGlowTexture(
-      tuning.energyTowerGlowMidpoint,
-      tuning.energyTowerGlowMidAlpha,
-    );
-    const glowMaterial = this.owner.material(new THREE.MeshBasicMaterial({
-      map: glow,
-      color: mapVisualColor(tuning, "energyTowerGlow", theme.primary),
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      opacity: 0,
-      depthTest: false,
-      depthWrite: false,
-      polygonOffset: true,
-      polygonOffsetFactor: -2,
-    }));
-    glowMaterial.userData.baseOpacity = tuning.energyTowerGlowOpacity;
-    this.glowMaterials.push(glowMaterial);
     const glowPlane = new THREE.Mesh(
-      this.owner.geometry(new THREE.CircleGeometry(
-        radius * tuning.energyTowerGlowRadiusScale,
-        40,
-      )),
-      glowMaterial,
+      glowResources.geometry,
+      glowResources.material,
     );
     glowPlane.position.z = 0.16;
     glowPlane.renderOrder = 1;
@@ -287,6 +307,38 @@ export class EnergyTowerLayer {
     this.root.add(group);
   }
 
+  private createGlowResources(
+    radius: number,
+    theme: DigitalTwinMapTheme,
+    tuning: Readonly<MapVisualTuning>,
+  ): EnergyTowerGlowResources {
+    const texture = this.createGlowTexture(
+      tuning.energyTowerGlowMidpoint,
+      tuning.energyTowerGlowMidAlpha,
+    );
+    const glowColor = this.resolveColors(theme, tuning, "low").glow;
+    const material = this.owner.material(new THREE.MeshBasicMaterial({
+      map: texture,
+      color: glowColor,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      opacity: 0,
+      depthTest: false,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+    }));
+    material.userData.baseOpacity = tuning.energyTowerGlowOpacity;
+    this.glowMaterials.push(material);
+    return {
+      geometry: this.owner.geometry(new THREE.CircleGeometry(
+        radius * tuning.energyTowerGlowRadiusScale,
+        40,
+      )),
+      material,
+    };
+  }
+
   private syncPinnedLabel() {
     const activeId = this.hoveredId ?? this.labelIds[this.activeLabelIndex];
     for (const [id, element] of this.labels) {
@@ -310,6 +362,7 @@ export class EnergyTowerLayer {
   }
 
   animate(delta: number) {
+    const previousReveal = this.reveal;
     const next = THREE.MathUtils.lerp(
       this.reveal,
       this.targetReveal,
@@ -318,11 +371,11 @@ export class EnergyTowerLayer {
       ),
     );
     this.reveal = Math.abs(next - this.targetReveal) < 0.002 ? this.targetReveal : next;
-    this.applyReveal();
+    if (this.reveal !== previousReveal) this.applyReveal();
     let labelChanged = false;
     if (!this.hoveredId && this.labelIds.length > 1 && this.targetReveal > 0) {
       const cycleDuration = Math.max(0.1, this.tuning.energyTowerLabelCycleSeconds);
-      this.labelCycleElapsed += THREE.MathUtils.clamp(delta, 0, 0.1);
+      this.labelCycleElapsed += THREE.MathUtils.clamp(delta, 0, cycleDuration);
       if (this.labelCycleElapsed >= cycleDuration) {
         this.labelCycleElapsed %= cycleDuration;
         this.activeLabelIndex = (this.activeLabelIndex + 1) % this.labelIds.length;
@@ -388,15 +441,45 @@ export class EnergyTowerLayer {
     this.syncPinnedLabel();
   }
 
+  private resolveColors(
+    theme: DigitalTwinMapTheme,
+    tuning: Readonly<MapVisualTuning>,
+    band: EnergyTowerValueBand,
+  ) {
+    if (theme.energyTowerPalette) {
+      const topColors: Record<EnergyTowerValueBand, string> = {
+        low: theme.energyTowerPalette.low,
+        medium: theme.energyTowerPalette.medium,
+        high: theme.energyTowerPalette.high,
+      };
+      return {
+        base: theme.energyTowerPalette.base,
+        top: topColors[band],
+        glow: theme.energyTowerPalette.base,
+      };
+    }
+    const towerColor = mapVisualColor(tuning, "energyTower", theme.primary);
+    return {
+      base: towerColor,
+      top: towerColor,
+      glow: mapVisualColor(tuning, "energyTowerGlow", theme.primary),
+    };
+  }
+
   applyTheme(
     theme: DigitalTwinMapTheme,
     tuning: Readonly<MapVisualTuning> = this.tuning,
   ) {
-    const towerColor = mapVisualColor(tuning, "energyTower", theme.primary);
-    const glowColor = mapVisualColor(tuning, "energyTowerGlow", theme.primary);
     for (const material of this.materials.values()) {
-      material.uniforms.uTopColor!.value.set(towerColor);
+      const band = material.userData.energyTowerValueBand as EnergyTowerValueBand;
+      const colors = this.resolveColors(theme, tuning, band);
+      material.uniforms.uBaseColor!.value.set(colors.base);
+      material.uniforms.uTopColor!.value.set(colors.top);
+      material.uniforms.uBottomOpacity!.value = theme.energyTowerPalette?.bottomOpacity ?? 0;
     }
+    const glowColor = theme.energyTowerPalette
+      ? theme.energyTowerPalette.base
+      : mapVisualColor(tuning, "energyTowerGlow", theme.primary);
     for (const material of this.glowMaterials) material.color.set(glowColor);
   }
 
@@ -418,6 +501,7 @@ export class EnergyTowerLayer {
       material.uniforms.uHeightOpacity!.value = tuning.energyTowerHeightOpacity;
       material.uniforms.uGridOpacity!.value = tuning.energyTowerGridOpacity;
       material.uniforms.uHoverOpacity!.value = tuning.energyTowerHoverOpacity;
+      material.uniforms.uBottomOpacity!.value = theme.energyTowerPalette?.bottomOpacity ?? 0;
     }
     for (const material of this.glowMaterials) {
       material.userData.baseOpacity = tuning.energyTowerGlowOpacity;

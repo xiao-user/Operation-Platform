@@ -2,12 +2,12 @@ import * as THREE from "three";
 import type { GeoFeature, Position } from "../geo";
 import type { MapState } from "../map-data-adapter";
 import type { DigitalTwinMapTheme } from "../map-themes";
+import type { TuningAwareMapSceneLayer } from "./map-scene-layer";
 import type { MapProjection } from "./map-projection";
 import { polygonsOf } from "./map-projection";
 import type { MapVisualTuning } from "./map-visual-tuning";
 import { mapVisualColor } from "./map-visual-tuning";
 import { ResourceOwner } from "./resource-owner";
-import type { TerrainTextureSet } from "./terrain-texture-set";
 import { themeColor } from "./theme-color";
 
 const topZ = 44;
@@ -49,7 +49,7 @@ interface RegionHit {
   group: THREE.Group;
 }
 
-export class RegionLayer {
+export class RegionLayer implements TuningAwareMapSceneLayer {
   readonly root = new THREE.Group();
   private readonly owner = new ResourceOwner();
   private readonly interactiveMeshes: THREE.Mesh[] = [];
@@ -58,11 +58,11 @@ export class RegionLayer {
   private readonly highlightMaterials = new Map<THREE.Group, THREE.MeshBasicMaterial>();
   private readonly inactiveOverlayMaterials = new Map<THREE.Group, THREE.MeshBasicMaterial>();
   private readonly baseMaterial: THREE.MeshBasicMaterial;
+  private readonly sideDepthMaterial: THREE.MeshBasicMaterial;
   private readonly sideMaterial: THREE.ShaderMaterial;
   private readonly terrainMaterial: THREE.MeshStandardMaterial;
   private readonly internalBoundaryMaterial: THREE.LineBasicMaterial;
   private readonly topContourMaterial: THREE.LineBasicMaterial;
-  private readonly bottomContourMaterial: THREE.LineBasicMaterial;
   private focusFeatureCode?: string;
   private hoveredFeatureCode?: string;
   private tuning: MapVisualTuning;
@@ -72,7 +72,6 @@ export class RegionLayer {
     mapState: MapState,
     private readonly projection: MapProjection,
     theme: DigitalTwinMapTheme,
-    textures: TerrainTextureSet,
     tuning: MapVisualTuning,
   ) {
     this.theme = theme;
@@ -80,9 +79,20 @@ export class RegionLayer {
     this.baseMaterial = this.owner.material(new THREE.MeshBasicMaterial({
       transparent: true,
       opacity: 0.75,
-      side: THREE.DoubleSide,
+      // The bottom cap is only physically visible from below. Rendering its
+      // front face from above lets its edge bleed through translucent walls.
+      side: THREE.BackSide,
       depthWrite: false,
     }));
+    this.sideDepthMaterial = this.owner.material(new THREE.MeshBasicMaterial({
+      side: THREE.DoubleSide,
+      depthTest: true,
+      depthWrite: true,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
+    }));
+    this.sideDepthMaterial.colorWrite = false;
     this.sideMaterial = this.owner.material(new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -114,50 +124,28 @@ export class RegionLayer {
       `,
     }));
     this.terrainMaterial = this.owner.material(new THREE.MeshStandardMaterial({
-      map: textures.diffuse,
-      normalMap: textures.normal,
-      normalScale: new THREE.Vector2(1, 1),
-      roughnessMap: textures.roughness,
       roughness: 0.94,
       metalness: 0.03,
-      transparent: true,
+      transparent: false,
       side: THREE.DoubleSide,
-      depthWrite: false,
+      depthWrite: true,
       alphaTest: 0.02,
-      emissiveIntensity: 0.12,
+      emissiveIntensity: tuning.regionTerrainEmissiveIntensity,
     }));
     this.internalBoundaryMaterial = this.owner.material(new THREE.LineBasicMaterial({
       transparent: true,
-      depthTest: false,
+      depthTest: true,
       depthWrite: false,
     }));
     this.topContourMaterial = this.owner.material(new THREE.LineBasicMaterial({
       transparent: true,
       opacity: 0.88,
       blending: THREE.AdditiveBlending,
-      depthTest: false,
-      depthWrite: false,
-    }));
-    this.bottomContourMaterial = this.owner.material(new THREE.LineBasicMaterial({
-      transparent: true,
-      opacity: 0.52,
-      blending: THREE.AdditiveBlending,
-      depthTest: false,
+      depthTest: true,
       depthWrite: false,
     }));
     this.build(mapState);
     this.applyTheme(theme);
-  }
-
-  private applyTerrainUv(geometry: THREE.BufferGeometry) {
-    const position = geometry.getAttribute("position");
-    const uv = new Float32Array(position.count * 2);
-    for (let index = 0; index < position.count; index += 1) {
-      uv[index * 2] = (position.getX(index) + 430) / 860;
-      uv[index * 2 + 1] = (position.getY(index) + 260) / 520;
-    }
-    geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-    return geometry;
   }
 
   private createBoundary(ring: Position[], z: number, material: THREE.Material) {
@@ -191,7 +179,10 @@ export class RegionLayer {
     const geometry = this.owner.geometry(new THREE.BufferGeometry());
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
     geometry.computeVertexNormals();
-    return new THREE.Mesh(geometry, this.sideMaterial);
+    return [
+      new THREE.Mesh(geometry, this.sideDepthMaterial),
+      new THREE.Mesh(geometry, this.sideMaterial),
+    ] as const;
   }
 
   private build(mapState: MapState) {
@@ -217,10 +208,10 @@ export class RegionLayer {
           this.baseMaterial,
         );
         base.position.z = bottomZ;
-        regionGroup.add(base, this.createSideWalls(outerRing));
+        regionGroup.add(base, ...this.createSideWalls(outerRing));
 
         const terrain = new THREE.Mesh(
-          this.applyTerrainUv(this.owner.geometry(new THREE.ShapeGeometry(shape))),
+          this.owner.geometry(new THREE.ShapeGeometry(shape)),
           this.terrainMaterial,
         );
         terrain.position.z = topZ;
@@ -267,7 +258,6 @@ export class RegionLayer {
         }
         regionGroup.add(
           this.createBoundary(outerRing, topZ + 1, this.topContourMaterial),
-          this.createBoundary(outerRing, bottomZ, this.bottomContourMaterial),
         );
         this.root.add(regionGroup);
       }
@@ -287,7 +277,7 @@ export class RegionLayer {
       mapVisualColor(tuning, "sideBottom", theme.sideBottom),
       regionTop,
     );
-    this.baseMaterial.color.set(regionTop);
+    this.baseMaterial.color.set(theme.bottomFill);
     this.baseMaterial.opacity = tuning.regionBaseOpacity;
     this.sideMaterial.uniforms.topColor!.value.set(
       mapVisualColor(tuning, "sideTop", theme.sideTop),
@@ -300,9 +290,12 @@ export class RegionLayer {
     this.terrainMaterial.color.set(regionTop);
     this.terrainMaterial.emissive.set(regionTop);
     this.terrainMaterial.opacity = tuning.regionTerrainOpacity;
-    this.terrainMaterial.roughness = tuning.regionTerrainRoughness;
-    this.terrainMaterial.metalness = tuning.regionTerrainMetalness;
-    this.terrainMaterial.normalScale.setScalar(tuning.regionTerrainNormalScale);
+    const terrainTransparent = tuning.regionTerrainOpacity < 0.999;
+    if (this.terrainMaterial.transparent !== terrainTransparent) {
+      this.terrainMaterial.transparent = terrainTransparent;
+      this.terrainMaterial.needsUpdate = true;
+    }
+    this.terrainMaterial.depthWrite = !terrainTransparent;
     this.terrainMaterial.emissiveIntensity = tuning.regionTerrainEmissiveIntensity;
     this.internalBoundaryMaterial.color.copy(internal.color);
     this.internalBoundaryMaterial.opacity = (
@@ -310,8 +303,6 @@ export class RegionLayer {
     );
     this.topContourMaterial.color.set(outline);
     this.topContourMaterial.opacity = tuning.regionTopContourOpacity;
-    this.bottomContourMaterial.color.set(outline);
-    this.bottomContourMaterial.opacity = tuning.regionBottomContourOpacity;
     for (const material of this.highlightMaterials.values()) {
       material.color.set(mapVisualColor(tuning, "hover", theme.primary));
     }
@@ -390,8 +381,12 @@ export class RegionLayer {
   }
 
   setTuning(tuning: MapVisualTuning) {
+    this.applyTuning(this.theme, tuning);
+  }
+
+  applyTuning(theme: DigitalTwinMapTheme, tuning: MapVisualTuning) {
     this.tuning = tuning;
-    this.applyTheme(this.theme, tuning);
+    this.applyTheme(theme, tuning);
     this.applyInteractionTargets();
   }
 

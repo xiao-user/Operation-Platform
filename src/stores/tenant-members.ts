@@ -3,13 +3,13 @@ import { defineStore } from "pinia";
 import { ADMIN_ROLE_ID, type RoleRecord } from "@/features/access-control/types";
 import {
   cloneTenantMember,
-  tenantMemberRepository,
-} from "@/features/tenant-members/local-storage-tenant-member-repository";
+} from "@/features/tenant-members/tenant-member-factories";
 import type {
   TenantMemberInput,
   TenantMemberRecord,
 } from "@/features/tenant-members/types";
-import { tenantConfigurationRepository } from "@/features/tenant-config/local-storage-tenant-configuration-repository";
+import { normalizeMemberAccount } from "@/features/tenant-members/member-account";
+import { operationPlatformPersistence } from "@/features/persistence/runtime-operation-platform-persistence";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
 import type { TenantInfo } from "@/types/user";
@@ -50,6 +50,9 @@ export const useTenantMemberStore = defineStore("tenant-members", () => {
   const roleNameById = computed(
     () => new Map(roles.value.map((role) => [role.id, role.name])),
   );
+  const memberAccountKind = computed(
+    () => useUserStore().persistenceCapabilities.memberAccountKind,
+  );
 
   function requireTenant() {
     if (!selectedTenant.value) throw new Error("请先选择组织");
@@ -57,8 +60,9 @@ export const useTenantMemberStore = defineStore("tenant-members", () => {
   }
 
   function load(tenant: TenantInfo) {
-    const configurationResult = tenantConfigurationRepository.list(tenant);
-    const memberResult = tenantMemberRepository.list(tenant);
+    const configurationResult = operationPlatformPersistence.loadConfiguration(tenant);
+    if (!configurationResult) throw new Error("组织配置尚未加载");
+    const memberResult = operationPlatformPersistence.loadMembers(tenant);
     selectedTenant.value = { ...tenant };
     roles.value = configurationResult.configuration.roles;
     members.value = memberResult.members;
@@ -103,9 +107,8 @@ export const useTenantMemberStore = defineStore("tenant-members", () => {
 
   function normalizeInput(input: TenantMemberInput) {
     const name = input.name.trim();
-    const account = input.account.trim();
+    const account = normalizeMemberAccount(input.account, memberAccountKind.value);
     if (!name) throw new Error("请输入成员姓名");
-    if (!account) throw new Error("请输入成员账号");
     const roleIds = uniqueRoleIds(input.roleIds);
     if (!roleIds.length) throw new Error("请至少选择一个角色");
     const normalized: TenantMemberInput = {
@@ -123,10 +126,12 @@ export const useTenantMemberStore = defineStore("tenant-members", () => {
   function persist(nextMembers: TenantMemberRecord[]) {
     const tenant = requireTenant();
     assertAdminSafety(nextMembers);
-    members.value = tenantMemberRepository.replace(tenant, nextMembers);
-    recoveryNotice.value = null;
-    refreshRuntimeIfCurrent(tenant);
-    return members.value.map(cloneTenantMember);
+    return operationPlatformPersistence.replaceMembers(tenant, nextMembers).then((saved) => {
+      members.value = saved;
+      recoveryNotice.value = null;
+      refreshRuntimeIfCurrent(tenant);
+      return members.value.map(cloneTenantMember);
+    });
   }
 
   function createMember(input: TenantMemberInput) {
@@ -148,8 +153,7 @@ export const useTenantMemberStore = defineStore("tenant-members", () => {
       createdAt: now,
       updatedAt: now,
     };
-    persist([...members.value, member]);
-    return cloneTenantMember(member);
+    return persist([...members.value, member]).then(() => cloneTenantMember(member));
   }
 
   function updateMember(memberId: string, input: TenantMemberInput) {
@@ -172,13 +176,13 @@ export const useTenantMemberStore = defineStore("tenant-members", () => {
           }
         : member,
     );
-    persist(nextMembers);
+    return persist(nextMembers);
   }
 
   function setMemberEnabled(memberId: string, enabled: boolean) {
     const existing = members.value.find((member) => member.id === memberId);
     if (!existing) return;
-    updateMember(memberId, {
+    return updateMember(memberId, {
       name: existing.name,
       account: existing.account,
       phone: existing.phone,
@@ -190,7 +194,7 @@ export const useTenantMemberStore = defineStore("tenant-members", () => {
 
   function removeMember(memberId: string) {
     if (!members.value.some((member) => member.id === memberId)) return;
-    persist(members.value.filter((member) => member.id !== memberId));
+    return persist(members.value.filter((member) => member.id !== memberId));
   }
 
   function roleLabel(roleId: string) {
@@ -212,6 +216,7 @@ export const useTenantMemberStore = defineStore("tenant-members", () => {
     members,
     roles,
     roleOptions,
+    memberAccountKind,
     recoveryNotice,
     load,
     createMember,

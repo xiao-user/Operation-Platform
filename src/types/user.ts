@@ -12,6 +12,7 @@ export interface TenantInfo {
 
 export interface UserInfo {
   id: string;
+  email?: string;
   name: string;
   initials: string;
   platformAdmin: boolean;

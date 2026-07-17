@@ -1,17 +1,15 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
-import {
-  createDefaultRoles,
-} from "@/features/access-control/local-storage-role-repository";
+import { createDefaultRoles } from "@/features/access-control/default-roles";
 import { ADMIN_ROLE_ID, type RoleInput, type RoleRecord } from "@/features/access-control/types";
-import { tenantMemberRepository } from "@/features/tenant-members/local-storage-tenant-member-repository";
 import type { TenantMemberRecord } from "@/features/tenant-members/types";
 import { buildMenuTree } from "@/features/menu-config/menu-tree";
 import type { MenuConfigRecord, MenuTreeNode } from "@/features/menu-config/types";
 import type { TenantShellConfig } from "@/features/shell-config/types";
-import { tenantConfigurationRepository } from "@/features/tenant-config/local-storage-tenant-configuration-repository";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
+import { cloneJson } from "@/lib/clone-json";
+import { operationPlatformPersistence } from "@/features/persistence/runtime-operation-platform-persistence";
 import type { TenantInfo } from "@/types/user";
 
 function sortRoles(roles: RoleRecord[]) {
@@ -72,18 +70,21 @@ export const useAccessControlStore = defineStore("access-control", () => {
     return selectedTenant.value;
   }
 
-  function persist(nextRoles: RoleRecord[]) {
+  async function persist(nextRoles: RoleRecord[]) {
     const tenant = requireTenant();
     if (!shellConfig.value) throw new Error("租户配置尚未加载");
-    roles.value = tenantConfigurationRepository.replace(tenant, {
+    const configuration = await operationPlatformPersistence.saveConfiguration(tenant, {
       version: 1,
       menuRecords: records.value,
       shellConfig: shellConfig.value,
       roles: nextRoles,
-    }).roles;
+    });
+    roles.value = cloneJson(configuration.roles);
     recoveryNotice.value = null;
-    members.value = tenantMemberRepository.list(tenant).members;
+    members.value = operationPlatformPersistence.loadMembers(tenant).members;
+    useUserStore().refreshMemberRoles();
     refreshRuntimeIfCurrent(tenant);
+    return roles.value;
   }
 
   function refreshRuntimeIfCurrent(tenant: TenantInfo) {
@@ -94,12 +95,13 @@ export const useAccessControlStore = defineStore("access-control", () => {
   }
 
   function load(tenant: TenantInfo) {
-    const result = tenantConfigurationRepository.list(tenant);
+    const result = operationPlatformPersistence.loadConfiguration(tenant);
+    if (!result) throw new Error("组织配置尚未加载");
     selectedTenant.value = { ...tenant };
     records.value = result.configuration.menuRecords;
     roles.value = result.configuration.roles;
     shellConfig.value = result.configuration.shellConfig;
-    const memberResult = tenantMemberRepository.list(tenant);
+    const memberResult = operationPlatformPersistence.loadMembers(tenant);
     members.value = memberResult.members;
     recoveryNotice.value = [result.recoveryNotice, memberResult.recoveryNotice]
       .filter(Boolean)
@@ -136,8 +138,8 @@ export const useAccessControlStore = defineStore("access-control", () => {
       sort: input.sort,
       menuIds: input.menuIds,
     };
-    persist([...roles.value, role]);
-    return role;
+    const saved = persist([...roles.value, role]);
+    return saved instanceof Promise ? saved.then(() => role) : role;
   }
 
   function updateRole(roleId: string, input: RoleInput) {
@@ -147,7 +149,7 @@ export const useAccessControlStore = defineStore("access-control", () => {
     }
     const existing = roles.value.find((role) => role.id === roleId);
     if (existing?.enabled && !input.enabled) assertRoleNotUsedByEnabledMembers(roleId);
-    persist(
+    return persist(
       roles.value.map((role) =>
         role.id === roleId
           ? {
@@ -166,7 +168,7 @@ export const useAccessControlStore = defineStore("access-control", () => {
   function setRoleEnabled(roleId: string, enabled: boolean) {
     const existing = roles.value.find((role) => role.id === roleId);
     if (existing?.enabled && !enabled) assertRoleNotUsedByEnabledMembers(roleId);
-    persist(
+    return persist(
       roles.value.map((role) =>
         role.id === roleId
           ? {
@@ -182,11 +184,11 @@ export const useAccessControlStore = defineStore("access-control", () => {
     const target = roles.value.find((role) => role.id === roleId);
     if (!target || target.builtIn) return;
     assertRoleNotUsedByEnabledMembers(roleId);
-    persist(roles.value.filter((role) => role.id !== roleId));
+    return persist(roles.value.filter((role) => role.id !== roleId));
   }
 
   function updateRoleMenuIds(roleId: string, menuIds: string[]) {
-    persist(
+    return persist(
       roles.value.map((role) =>
         role.id === roleId
           ? {
@@ -208,12 +210,13 @@ export const useAccessControlStore = defineStore("access-control", () => {
     if (usedCustomRoleIds.length) {
       throw new Error("已有启用成员使用自定义角色，请先调整成员角色");
     }
-    roles.value = tenantConfigurationRepository.replace(tenant, {
-      version: 1,
-      menuRecords: records.value,
-      shellConfig: shellConfig.value,
-      roles: createDefaultRoles(tenant, records.value),
-    }).roles;
+    const saved = persist(createDefaultRoles(tenant, records.value));
+    if (saved instanceof Promise) {
+      return saved.then(() => {
+        recoveryNotice.value = null;
+        refreshRuntimeIfCurrent(tenant);
+      });
+    }
     recoveryNotice.value = null;
     refreshRuntimeIfCurrent(tenant);
   }

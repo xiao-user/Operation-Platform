@@ -6,7 +6,7 @@ import {
   resolveFirstPermittedInternalPath,
 } from "@/features/access-control/menu-permissions";
 import type { RoleRecord } from "@/features/access-control/types";
-import { defaultTenantShellConfig } from "@/features/shell-config/local-storage-shell-config-repository";
+import { defaultTenantShellConfig } from "@/features/shell-config/default-shell-config";
 import type { MenuConfigRecord } from "@/features/menu-config/types";
 import type { TenantShellConfig } from "@/features/shell-config/types";
 import type { UserRole } from "@/types/user";

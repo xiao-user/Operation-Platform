@@ -64,7 +64,7 @@ describe("TenantMemberDrawer", () => {
     await flushPromises();
 
     expect(document.body.textContent).toContain("体育东路小学海明学校 · 成员管理");
-    expect(document.body.textContent).toContain("罗吾航");
+    expect(document.body.textContent).toContain("罗吴航");
     expect(document.body.textContent).toContain("李老师");
 
     await wrapper
@@ -73,7 +73,7 @@ describe("TenantMemberDrawer", () => {
     await flushPromises();
 
     expect(document.body.textContent).toContain("李老师");
-    expect(document.body.textContent).not.toContain("罗吾航");
+    expect(document.body.textContent).not.toContain("罗吴航");
     wrapper.unmount();
   });
 

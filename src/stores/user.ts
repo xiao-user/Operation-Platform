@@ -1,26 +1,32 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
-import { activeRoleRepository } from "@/features/access-control/local-storage-active-role-repository";
 import { ADMIN_ROLE_ID } from "@/features/access-control/types";
 import {
-  tenantMemberRepository,
-} from "@/features/tenant-members/local-storage-tenant-member-repository";
-import { tenantConfigurationRepository } from "@/features/tenant-config/local-storage-tenant-configuration-repository";
+  operationPlatformPersistence,
+  operationPlatformPersistenceCapabilities,
+} from "@/features/persistence/runtime-operation-platform-persistence";
+import type { PersistenceIdentity } from "@/features/persistence/operation-platform-persistence";
 import type { UserRole, UserInfo, TenantInfo } from "@/types/user";
-import { MOCK_USER_INFO } from "@/config/mock";
-import { tenantRepository } from "@/features/tenant/local-storage-tenant-repository";
+
+const EMPTY_TENANT: TenantInfo = {
+  id: "",
+  name: "正在加载组织",
+  shortName: "加载中",
+  type: "platform",
+  enabled: false,
+};
 
 export const useUserStore = defineStore("user", () => {
-  const tenantLoadResult = tenantRepository.list();
-
-  // 当前登录用户信息（对接登录接口后从响应中赋值）
-  const userInfo = ref<UserInfo>({ ...MOCK_USER_INFO });
-
-  // 可切换的租户列表（对接接口后替换）
-  const tenantList = ref<TenantInfo[]>(tenantLoadResult.tenants);
-  const tenantRecoveryNotice = ref(tenantLoadResult.recoveryNotice);
+  const initialState = operationPlatformPersistence.initialState();
+  const userInfo = ref<UserInfo>({
+    ...initialState.userInfo,
+    tenantRoleIds: { ...initialState.userInfo.tenantRoleIds },
+  });
+  const tenantList = ref<TenantInfo[]>(initialState.tenants.map((tenant) => ({ ...tenant })));
+  const tenantRecoveryNotice = ref<string | null>(initialState.tenantRecoveryNotice);
   const memberRoleVersion = ref(0);
   const activeRoleVersion = ref(0);
+  const persistenceInitialized = ref(initialState.initialized);
 
   function legacyRoleIdsForTenant(tenantId: string) {
     const legacyRoleId = userInfo.value.tenantRoleIds[tenantId];
@@ -31,17 +37,18 @@ export const useUserStore = defineStore("user", () => {
     void memberRoleVersion.value;
     if (userInfo.value.platformAdmin) return [ADMIN_ROLE_ID];
     const tenant = tenantList.value.find((item) => item.id === tenantId && item.enabled !== false);
-    if (!tenant) return legacyRoleIdsForTenant(tenantId);
+    if (!tenant) {
+      return operationPlatformPersistenceCapabilities.requiresAuthentication
+        ? []
+        : legacyRoleIdsForTenant(tenantId);
+    }
+    const configuration = operationPlatformPersistence.loadConfiguration(tenant)?.configuration;
+    if (!configuration) return [];
     const enabledRoleIds = new Set(
-      tenantConfigurationRepository
-        .list(tenant)
-        .configuration.roles
-        .filter((roleRecord) => roleRecord.enabled)
-        .map((roleRecord) => roleRecord.id),
+      configuration.roles.filter((roleRecord) => roleRecord.enabled).map((roleRecord) => roleRecord.id),
     );
-    const member = tenantMemberRepository
-      .list(tenant)
-      .members.find((item) => item.userId === userInfo.value.id && item.enabled);
+    const members = operationPlatformPersistence.loadMembers(tenant).members;
+    const member = members.find((item) => item.userId === userInfo.value.id && item.enabled);
     return member ? member.roleIds.filter((roleId) => enabledRoleIds.has(roleId)) : [];
   }
 
@@ -56,19 +63,15 @@ export const useUserStore = defineStore("user", () => {
 
   function firstAvailableTenant(tenants: TenantInfo[]) {
     const assignedTenants = tenants.filter(canAccessTenant);
-    return (
-      assignedTenants.find((tenant) => tenant.type !== "platform") ??
-      assignedTenants[0] ??
-      tenants.find((tenant) => tenant.enabled !== false && tenant.type !== "platform") ??
-      tenants.find((tenant) => tenant.enabled !== false) ??
-      tenants[0]!
-    );
+    return assignedTenants.find((tenant) => tenant.type !== "platform")
+      ?? assignedTenants[0]
+      ?? tenants.find((tenant) => tenant.enabled !== false && tenant.type !== "platform")
+      ?? tenants.find((tenant) => tenant.enabled !== false)
+      ?? tenants[0]
+      ?? EMPTY_TENANT;
   }
 
-  // 当前选中的租户（默认优先进入业务组织，运营平台通过租户切换进入）
-  const currentTenant = ref<TenantInfo>({
-    ...firstAvailableTenant(tenantList.value),
-  });
+  const currentTenant = ref<TenantInfo>({ ...firstAvailableTenant(tenantList.value) });
 
   function defaultActiveRole(roleIds: readonly UserRole[]) {
     return roleIds.includes(ADMIN_ROLE_ID) ? ADMIN_ROLE_ID : roleIds[0] ?? null;
@@ -78,15 +81,8 @@ export const useUserStore = defineStore("user", () => {
     void activeRoleVersion.value;
     const roleIds = roleIdsForTenant(tenantId);
     if (!roleIds.length) return null;
-    const stored = activeRoleRepository.get({
-      tenantId,
-      userId: userInfo.value.id,
-    });
+    const stored = operationPlatformPersistence.getActiveRole(tenantId, userInfo.value.id);
     return stored && roleIds.includes(stored) ? stored : defaultActiveRole(roleIds);
-  }
-
-  function roleForTenant(tenantId: string): UserRole | null {
-    return activeRoleIdForTenant(tenantId);
   }
 
   const role = computed<UserRole | null>(() => activeRoleIdForTenant(currentTenant.value.id));
@@ -98,11 +94,28 @@ export const useUserStore = defineStore("user", () => {
   const availableTenants = computed(() => tenantList.value.filter(canAccessTenant));
 
   function applyAuthenticatedSession(session: UserInfo) {
-    userInfo.value = {
-      ...session,
-      tenantRoleIds: { ...session.tenantRoleIds },
-    };
+    userInfo.value = { ...session, tenantRoleIds: { ...session.tenantRoleIds } };
     refreshMemberRoles();
+  }
+
+  function applyPersistenceState(state: ReturnType<typeof operationPlatformPersistence.initialState>) {
+    userInfo.value = { ...state.userInfo, tenantRoleIds: { ...state.userInfo.tenantRoleIds } };
+    tenantList.value = state.tenants.map((tenant) => ({ ...tenant }));
+    tenantRecoveryNotice.value = state.tenantRecoveryNotice;
+    currentTenant.value = { ...firstAvailableTenant(tenantList.value) };
+    persistenceInitialized.value = state.initialized;
+    refreshMemberRoles();
+  }
+
+  async function initializePersistence(identity: PersistenceIdentity | null, force = false) {
+    if (persistenceInitialized.value && !force) return;
+    const state = await operationPlatformPersistence.initialize(identity);
+    applyPersistenceState(state);
+  }
+
+  function resetPersistence() {
+    operationPlatformPersistence.reset();
+    applyPersistenceState(operationPlatformPersistence.initialState());
   }
 
   function switchTenant(tenantId: string) {
@@ -110,28 +123,26 @@ export const useUserStore = defineStore("user", () => {
     if (found) currentTenant.value = { ...found };
   }
 
-  function setActiveRoleForTenant(tenantId: string, roleId: UserRole) {
+  async function setActiveRoleForTenant(tenantId: string, roleId: UserRole) {
     const effectiveRoleIds = roleIdsForTenant(tenantId);
     if (!effectiveRoleIds.includes(roleId)) {
       throw new Error("当前成员未拥有该角色，或该角色已停用");
     }
-    activeRoleRepository.set({ tenantId, userId: userInfo.value.id }, roleId);
+    await operationPlatformPersistence.setActiveRole(tenantId, userInfo.value.id, roleId);
     activeRoleVersion.value += 1;
   }
 
   function refreshTenants() {
-    const result = tenantRepository.list();
-    tenantList.value = result.tenants;
-    tenantRecoveryNotice.value = result.recoveryNotice;
+    tenantList.value = operationPlatformPersistence.listTenants();
+    tenantRecoveryNotice.value = null;
     const current = tenantList.value.find(
       (tenant) => tenant.id === currentTenant.value.id && canAccessTenant(tenant),
     );
-    const fallback = firstAvailableTenant(tenantList.value);
-    currentTenant.value = { ...(current ?? fallback ?? tenantList.value[0]!) };
+    currentTenant.value = { ...(current ?? firstAvailableTenant(tenantList.value)) };
   }
 
   function replaceTenants(tenants: TenantInfo[]) {
-    tenantList.value = tenantRepository.replace(tenants);
+    tenantList.value = operationPlatformPersistence.replaceTenantCache(tenants);
     tenantRecoveryNotice.value = null;
     refreshTenants();
   }
@@ -141,9 +152,6 @@ export const useUserStore = defineStore("user", () => {
     activeRoleVersion.value += 1;
   }
 
-  /**
-   * 检查当前角色是否拥有某项权限
-   */
   function hasRole(...allowedRoles: UserRole[]): boolean {
     return role.value !== null && allowedRoles.includes(role.value);
   }
@@ -156,17 +164,21 @@ export const useUserStore = defineStore("user", () => {
     availableTenants,
     currentTenant,
     tenantRecoveryNotice,
+    persistenceInitialized,
+    persistenceCapabilities: operationPlatformPersistenceCapabilities,
     isAdmin,
     isTeacher,
     isSchool,
     isBureau,
     applyAuthenticatedSession,
+    initializePersistence,
+    resetPersistence,
     refreshMemberRoles,
     activeRoleIdForTenant,
     canAccessTenant,
     hasAdminRoleForTenant,
     setActiveRoleForTenant,
-    roleForTenant,
+    roleForTenant: activeRoleIdForTenant,
     roleIdsForTenant,
     switchTenant,
     refreshTenants,

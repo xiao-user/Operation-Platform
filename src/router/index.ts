@@ -8,6 +8,7 @@ import {
 } from "@/config/page-registry";
 import { resolveTenantRouteAccess } from "@/router/tenant-route-access";
 import { useNavigationStore } from "@/stores/navigation";
+import { useAuthStore } from "@/stores/auth";
 import { useUserStore } from "@/stores/user";
 
 const legacyRedirects: RouteRecordRaw[] = [
@@ -62,8 +63,12 @@ const router = createRouter({
   routes,
 });
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
+  const authStore = useAuthStore();
+  await authStore.initialize();
+  if (!authStore.isAuthenticated) return true;
   const userStore = useUserStore();
+  if (authStore.session?.user) await userStore.initializePersistence(authStore.session.user);
   const navigationStore = useNavigationStore();
   const pageKey = typeof to.meta.pageKey === "string" ? to.meta.pageKey : "";
   const page = pageKey ? pageRegistryByKey.get(pageKey) : null;

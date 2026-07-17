@@ -384,9 +384,9 @@ function inlinePageOptions(row: MenuConfigRecord) {
   });
 }
 
-function saveInlineEdit(row: MenuConfigRecord) {
+async function saveInlineEdit(row: MenuConfigRecord) {
   try {
-    menuConfigStore.update(row.id, { ...inlineDraft.value, name: inlineDraft.value.name.trim() });
+    await menuConfigStore.update(row.id, { ...inlineDraft.value, name: inlineDraft.value.name.trim() });
     void navigationStore.ensureValidCurrentRoute(router);
     cancelInlineEdit();
     ElMessage.success("菜单已更新");
@@ -399,14 +399,14 @@ function saveInlineEdit(row: MenuConfigRecord) {
   }
 }
 
-function handleVisibleChange(row: MenuConfigRecord, value: boolean | string | number) {
+async function handleVisibleChange(row: MenuConfigRecord, value: boolean | string | number) {
   try {
     const visible = Boolean(value);
     if (isInlineEditing(row)) {
       inlineDraft.value.visible = visible;
       return;
     }
-    menuConfigStore.setVisible(row.id, visible);
+    await menuConfigStore.setVisible(row.id, visible);
     void navigationStore.ensureValidCurrentRoute(router);
     ElMessage.success(visible ? "菜单已显示" : "菜单已隐藏");
   } catch (error) {

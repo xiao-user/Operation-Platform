@@ -22,7 +22,31 @@ describe("regional map visual configuration", () => {
     });
     expect(defaultMapVisualTuning.colorOverrides).toMatchObject({
       contextLine: "#ABABAB",
+      groundFill: "#23252F",
+      groundGrid: "#FFFFFF",
       internalLine: "#2B2D31",
+    });
+    expect(defaultMapVisualTuning.groundFillOpacity).toBe(0);
+    expect(defaultMapVisualTuning.groundGridOpacity).toBe(0.3);
+    expect((["lime", "cyan", "amber", "royal", "spectrum"] as const).map((themeId) => {
+      const theme = getDigitalTwinMapTheme(themeId);
+      return [
+        theme.contextFill,
+        theme.contextFillOpacity,
+        theme.chaseLightHead,
+        theme.chaseLightTail,
+      ];
+    })).toEqual(Array.from(
+      { length: 5 },
+      () => ["#707070", 0.06, "#FFFFFF", "rgba(255,255,255,0)"],
+    ));
+    expect(getDigitalTwinMapTheme("spectrum")).toMatchObject({
+      topFill: "#0A0B0F",
+      bottomFill: "#0A0B0F",
+      sideTop: "#0071DB",
+      sideBottom: "#1FDDE0",
+      contextFill: "#707070",
+      contextFillOpacity: 0.06,
     });
   });
 
@@ -40,6 +64,8 @@ describe("regional map visual configuration", () => {
       energyTowerTownshipMaximumHeight: 120,
       energyTowerTownshipRadius: 20,
       energyTowerTownshipGridCellSizeDegrees: 0.025,
+      energyTowerBaseOpacity: 0.9,
+      regionTerrainEmissiveIntensity: 0,
     });
   });
 

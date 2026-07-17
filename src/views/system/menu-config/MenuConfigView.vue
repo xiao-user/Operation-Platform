@@ -195,12 +195,12 @@ function openEdit(row: MenuConfigRecord) {
   drawerVisible.value = true;
 }
 
-function handleSave(input: MenuRecordInput, visibleRoleIds: string[] = []) {
+async function handleSave(input: MenuRecordInput, visibleRoleIds: string[] = []) {
   try {
     if (editingRecord.value) {
-      menuConfigStore.update(editingRecord.value.id, input, visibleRoleIds);
+      await menuConfigStore.update(editingRecord.value.id, input, visibleRoleIds);
     } else {
-      menuConfigStore.create(input, visibleRoleIds);
+      await menuConfigStore.create(input, visibleRoleIds);
     }
     void navigationStore.ensureValidCurrentRoute(router);
     drawerVisible.value = false;
@@ -214,9 +214,9 @@ function handleSave(input: MenuRecordInput, visibleRoleIds: string[] = []) {
   }
 }
 
-function updateWorkbench(input: Parameters<typeof menuConfigStore.updateWorkbench>[0]) {
+async function updateWorkbench(input: Parameters<typeof menuConfigStore.updateWorkbench>[0]) {
   try {
-    menuConfigStore.updateWorkbench(input);
+    await menuConfigStore.updateWorkbench(input);
     void navigationStore.ensureValidCurrentRoute(router);
     ElMessage.success("工作台配置已更新");
   } catch (error) {
@@ -240,7 +240,7 @@ async function handleDelete(row: MenuConfigRecord) {
   }
 
   try {
-    menuConfigStore.removeCascade(row.id);
+    await menuConfigStore.removeCascade(row.id);
     await navigationStore.ensureValidCurrentRoute(router);
     ElMessage.success("菜单已删除");
   } catch (error) {
@@ -265,7 +265,7 @@ async function handleReset() {
   }
 
   try {
-    menuConfigStore.reset();
+    await menuConfigStore.reset();
     await navigationStore.ensureValidCurrentRoute(router);
     ElMessage.success("已恢复默认菜单");
   } catch (error) {

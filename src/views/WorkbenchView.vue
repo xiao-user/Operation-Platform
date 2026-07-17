@@ -189,9 +189,9 @@ async function cancelEditing() {
   gridRenderVersion.value += 1;
 }
 
-function saveEditing() {
+async function saveEditing() {
   try {
-    workbenchStore.saveEditing();
+    await workbenchStore.saveEditing();
     managerVisible.value = false;
     settingsVisible.value = false;
     gridRenderVersion.value += 1;

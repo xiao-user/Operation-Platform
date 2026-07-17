@@ -75,7 +75,7 @@ test("组织成员抽屉支持新增多角色成员并保护最后管理员", as
   await page.goto("/system/organization");
   await openTenantMembers(page, "体育东路小学海明学校");
 
-  const currentUserRow = page.getByRole("row", { name: /罗吾航/ });
+  const currentUserRow = page.getByRole("row", { name: /罗吴航/ });
   await currentUserRow.locator(".el-switch").click();
   await expect(page.getByText("至少保留一个启用管理员成员", { exact: true })).toBeVisible();
 
@@ -106,7 +106,7 @@ test("当前用户成员角色变更后 Header 与工作台按新角色生效", 
   await saveMemberDialog(page);
   await expectMemberSaved(page);
 
-  await page.getByRole("row", { name: /罗吾航/ }).getByRole("button", { name: "编辑" }).click();
+  await page.getByRole("row", { name: /罗吴航/ }).getByRole("button", { name: "编辑" }).click();
   await ensureRoleOptions(page, ["管理员", "老师"]);
   await saveMemberDialog(page);
   await expectMemberSaved(page);
@@ -146,7 +146,7 @@ test("当前用户失去管理员角色后立即离开系统管理页", async ({
   await saveMemberDialog(page);
   await expectMemberSaved(page);
 
-  await page.getByRole("row", { name: /罗吾航/ }).getByRole("button", { name: "编辑" }).click();
+  await page.getByRole("row", { name: /罗吴航/ }).getByRole("button", { name: "编辑" }).click();
   await setRoleOptions(page, ["职员"]);
   await saveMemberDialog(page);
   await expectMemberSaved(page);

@@ -10,6 +10,7 @@ import {
 } from "../map-data-adapter";
 import type { MapState } from "../map-data-adapter";
 import type { DigitalTwinMapTheme } from "../map-themes";
+import type { MapVisualTuning } from "../rendering/map-visual-tuning";
 import type { EducationLocation, MapCameraView, MapDataLayerMode } from "../types";
 
 const props = defineProps<{
@@ -17,6 +18,7 @@ const props = defineProps<{
   selectedLocationId?: string;
   theme: DigitalTwinMapTheme;
   dataLayerMode: MapDataLayerMode;
+  visualTuning: Readonly<MapVisualTuning>;
 }>();
 
 const emit = defineEmits<{
@@ -114,6 +116,7 @@ defineExpose({ focusLocation, goBack });
       :map-state="currentState"
       :theme="theme"
       :data-layer-mode="dataLayerMode"
+      :visual-tuning="visualTuning"
       :locations="visibleLocations"
       :selected-location-id="selectedLocationId"
       @select="emit('select', $event)"

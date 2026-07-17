@@ -79,6 +79,14 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
     overviewPage.getByRole("heading", { name: "榕城区", exact: true }),
   ).toBeVisible({ timeout: 20_000 });
   await expect(overviewPage.getByText("体验区智慧教育生态服务平台")).toBeVisible();
+  await expect(overviewPage.locator(".page-topbar .user-item")).toContainText("罗吴航");
+  await expect(overviewPage.locator(".page-topbar .user-item img")).toHaveCount(2);
+  await overviewPage.getByRole("button", { name: "用户 罗吴航" }).click();
+  await expect(overviewPage.getByRole("menu", { name: "用户与角色" })).toBeVisible();
+  await expect(overviewPage.getByRole("menuitemradio", { checked: true })).toHaveCount(1);
+  await expect(overviewPage.getByRole("menuitem", { name: "退出大屏" })).toBeVisible();
+  await overviewPage.keyboard.press("Escape");
+  await expect(overviewPage.getByRole("menu", { name: "用户与角色" })).toHaveCount(0);
   await expect(
     overviewPage.getByRole("button", { name: "区域教育总览" }),
   ).toBeVisible({ timeout: 20_000 });
@@ -108,6 +116,22 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   await expect(overviewPage.getByRole("button", { name: "保存视角" })).toHaveCount(0);
   await expect(overviewPage.getByRole("button", { name: "恢复视角" })).toHaveCount(0);
   await expect(overviewPage.getByRole("button", { name: "重置视角" })).toBeVisible();
+  await overviewPage.getByRole("button", { name: "切换至多维光谱" }).click();
+  await expect(overviewPage.getByRole("button", { name: "切换至多维光谱" }))
+    .toHaveClass(/is-active/);
+  await expect(overviewPage.locator(".map-location-name.is-bureau"))
+    .toHaveCSS("color", "rgb(43, 103, 209)");
+  await overviewPage.getByRole("button", { name: "地图材质" }).click();
+  await expect(overviewPage.getByLabel("地图材质调试")).toBeVisible();
+  await expect(overviewPage.getByText("折射率 IOR", { exact: true })).toHaveCount(0);
+  await expect(overviewPage.getByText("金属度", { exact: true })).toHaveCount(0);
+  await expect(overviewPage.getByText("锥峰透明度", { exact: true })).toBeVisible();
+  await expect(overviewPage.getByLabel("行政区顶面颜色")).toBeVisible();
+  await expect(overviewPage.getByLabel("外部地面颜色")).toBeVisible();
+  await expect(overviewPage.getByText("外部地面透明度", { exact: true })).toBeVisible();
+  await expect(overviewPage.getByLabel("侧边顶部颜色")).toBeVisible();
+  await expect(overviewPage.getByLabel("多量顶色")).toBeVisible();
+  await overviewPage.getByRole("button", { name: "地图材质" }).click();
   await expect(overviewPage.locator(".map-camera-control > span")).toHaveCount(0);
   await overviewPage.getByRole("button", { name: "切换至凤岐华侨学校" }).click();
   await expect(

@@ -9,6 +9,7 @@
       '--map-label-glow': theme.labelGlow,
       '--map-label-pointer': theme.labelPointer,
       '--map-surface': theme.topFill,
+      '--map-ground-background': visualTuning.colorOverrides.groundFill ?? theme.pageBackground,
     }"
   >
     <div ref="canvasHost" class="map-canvas-host" />
@@ -28,6 +29,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { MapState } from "../map-data-adapter";
 import type { DigitalTwinMapTheme } from "../map-themes";
+import type { MapVisualTuning } from "../rendering/map-visual-tuning";
 import {
   defaultRegionalMapCameraView,
   RegionalMapEngine,
@@ -44,6 +46,7 @@ const props = defineProps<{
   locations: readonly EducationLocation[];
   selectedLocationId?: string;
   dataLayerMode: MapDataLayerMode;
+  visualTuning: Readonly<MapVisualTuning>;
 }>();
 const emit = defineEmits<{
   select: [location: EducationLocation];
@@ -54,6 +57,19 @@ const emit = defineEmits<{
 const canvasHost = ref<HTMLElement>();
 let engine: RegionalMapEngine | undefined;
 let renderedScopeCode = props.mapState.code;
+let visualTuningFrame = 0;
+let pendingVisualTuning: Readonly<MapVisualTuning> | undefined;
+
+function scheduleVisualTuning(tuning: Readonly<MapVisualTuning>) {
+  pendingVisualTuning = tuning;
+  if (visualTuningFrame) return;
+  visualTuningFrame = window.requestAnimationFrame(() => {
+    visualTuningFrame = 0;
+    const nextTuning = pendingVisualTuning;
+    pendingVisualTuning = undefined;
+    if (nextTuning) engine?.setVisualTuning(nextTuning);
+  });
+}
 
 function resetCameraView() {
   void engine?.animateCameraView(defaultRegionalMapCameraView);
@@ -68,6 +84,7 @@ onMounted(() => {
     props.theme,
     props.selectedLocationId,
     props.dataLayerMode,
+    props.visualTuning,
     {
       locationSelect: (location) => emit("select", location),
       featureSelect: (feature) => emit("featureSelect", feature),
@@ -91,6 +108,11 @@ watch(
 watch(() => props.theme, (theme) => engine?.setTheme(theme));
 watch(() => props.dataLayerMode, (mode) => engine?.setDataLayerMode(mode));
 watch(
+  () => props.visualTuning,
+  scheduleVisualTuning,
+  { deep: true },
+);
+watch(
   () => props.selectedLocationId,
   (locationId) => engine?.setSelectedLocation(locationId),
 );
@@ -104,6 +126,9 @@ defineExpose({
 });
 
 onBeforeUnmount(() => {
+  if (visualTuningFrame) window.cancelAnimationFrame(visualTuningFrame);
+  visualTuningFrame = 0;
+  pendingVisualTuning = undefined;
   engine?.dispose();
   engine = undefined;
 });
@@ -126,7 +151,7 @@ onBeforeUnmount(() => {
 }
 
 .map-canvas-host {
-  background-color: var(--dt-color-canvas);
+  background-color: var(--map-ground-background);
 }
 
 .map-canvas-host :deep(.regional-map-canvas),

@@ -1,14 +1,17 @@
 export interface DigitalTwinMapTheme {
-  id: "lime" | "cyan" | "amber" | "royal";
+  id: "lime" | "cyan" | "amber" | "royal" | "spectrum";
   name: string;
   description: string;
   primary: string;
   outline: string;
   internalLine: string;
   topFill: string;
+  bottomFill: string;
   topOpacity: number;
   sideTop: string;
   sideBottom: string;
+  contextFill: string;
+  contextFillOpacity: number;
   labelText: string;
   labelBorder: string;
   labelGlow: string;
@@ -23,7 +26,25 @@ export interface DigitalTwinMapTheme {
   pageText: string;
   pageMuted: string;
   pageLine: string;
+  swatches?: readonly [string, string, string, string];
+  energyTowerPalette?: {
+    base: string;
+    low: string;
+    medium: string;
+    high: string;
+    bottomOpacity: number;
+  };
 }
+
+const sharedMapEnvironment: Pick<
+  DigitalTwinMapTheme,
+  "contextFill" | "contextFillOpacity" | "chaseLightHead" | "chaseLightTail"
+> = {
+  contextFill: "#707070",
+  contextFillOpacity: 0.06,
+  chaseLightHead: "#FFFFFF",
+  chaseLightTail: "rgba(255,255,255,0)",
+};
 
 export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
   {
@@ -34,9 +55,11 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     outline: "#D4E994",
     internalLine: "rgba(212,233,148,0.42)",
     topFill: "#11170F",
+    bottomFill: "#11170F",
     topOpacity: 0.9,
     sideTop: "#28E28B",
     sideBottom: "#E1FF00",
+    ...sharedMapEnvironment,
     labelText: "#E9F1D2",
     labelBorder: "rgba(212,233,148,0.58)",
     labelGlow: "rgba(4,232,108,0.24)",
@@ -45,8 +68,6 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     ripple: "rgba(4,232,108,0.34)",
     flyLine: "rgba(203,221,139,0.76)",
     hudRing: "rgba(4,232,108,0.16)",
-    chaseLightHead: "#FFFFFF",
-    chaseLightTail: "rgba(255,255,255,0)",
     pageBackground: "#0B100D",
     pageText: "#E8EEE4",
     pageMuted: "rgba(205,218,199,0.56)",
@@ -60,9 +81,11 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     outline: "#7CB3FF",
     internalLine: "rgba(124,179,255,0.42)",
     topFill: "#0C1421",
+    bottomFill: "#0C1421",
     topOpacity: 0.9,
     sideTop: "#00EEFF",
     sideBottom: "#0AFFD6",
+    ...sharedMapEnvironment,
     labelText: "#E3ECF8",
     labelBorder: "rgba(124,179,255,0.58)",
     labelGlow: "rgba(47,254,254,0.24)",
@@ -71,8 +94,6 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     ripple: "rgba(47,254,254,0.34)",
     flyLine: "rgba(148,186,240,0.76)",
     hudRing: "rgba(47,254,254,0.16)",
-    chaseLightHead: "#FFFFFF",
-    chaseLightTail: "rgba(255,255,255,0)",
     pageBackground: "#0A0F17",
     pageText: "#E8EDF5",
     pageMuted: "rgba(200,210,225,0.56)",
@@ -86,9 +107,11 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     outline: "#F0C383",
     internalLine: "rgba(240,195,131,0.42)",
     topFill: "#19140E",
+    bottomFill: "#19140E",
     topOpacity: 0.9,
     sideTop: "#FFF700",
     sideBottom: "#FA9E00",
+    ...sharedMapEnvironment,
     labelText: "#F3E9DA",
     labelBorder: "rgba(240,195,131,0.58)",
     labelGlow: "rgba(255,208,59,0.24)",
@@ -97,8 +120,6 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     ripple: "rgba(255,208,59,0.34)",
     flyLine: "rgba(229,195,145,0.76)",
     hudRing: "rgba(255,208,59,0.16)",
-    chaseLightHead: "#FFFFFF",
-    chaseLightTail: "rgba(255,255,255,0)",
     pageBackground: "#110E0A",
     pageText: "#F0EBE4",
     pageMuted: "rgba(221,207,187,0.56)",
@@ -112,9 +133,11 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     outline: "#78A8FF",
     internalLine: "rgba(120,168,255,0.42)",
     topFill: "#0B1324",
+    bottomFill: "#0B1324",
     topOpacity: 0.9,
     sideTop: "#2B67D1",
     sideBottom: "#75B8FF",
+    ...sharedMapEnvironment,
     labelText: "#E7EFFF",
     labelBorder: "rgba(120,168,255,0.58)",
     labelGlow: "rgba(43,103,209,0.3)",
@@ -123,12 +146,44 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     ripple: "rgba(43,103,209,0.38)",
     flyLine: "rgba(120,168,255,0.78)",
     hudRing: "rgba(43,103,209,0.2)",
-    chaseLightHead: "#FFFFFF",
-    chaseLightTail: "rgba(255,255,255,0)",
     pageBackground: "#080F1D",
     pageText: "#E8EFFF",
     pageMuted: "rgba(199,213,239,0.58)",
     pageLine: "rgba(43,103,209,0.3)",
+  },
+  {
+    id: "spectrum",
+    name: "多维光谱",
+    description: "学校数量分层态势",
+    primary: "#2B67D1",
+    outline: "#78A8FF",
+    internalLine: "rgba(120,168,255,0.42)",
+    topFill: "#0A0B0F",
+    bottomFill: "#0A0B0F",
+    topOpacity: 1,
+    sideTop: "#0071DB",
+    sideBottom: "#1FDDE0",
+    ...sharedMapEnvironment,
+    labelText: "#E7EFFF",
+    labelBorder: "rgba(120,168,255,0.58)",
+    labelGlow: "rgba(43,103,209,0.3)",
+    labelPointer: "#2B67D1",
+    scatter: "#2B67D1",
+    ripple: "rgba(43,103,209,0.38)",
+    flyLine: "rgba(120,168,255,0.78)",
+    hudRing: "rgba(43,103,209,0.2)",
+    pageBackground: "#080F1D",
+    pageText: "#E8EFFF",
+    pageMuted: "rgba(199,213,239,0.58)",
+    pageLine: "rgba(43,103,209,0.3)",
+    swatches: ["#0D2AC2", "#00FFD5", "#FFC800", "#FFA97A"],
+    energyTowerPalette: {
+      base: "#0D2AC2",
+      low: "#00FFD5",
+      medium: "#FFC800",
+      high: "#FFA97A",
+      bottomOpacity: 0.24,
+    },
   },
 ] as const;
 
@@ -137,4 +192,14 @@ const defaultDigitalTwinMapTheme: DigitalTwinMapTheme = digitalTwinMapThemes[1]!
 export function getDigitalTwinMapTheme(themeId: DigitalTwinMapTheme["id"]) {
   return digitalTwinMapThemes.find((theme) => theme.id === themeId)
     ?? defaultDigitalTwinMapTheme;
+}
+
+export function cloneDigitalTwinMapTheme(theme: DigitalTwinMapTheme): DigitalTwinMapTheme {
+  return {
+    ...theme,
+    swatches: theme.swatches ? [...theme.swatches] as [string, string, string, string] : undefined,
+    energyTowerPalette: theme.energyTowerPalette
+      ? { ...theme.energyTowerPalette }
+      : undefined,
+  };
 }

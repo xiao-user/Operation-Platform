@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import type { DigitalTwinMapTheme } from "../map-themes";
 import type { EducationLocation } from "../types";
+import type { TuningAwareMapSceneLayer } from "./map-scene-layer";
 import type { MapProjection } from "./map-projection";
 import { defaultMapVisualTuning, mapVisualColor } from "./map-visual-tuning";
 import type { MapVisualTuning } from "./map-visual-tuning";
@@ -39,7 +40,7 @@ export function institutionRippleFrame(
   };
 }
 
-export class InstitutionLayer {
+export class InstitutionLayer implements TuningAwareMapSceneLayer {
   readonly root = new THREE.Group();
   private readonly owner = new ResourceOwner();
   private readonly locationByPointIndex: EducationLocation[] = [];
@@ -291,6 +292,10 @@ export class InstitutionLayer {
       material.color.copy(ripple.color);
       material.userData.baseOpacity = ripple.opacity * tuning.institutionRippleOpacityScale;
     }
+  }
+
+  applyTuning(theme: DigitalTwinMapTheme, tuning: MapVisualTuning) {
+    this.applyTheme(theme, tuning);
   }
 
   hitScreenPoint(pointer: THREE.Vector2, camera: THREE.Camera, viewport: ViewportSize) {

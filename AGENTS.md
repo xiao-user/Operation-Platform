@@ -1,6 +1,6 @@
 # 项目协作规范
 
-本文件适用于仓库根目录及全部子目录。项目是 Vue 3 + TypeScript 的多租户 SaaS 管理前端，当前使用 `localStorage` 完成组织、组织成员、菜单、工作台和角色权限的原型闭环；前端权限不能视为生产安全边界。
+本文件适用于仓库根目录及全部子目录。项目是 Vue 3 + TypeScript 的多租户 SaaS 管理前端；配置环境默认使用 Supabase Auth、Postgres 和 RLS 持久化组织、组织成员、菜单、工作台和角色权限，`localStorage` 仅作为本地演示与迁移回退。前端权限不能视为生产安全边界。
 
 ## 开始修改前
 
@@ -15,7 +15,10 @@
 - `src/config/menu-template-definitions.ts` 和 `src/config/menu-templates.ts` 只用于首次初始化与恢复默认，不参与运行时导航。模板变更不得静默覆盖已配置租户。
 - 普通菜单最多四级：一级模块 → 二级目录 → 三级目录 → 内部页面或外部链接。层级规则统一由 `MAX_MENU_DEPTH` 和领域校验维护，不在组件中复制判断。
 - 工作台属于租户 Shell 配置，不是普通菜单节点；它不能拖入菜单树或绑定业务页面。
-- 菜单、工作台入口 Shell 和角色必须通过 `src/features/tenant-config/` 聚合仓库原子读写。禁止在新增流程中分别持久化三个旧 key；旧仓库仅保留迁移兼容职责。
+- 菜单、工作台入口 Shell 和角色必须通过 `src/features/tenant-config/` 聚合仓库原子读写。Supabase 运行时必须使用带 revision 的远端原子保存；禁止在新增流程中分别持久化三个旧 key，旧仓库仅保留迁移兼容和本地 E2E 职责。
+- 浏览器代码只能使用 Supabase publishable key；数据库密码、secret key 和迁移用户 ID 只能存在于 `.env.local`、迁移脚本或服务端环境。所有浏览器可访问表必须启用 RLS，新策略遵循“用户身份 + 租户归属 + 最小权限”。
+- `src/features/persistence/operation-platform-persistence.ts` 是应用级数据持久化契约，`runtime-operation-platform-persistence.ts` 是唯一装配入口。Store 和页面不得直接导入 Supabase/localStorage Adapter、判断数据源类型或操作远端 DTO；更换数据源应新增 Adapter 并保持业务调用不变。
+- 当前读取模型在认证初始化后提供同步快照，所有持久化写入统一为异步。默认配置、默认角色、成员工厂和校验属于领域规则，不得放回 `local-storage-*` 或 `supabase-*` 实现文件。
 - `src/features/workbench/workbench-templates.ts` 是“组织类型 × 管理/业务角色”固定组件清单的代码级事实源。个人布局必须始终保留模板全集，不允许通过 UI 新增或真正删除组件。
 - 个人工作台布局通过 `src/features/workbench/` repository 按租户、用户和 profile 隔离；快捷入口只能使用 Navigation Store 已按 RBAC 过滤的可见叶子菜单。
 - 组织成员数据通过 `src/features/tenant-members/` 仓库按租户隔离维护。当前用户可用角色来自启用成员记录，不再以 mock 会话角色映射作为运行时事实源。
