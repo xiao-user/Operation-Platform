@@ -1,8 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = "http://127.0.0.1:4173";
 const dataBackend = process.env.SUPABASE_E2E === "1" ? "supabase" : "local";
 const authProvider = process.env.SUPABASE_E2E === "1" ? "supabase" : "local";
+const serverPort = process.env.SUPABASE_E2E === "1" ? 4174 : 4173;
+const baseURL = `http://127.0.0.1:${serverPort}`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -28,7 +29,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `VITE_DATA_BACKEND=${dataBackend} VITE_AUTH_PROVIDER=${authProvider} npm run dev -- --host 127.0.0.1 --port 4173`,
+    command: `VITE_DATA_BACKEND=${dataBackend} VITE_AUTH_PROVIDER=${authProvider} npm run dev -- --host 127.0.0.1 --port ${serverPort}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

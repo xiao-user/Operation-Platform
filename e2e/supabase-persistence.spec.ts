@@ -41,7 +41,18 @@ async function authenticatedSession() {
   });
   if (error) throw error;
   if (!data.session) throw new Error("Supabase did not return an authenticated session");
-  return { admin, client, session: data.session };
+  const session = data.session;
+  await expect.poll(async () => {
+    const { error: readinessError } = await client
+      .from("profiles")
+      .select("id", { head: true })
+      .eq("id", session.user.id);
+    return readinessError?.message ?? null;
+  }, {
+    timeout: 10_000,
+    message: "wait for PostgREST to accept the newly issued session JWT",
+  }).toBeNull();
+  return { admin, client, session };
 }
 
 async function browserWithSession(newContext: () => Promise<BrowserContext>, session: Session) {
@@ -62,6 +73,39 @@ test.describe("Supabase persistence", () => {
     process.env.SUPABASE_E2E !== "1" || requiredEnvironment.some((name) => !process.env[name]?.trim()),
     "Run through npm run test:e2e:supabase after loading .env.local",
   );
+
+  test("the last active tenant survives reloads without being overwritten by a standalone tab", async ({ browser }) => {
+    const { session } = await authenticatedSession();
+    const context = await browserWithSession(() => browser.newContext(), session);
+    const shellPage = await context.newPage();
+    const standalonePage = await context.newPage();
+    const userId = environment("MIGRATION_AUTH_USER_ID");
+    const activeTenantKey = `operation-platform:active-tenant-session:v1:${userId}`;
+
+    try {
+      await shellPage.goto("/workbench");
+      await shellPage.locator(".tenant-switch").click();
+      await shellPage.getByRole("menuitem", { name: "天河区第二实验小学", exact: true }).click();
+      await expect(shellPage.getByRole("button", { name: "学校 天河区第二实验小学" }))
+        .toBeVisible();
+      await expect.poll(() => shellPage.evaluate(
+        (key) => sessionStorage.getItem(key),
+        activeTenantKey,
+      )).toBe("school-002");
+
+      await standalonePage.goto(
+        "/bureau/visualization/regional-education-overview?tenantId=bureau-001",
+      );
+      await expect(
+        standalonePage.getByRole("heading", { name: "榕城区", exact: true }),
+      ).toBeVisible({ timeout: 20_000 });
+      await shellPage.reload();
+      await expect(shellPage.getByRole("button", { name: "学校 天河区第二实验小学" }))
+        .toBeVisible({ timeout: 20_000 });
+    } finally {
+      await context.close();
+    }
+  });
 
   test("a tenant created in one browser is available in another browser", async ({ browser }) => {
     const { client, session } = await authenticatedSession();
@@ -167,6 +211,91 @@ test.describe("Supabase persistence", () => {
       cleanupError = error;
     }
     if (cleanupError) throw cleanupError;
+  });
+
+  test("AI conversations are isolated by authenticated user and browser writes are restricted", async () => {
+    const { admin, client, session } = await authenticatedSession();
+    const ownerUserId = session.user.id;
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let otherUserId = "";
+    const conversationIds: string[] = [];
+    const cleanupErrors: Error[] = [];
+
+    try {
+      const { data: otherUserData, error: otherUserError } = await admin.auth.admin.createUser({
+        email: `ai-history-${suffix}@example.com`,
+        password: `Ai-History-${suffix}!`,
+        email_confirm: true,
+      });
+      if (otherUserError) throw otherUserError;
+      otherUserId = otherUserData.user.id;
+
+      const { data: conversations, error: conversationError } = await admin
+        .from("ai_conversations")
+        .insert([
+          {
+            tenant_id: "school-001",
+            auth_user_id: ownerUserId,
+            title: `当前用户会话-${suffix}`,
+          },
+          {
+            tenant_id: "school-001",
+            auth_user_id: otherUserId,
+            title: `其他用户会话-${suffix}`,
+          },
+        ])
+        .select("id,auth_user_id");
+      if (conversationError) throw conversationError;
+      conversationIds.push(...conversations.map((conversation) => conversation.id));
+      const ownConversation = conversations.find(
+        (conversation) => conversation.auth_user_id === ownerUserId,
+      );
+      if (!ownConversation) throw new Error("AI conversation fixture was not created");
+
+      const { error: messageError } = await admin.from("ai_messages").insert({
+        conversation_id: ownConversation.id,
+        tenant_id: "school-001",
+        auth_user_id: ownerUserId,
+        role: "assistant",
+        status: "completed",
+        content: "仅当前用户可见",
+        model: "deepseek-chat",
+      });
+      if (messageError) throw messageError;
+
+      const { data: visibleConversations, error: visibleConversationError } = await client
+        .from("ai_conversations")
+        .select("id,title,auth_user_id")
+        .in("id", conversationIds);
+      if (visibleConversationError) throw visibleConversationError;
+      expect(visibleConversations).toEqual([
+        expect.objectContaining({ id: ownConversation.id, auth_user_id: ownerUserId }),
+      ]);
+
+      const { data: visibleMessages, error: visibleMessageError } = await client
+        .from("ai_messages")
+        .select("content")
+        .eq("conversation_id", ownConversation.id);
+      if (visibleMessageError) throw visibleMessageError;
+      expect(visibleMessages).toEqual([{ content: "仅当前用户可见" }]);
+
+      const forbiddenInsert = await client.from("ai_conversations").insert({
+        tenant_id: "school-001",
+        auth_user_id: ownerUserId,
+        title: "浏览器不应创建的会话",
+      });
+      expect(forbiddenInsert.error).not.toBeNull();
+    } finally {
+      if (conversationIds.length) {
+        const { error } = await admin.from("ai_conversations").delete().in("id", conversationIds);
+        if (error) cleanupErrors.push(error);
+      }
+      if (otherUserId) {
+        const { error } = await admin.auth.admin.deleteUser(otherUserId);
+        if (error) cleanupErrors.push(error);
+      }
+    }
+    if (cleanupErrors.length) throw cleanupErrors[0];
   });
 
   test("an organization member email is linked to Auth and the user can change password", async ({ browser }) => {

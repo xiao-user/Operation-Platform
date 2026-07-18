@@ -18,25 +18,39 @@
             <RouterView />
           </div>
         </main>
+        <Transition name="assistant-panel">
+          <div
+            v-if="aiAssistantStore.isOpen"
+            class="ai-assistant-slot"
+            :class="{ 'is-expanded': aiAssistantStore.isExpanded }"
+          >
+            <AiAssistantSidebar />
+          </div>
+        </Transition>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { watch } from "vue";
+import { defineAsyncComponent, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import AppHeader from "@/components/AppHeader.vue";
 import AppModuleRail from "@/components/AppModuleRail.vue";
 import AppSidebar from "@/components/AppSidebar.vue";
+import { useAiAssistantStore } from "@/stores/ai-assistant";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
 
 const route = useRoute();
+const AiAssistantSidebar = defineAsyncComponent(() =>
+  import("@/features/ai-assistant/components/AiAssistantSidebar.vue")
+);
 const router = useRouter();
 const navigationStore = useNavigationStore();
 const userStore = useUserStore();
+const aiAssistantStore = useAiAssistantStore();
 const { currentTenant, roleIds } = storeToRefs(userStore);
 const { activeRoleRecords, deepMenus, isWorkbenchRoute } = storeToRefs(navigationStore);
 
@@ -88,6 +102,7 @@ watch(
 }
 
 .app-body {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
@@ -116,6 +131,34 @@ watch(
   min-width: 0;
   overflow: hidden;
   flex-shrink: 0;
+}
+
+.ai-assistant-slot {
+  display: flex;
+  width: 419px;
+  min-width: 419px;
+  height: 100%;
+  flex: 0 0 419px;
+  overflow: hidden;
+}
+
+.ai-assistant-slot.is-expanded {
+  width: 0;
+  min-width: 0;
+  flex-basis: 0;
+  overflow: visible;
+}
+
+.assistant-panel-enter-active,
+.assistant-panel-leave-active {
+  transition: width 180ms ease, min-width 180ms ease, flex-basis 180ms ease;
+}
+
+.assistant-panel-enter-from,
+.assistant-panel-leave-to {
+  width: 0;
+  min-width: 0;
+  flex-basis: 0;
 }
 
 .module-rail-slot {
@@ -174,6 +217,11 @@ watch(
     transition: none;
   }
 
+  .assistant-panel-enter-active,
+  .assistant-panel-leave-active {
+    transition: none;
+  }
+
   .module-rail-slide-enter-from,
   .module-rail-slide-leave-to {
     max-width: none;
@@ -189,6 +237,32 @@ watch(
 @media (max-width: 767px) {
   .app-body.is-workbench .app-content-inner {
     padding: var(--spacing-12);
+  }
+
+  .ai-assistant-slot {
+    position: fixed;
+    top: var(--header-height);
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    width: 100vw;
+    min-width: 0;
+    height: auto;
+    flex-basis: auto;
+  }
+
+  .ai-assistant-slot.is-expanded {
+    width: 100vw;
+    min-width: 0;
+    overflow: hidden;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1100px) {
+  .ai-assistant-slot {
+    width: min(419px, 42vw);
+    min-width: min(419px, 42vw);
+    flex-basis: min(419px, 42vw);
   }
 }
 </style>

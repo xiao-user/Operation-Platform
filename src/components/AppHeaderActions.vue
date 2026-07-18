@@ -1,5 +1,15 @@
 <template>
   <div class="header-actions">
+    <button
+      class="ai-assistant-entry"
+      type="button"
+      aria-label="AI 运营助手"
+      title="AI 运营助手"
+      @click="aiAssistantStore.toggle"
+    >
+      <video :src="assistantAvatarVideo" autoplay loop muted playsinline />
+    </button>
+
     <el-dropdown trigger="click" @command="handleTenantSwitch">
       <button class="tenant-switch" type="button">
         <el-tag :type="TENANT_TAG_TYPE[currentTenant.type]" size="small" class="tenant-type-tag">
@@ -80,14 +90,16 @@
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
-import { ElMessageBox } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { ArrowDown } from "@element-plus/icons-vue";
+import assistantAvatarVideo from "@/assets/ai-assistant/avatar-48.webm";
 import ChangePasswordDialog from "@/components/ChangePasswordDialog.vue";
 import { TENANT_TAG_TYPE, TENANT_TYPE_LABEL } from "@/config/tenant";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
 import { useWorkbenchStore } from "@/stores/workbench";
 import { useAuthStore } from "@/stores/auth";
+import { useAiAssistantStore } from "@/stores/ai-assistant";
 import type { TenantType } from "@/types/user";
 
 const router = useRouter();
@@ -95,6 +107,7 @@ const navigationStore = useNavigationStore();
 const userStore = useUserStore();
 const workbenchStore = useWorkbenchStore();
 const authStore = useAuthStore();
+const aiAssistantStore = useAiAssistantStore();
 const passwordDialogVisible = ref(false);
 const { userInfo, currentTenant, availableTenants, isAdmin } = storeToRefs(userStore);
 const { activeRoleRecord, availableRoleRecords } = storeToRefs(navigationStore);
@@ -124,7 +137,12 @@ async function handleTenantSwitch(tenantId: string) {
   const tenant = availableTenants.value.find((item) => item.id === tenantId);
   if (!tenant || tenant.id === currentTenant.value.id) return;
   if (!(await confirmDiscardWorkbenchChanges())) return;
-  userStore.switchTenant(tenantId);
+  try {
+    await userStore.switchTenant(tenantId);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "当前机构保存失败");
+    return;
+  }
   navigationStore.loadTenant(tenant);
   await navigationStore.navigateToDefault(router);
 }
@@ -157,7 +175,7 @@ async function handleUserCommand(command: string) {
   const platformTenant = platformAdminTenant.value;
   if (!platformTenant) return;
   if (platformTenant && currentTenant.value.id !== platformTenant.id) {
-    userStore.switchTenant(platformTenant.id);
+    await userStore.switchTenant(platformTenant.id, { remember: false });
     navigationStore.loadTenant(platformTenant);
   }
   await router.push("/system/menu-config");
@@ -186,6 +204,38 @@ async function confirmDiscardWorkbenchChanges() {
   gap: var(--spacing-24);
   flex-shrink: 0;
   height: 100%;
+}
+
+.ai-assistant-entry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 3px;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.ai-assistant-entry:hover {
+  background: var(--color-primary-light);
+}
+
+.ai-assistant-entry:focus-visible {
+  outline: 2px solid var(--color-primary-line-light);
+  outline-offset: 2px;
+}
+
+.ai-assistant-entry video {
+  width: 30px;
+  height: 30px;
+  object-fit: cover;
+  border-radius: var(--radius-full);
 }
 
 .tenant-switch,
