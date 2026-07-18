@@ -2,9 +2,6 @@ import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import type { Session, Subscription } from "@supabase/supabase-js";
 import { getSupabaseClient, isSupabaseAuthEnabled } from "@/lib/supabase";
-import { setSupabaseAuthFailureHandler } from "@/lib/supabase-auth-failure";
-
-const SESSION_EXPIRED_MESSAGE = "登录状态已超时，请重新登录";
 
 export const useAuthStore = defineStore("auth", () => {
   const session = ref<Session | null>(null);
@@ -19,27 +16,6 @@ export const useAuthStore = defineStore("auth", () => {
   );
   let authSubscription: Subscription | null = null;
   let initializePromise: Promise<void> | null = null;
-  let expiringSession = false;
-
-  async function expireSession() {
-    if (!isSupabaseAuthEnabled || expiringSession) return;
-    expiringSession = true;
-    const previousUserId = session.value?.user.id ?? null;
-    session.value = null;
-    errorMessage.value = SESSION_EXPIRED_MESSAGE;
-    if (previousUserId) authStateVersion.value += 1;
-    try {
-      await getSupabaseClient().auth.signOut({ scope: "local" });
-    } catch {
-      // The local auth state is already invalidated; remote revocation is unnecessary here.
-    } finally {
-      expiringSession = false;
-    }
-  }
-
-  setSupabaseAuthFailureHandler(() => {
-    void expireSession();
-  });
 
   function subscribeToAuthChanges() {
     if (!isSupabaseAuthEnabled || authSubscription) return;

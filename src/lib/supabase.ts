@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { authProvider } from "@/config/runtime-providers";
-import { createSupabaseAuthFailureFetch } from "@/lib/supabase-auth-failure";
+import { createSupabaseAuthRetryFetch } from "@/lib/supabase-auth-fetch";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
@@ -23,7 +23,7 @@ export function getSupabaseClient() {
       detectSessionInUrl: true,
     },
     global: {
-      fetch: createSupabaseAuthFailureFetch(),
+      fetch: createSupabaseAuthRetryFetch(),
     },
   });
   return client;
@@ -36,6 +36,6 @@ export function getSupabaseFunctionRequest(name: string) {
   return {
     url: `${supabaseUrl.replace(/\/$/, "")}/functions/v1/${name}`,
     publishableKey,
-    fetch: createSupabaseAuthFailureFetch(),
+    fetch: createSupabaseAuthRetryFetch(),
   };
 }

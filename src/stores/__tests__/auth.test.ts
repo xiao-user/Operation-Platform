@@ -16,7 +16,6 @@ vi.mock("@/lib/supabase", () => ({
 }));
 
 import { useAuthStore } from "@/stores/auth";
-import { reportSupabaseAuthFailure } from "@/lib/supabase-auth-failure";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -118,15 +117,4 @@ describe("auth store", () => {
     expect(store.authStateVersion).toBe(0);
   });
 
-  it("expires the local session when Supabase rejects a future-issued JWT", async () => {
-    const store = useAuthStore();
-    await store.initialize();
-
-    reportSupabaseAuthFailure("session-expired");
-    await vi.waitFor(() => expect(authApi.signOut).toHaveBeenCalledWith({ scope: "local" }));
-
-    expect(store.session).toBeNull();
-    expect(store.errorMessage).toBe("登录状态已超时，请重新登录");
-    expect(store.authStateVersion).toBe(1);
-  });
 });
