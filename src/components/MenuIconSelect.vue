@@ -13,7 +13,6 @@
       <span class="icon-option">
         <component :is="menuIconComponent(option.key)" class="icon-option-svg" />
         <span class="icon-option-name">{{ option.label }}</span>
-        <span class="icon-option-key">{{ option.key }}</span>
       </span>
     </template>
   </el-select-v2>
@@ -66,10 +65,4 @@ const optionProps = { label: "label", value: "key" } as const;
   white-space: nowrap;
 }
 
-.icon-option-key {
-  margin-left: auto;
-  color: var(--color-secondary);
-  font-size: var(--font-size-xs);
-  flex-shrink: 0;
-}
 </style>
