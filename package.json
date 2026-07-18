@@ -31,10 +31,14 @@
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
     "@lucide/vue": "1.22.0",
+    "@mdit/plugin-katex": "^1.0.1",
     "@supabase/supabase-js": "^2.110.7",
+    "echarts": "^6.1.0",
     "element-plus": "^2.13.5",
     "gridstack": "^12.6.0",
     "gsap": "^3.15.0",
+    "katex": "^0.18.0",
+    "markdown-it": "^14.3.0",
     "pinia": "^3.0.4",
     "three": "^0.185.1",
     "vue": "^3.5.29",
@@ -43,6 +47,7 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@tsconfig/node24": "^24.0.4",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^24.11.0",
     "@types/three": "^0.185.1",
     "@vitejs/plugin-vue": "^6.0.4",
