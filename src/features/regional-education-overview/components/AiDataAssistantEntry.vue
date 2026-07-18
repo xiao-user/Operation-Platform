@@ -54,7 +54,7 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: calc(var(--dt-z-hud) + 1);
   bottom: var(--dt-ai-entry-bottom);
-  left: var(--dt-space-6);
+  left: var(--dt-map-hud-left);
   display: inline-flex;
   width: var(--dt-ai-entry-width);
   height: var(--dt-ai-entry-height);
@@ -100,5 +100,9 @@ onBeforeUnmount(() => {
 
 .ai-data-assistant-entry:active {
   transform: translateY(0);
+}
+
+@media (max-width: 1180px) {
+  .ai-data-assistant-entry { left: var(--dt-space-6); }
 }
 </style>

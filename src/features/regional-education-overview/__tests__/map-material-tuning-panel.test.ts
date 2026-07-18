@@ -146,7 +146,11 @@ describe("MapMaterialTuningPanel", () => {
     expect(tuningEvents[tuningEvents.length - 1]?.[0]).toMatchObject({
       regionTerrainEmissiveIntensity: 0,
       regionTerrainVariationStrength: 0.05,
-      energyTowerBaseOpacity: 0.9,
+      energyTowerBaseOpacity: 0.7,
+      energyTowerHeightOpacity: 0.6,
+      energyTowerGridOpacity: 0.07,
+      energyTowerHoverOpacity: 0.2,
+      energyTowerGlowOpacity: 0.23,
       institutionDefaultOpacity: 0.56,
       institutionSelectionCycleSeconds: 5,
       connectionSurfaceOffset: 2.2,

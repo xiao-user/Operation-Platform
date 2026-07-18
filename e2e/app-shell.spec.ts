@@ -100,8 +100,11 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   await expect(aiAssistantEntry).toBeVisible();
   await expect(aiAssistantEntry).toHaveAttribute("target", "_blank");
   await expect(aiAssistantEntry).toHaveAttribute("aria-disabled", "true");
-  await expect(aiAssistantEntry).toHaveCSS("left", "24px");
+  await expect(aiAssistantEntry).toHaveCSS("left", "40px");
   await expect(aiAssistantEntry).toHaveCSS("bottom", "148px");
+  await overviewPage.setViewportSize({ width: 1100, height: 720 });
+  await expect(aiAssistantEntry).toHaveCSS("left", "24px");
+  await overviewPage.setViewportSize({ width: 1280, height: 720 });
   const entryBorderBeforeHover = await aiAssistantEntry.evaluate(
     (element) => element.ownerDocument.defaultView!.getComputedStyle(element).borderColor,
   );
