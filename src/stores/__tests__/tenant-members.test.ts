@@ -48,7 +48,7 @@ describe("tenant member store", () => {
     member.userId = userStore.userInfo.id;
     tenantMemberRepository.replace(school, store.members);
     userStore.refreshMemberRoles();
-    userStore.switchTenant(school.id);
+    await userStore.switchTenant(school.id);
 
     expect(userStore.roleIdsForTenant(school.id)).toEqual([STAFF_ROLE_ID, ADMIN_ROLE_ID]);
     expect(userStore.role).toBe(ADMIN_ROLE_ID);
@@ -74,7 +74,7 @@ describe("tenant member store", () => {
         roleIds: [ADMIN_ROLE_ID, STAFF_ROLE_ID],
       },
     ]);
-    userStore.switchTenant(school.id);
+    await userStore.switchTenant(school.id);
     await userStore.setActiveRoleForTenant(school.id, STAFF_ROLE_ID);
     const configuration = createDefaultTenantConfiguration(school);
     tenantConfigurationRepository.replace(school, {

@@ -2,6 +2,9 @@ import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import type { Session, Subscription } from "@supabase/supabase-js";
 import { getSupabaseClient, isSupabaseAuthEnabled } from "@/lib/supabase";
+import { setSupabaseAuthFailureHandler } from "@/lib/supabase-auth-failure";
+
+const SESSION_EXPIRED_MESSAGE = "登录状态已超时，请重新登录";
 
 export const useAuthStore = defineStore("auth", () => {
   const session = ref<Session | null>(null);
@@ -15,31 +18,60 @@ export const useAuthStore = defineStore("auth", () => {
     isSupabaseAuthEnabled && Boolean(session.value?.user.email),
   );
   let authSubscription: Subscription | null = null;
+  let initializePromise: Promise<void> | null = null;
+  let expiringSession = false;
+
+  async function expireSession() {
+    if (!isSupabaseAuthEnabled || expiringSession) return;
+    expiringSession = true;
+    const previousUserId = session.value?.user.id ?? null;
+    session.value = null;
+    errorMessage.value = SESSION_EXPIRED_MESSAGE;
+    if (previousUserId) authStateVersion.value += 1;
+    try {
+      await getSupabaseClient().auth.signOut({ scope: "local" });
+    } catch {
+      // The local auth state is already invalidated; remote revocation is unnecessary here.
+    } finally {
+      expiringSession = false;
+    }
+  }
+
+  setSupabaseAuthFailureHandler(() => {
+    void expireSession();
+  });
 
   function subscribeToAuthChanges() {
     if (!isSupabaseAuthEnabled || authSubscription) return;
     const { data } = getSupabaseClient().auth.onAuthStateChange((_event, nextSession) => {
+      const previousUserId = session.value?.user.id ?? null;
+      const nextUserId = nextSession?.user.id ?? null;
       session.value = nextSession;
-      authStateVersion.value += 1;
+      if (previousUserId !== nextUserId) authStateVersion.value += 1;
     });
     authSubscription = data.subscription;
   }
 
   async function initialize() {
     if (!isSupabaseAuthEnabled || initialized.value) return;
-    loading.value = true;
-    try {
-      const { data, error } = await getSupabaseClient().auth.getSession();
-      if (error) throw error;
-      session.value = data.session;
-      subscribeToAuthChanges();
-      errorMessage.value = "";
-    } catch (error) {
-      errorMessage.value = error instanceof Error ? error.message : "登录状态读取失败";
-    } finally {
-      initialized.value = true;
-      loading.value = false;
-    }
+    if (initializePromise) return initializePromise;
+    initializePromise = (async () => {
+      loading.value = true;
+      try {
+        const { data, error } = await getSupabaseClient().auth.getSession();
+        if (error) throw error;
+        session.value = data.session;
+        subscribeToAuthChanges();
+        errorMessage.value = "";
+      } catch (error) {
+        errorMessage.value = error instanceof Error ? error.message : "登录状态读取失败";
+      } finally {
+        initialized.value = true;
+        loading.value = false;
+        initializePromise = null;
+      }
+    })();
+    return initializePromise;
   }
 
   async function signIn(email: string, password: string) {
@@ -67,6 +99,7 @@ export const useAuthStore = defineStore("auth", () => {
       if (error) throw error;
     }
     session.value = null;
+    errorMessage.value = "";
   }
 
   async function changePassword(currentPassword: string, newPassword: string) {

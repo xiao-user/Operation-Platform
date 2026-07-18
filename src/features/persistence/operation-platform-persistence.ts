@@ -43,6 +43,7 @@ export interface OperationPlatformPersistence {
   updateTenant(tenant: TenantInfo): Promise<TenantInfo>;
   deleteTenant(tenantId: string): Promise<void>;
 
+  ensureTenantLoaded(tenant: TenantInfo): Promise<void>;
   loadConfiguration(tenant: TenantInfo): TenantConfigurationLoadResult | null;
   saveConfiguration(
     tenant: TenantInfo,

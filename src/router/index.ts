@@ -83,7 +83,7 @@ router.beforeEach(async (to) => {
     );
     if (!requestedTenant) return { name: "menu-unavailable" };
     if (requestedTenant.id !== userStore.currentTenant.id) {
-      userStore.switchTenant(requestedTenant.id);
+      await userStore.switchTenant(requestedTenant.id, { remember: false });
     }
   }
   const platformTenant = userStore.availableTenants.find((tenant) => tenant.type === "platform");
@@ -98,7 +98,7 @@ router.beforeEach(async (to) => {
     platformTenant &&
     userStore.currentTenant.type !== "platform"
   ) {
-    userStore.switchTenant(platformTenant.id);
+    await userStore.switchTenant(platformTenant.id, { remember: false });
   }
 
   if (navigationStore.currentTenant?.id !== userStore.currentTenant.id) {

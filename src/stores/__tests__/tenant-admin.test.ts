@@ -87,7 +87,7 @@ describe("tenant admin store", () => {
     expect(userStore.role).toBe("admin");
   });
 
-  it("does not expose or switch to an enabled tenant without current user membership", () => {
+  it("does not expose or switch to an enabled tenant without current user membership", async () => {
     tenantRepository.replace([
       ...MOCK_TENANTS,
       {
@@ -102,7 +102,7 @@ describe("tenant admin store", () => {
     const userStore = useUserStore();
 
     expect(userStore.availableTenants.map((tenant) => tenant.id)).not.toContain("school-unassigned");
-    userStore.switchTenant("school-unassigned");
+    await userStore.switchTenant("school-unassigned");
     expect(userStore.currentTenant.id).toBe("school-001");
   });
 });

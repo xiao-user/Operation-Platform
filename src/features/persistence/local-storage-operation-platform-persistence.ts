@@ -88,6 +88,10 @@ export class LocalStorageOperationPlatformPersistence implements OperationPlatfo
     }
   }
 
+  async ensureTenantLoaded() {
+    return;
+  }
+
   loadConfiguration(tenant: TenantInfo) {
     return tenantConfigurationRepository.list(tenant);
   }

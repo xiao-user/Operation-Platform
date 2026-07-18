@@ -13,9 +13,17 @@ const pinia = createPinia();
 
 app.use(pinia);
 const authStore = useAuthStore(pinia);
-await authStore.initialize();
 const userStore = useUserStore(pinia);
-await userStore.initializePersistence(authStore.session?.user ?? null);
+
+function initializeSignedInUser() {
+  const identity = authStore.session?.user ?? null;
+  if (!identity) return;
+  void userStore.initializePersistence(identity).catch(() => {
+    // The user store exposes the bootstrap error for the mounted app shell.
+  });
+}
+
+void authStore.initialize().then(initializeSignedInUser);
 watch(
   () => authStore.authStateVersion,
   () => {
@@ -24,7 +32,9 @@ watch(
       userStore.resetPersistence();
       return;
     }
-    void userStore.initializePersistence(identity, true);
+    void userStore.initializePersistence(identity, true).catch(() => {
+      // The user store exposes the bootstrap error for the mounted app shell.
+    });
   },
   { flush: "post" },
 );

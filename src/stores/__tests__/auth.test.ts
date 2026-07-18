@@ -16,6 +16,17 @@ vi.mock("@/lib/supabase", () => ({
 }));
 
 import { useAuthStore } from "@/stores/auth";
+import { reportSupabaseAuthFailure } from "@/lib/supabase-auth-failure";
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
 
 function session(email = "member@example.com") {
   return {
@@ -56,6 +67,20 @@ describe("auth store", () => {
     expect(store.changingPassword).toBe(false);
   });
 
+  it("reuses the same session initialization request while it is pending", async () => {
+    const pending = deferred<{ data: { session: Session }; error: null }>();
+    authApi.getSession.mockReturnValueOnce(pending.promise);
+    const store = useAuthStore();
+
+    const first = store.initialize();
+    const second = store.initialize();
+
+    expect(authApi.getSession).toHaveBeenCalledTimes(1);
+    pending.resolve({ data: { session: session() }, error: null });
+    await Promise.all([first, second]);
+    expect(store.initialized).toBe(true);
+  });
+
   it("does not update the password when the current password is invalid", async () => {
     const store = useAuthStore();
     await store.initialize();
@@ -79,6 +104,29 @@ describe("auth store", () => {
     callback("SIGNED_OUT", null);
 
     expect(store.session).toBeNull();
+    expect(store.authStateVersion).toBe(1);
+  });
+
+  it("does not reload business persistence for token refreshes of the same user", async () => {
+    const store = useAuthStore();
+    await store.initialize();
+    const callback = authApi.onAuthStateChange.mock.calls[0]?.[0];
+
+    callback("TOKEN_REFRESHED", session());
+
+    expect(store.session?.user.id).toBe("auth-user");
+    expect(store.authStateVersion).toBe(0);
+  });
+
+  it("expires the local session when Supabase rejects a future-issued JWT", async () => {
+    const store = useAuthStore();
+    await store.initialize();
+
+    reportSupabaseAuthFailure("session-expired");
+    await vi.waitFor(() => expect(authApi.signOut).toHaveBeenCalledWith({ scope: "local" }));
+
+    expect(store.session).toBeNull();
+    expect(store.errorMessage).toBe("登录状态已超时，请重新登录");
     expect(store.authStateVersion).toBe(1);
   });
 });

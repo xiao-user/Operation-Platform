@@ -1,5 +1,6 @@
 import { cloneTenantMember } from "@/features/tenant-members/tenant-member-factories";
 import { cloneJson } from "@/lib/clone-json";
+import { loadActiveTenantFromSession } from "@/features/session/active-tenant-session";
 import {
   remoteWorkbenchLayoutKey,
   supabaseOperationPlatformRepository,
@@ -14,6 +15,7 @@ import {
   cloneWorkbenchLayout,
   createDefaultWorkbenchLayout,
   reconcileStoredWorkbenchLayout,
+  validateWorkbenchLayout,
 } from "@/features/workbench/workbench-layout";
 import type {
   UserWorkbenchLayout,
@@ -45,6 +47,9 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
   private activeRoles = new Map<string, string>();
   private visualizationThemes = new Map<string, string>();
   private workbenchLayouts = new Map<string, UserWorkbenchLayout>();
+  private loadedTenants = new Set<string>();
+  private tenantLoadRequests = new Map<string, Promise<void>>();
+  private generation = 0;
 
   initialState() {
     return {
@@ -57,8 +62,12 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
 
   async initialize(identity: PersistenceIdentity | null) {
     if (!identity) return this.initialState();
-    const bootstrap = await supabaseOperationPlatformRepository.bootstrap(identity);
-    this.userInfo = {
+    const generation = ++this.generation;
+    const bootstrap = await supabaseOperationPlatformRepository.bootstrap(
+      identity,
+      loadActiveTenantFromSession(identity.id),
+    );
+    const userInfo: UserInfo = {
       id: identity.id,
       email: identity.email ?? "",
       name: bootstrap.profile.display_name,
@@ -66,33 +75,46 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
       platformAdmin: bootstrap.profile.platform_admin,
       tenantRoleIds: {},
     };
-    this.tenants = bootstrap.tenants.map((tenant) => ({ ...tenant }));
-    this.configurations = new Map(
+    const tenants = bootstrap.tenants.map((tenant) => ({ ...tenant }));
+    const configurations = new Map(
       [...bootstrap.configurations].map(([id, value]) => [id, cloneJson(value.configuration)]),
     );
-    this.configurationRevisions = new Map(
+    const configurationRevisions = new Map(
       [...bootstrap.configurations].map(([id, value]) => [id, value.revision]),
     );
-    this.members = new Map(
+    const members = new Map(
       [...bootstrap.members].map(([id, members]) => [
         id,
         members.map(cloneTenantMember),
       ]),
     );
-    this.activeRoles = new Map(bootstrap.activeRoles);
-    this.visualizationThemes = new Map(bootstrap.visualizationThemes);
-    this.workbenchLayouts = new Map(
+    const activeRoles = new Map(bootstrap.activeRoles);
+    const visualizationThemes = new Map(bootstrap.visualizationThemes);
+    const workbenchLayouts = new Map(
       [...bootstrap.workbenchLayouts].map(([key, layout]) => [key, cloneWorkbenchLayout(layout)]),
     );
+    if (generation === this.generation) {
+      this.userInfo = userInfo;
+      this.tenants = tenants;
+      this.configurations = configurations;
+      this.configurationRevisions = configurationRevisions;
+      this.members = members;
+      this.activeRoles = activeRoles;
+      this.visualizationThemes = visualizationThemes;
+      this.workbenchLayouts = workbenchLayouts;
+      this.loadedTenants = new Set(configurations.keys());
+      this.tenantLoadRequests.clear();
+    }
     return {
-      userInfo: { ...this.userInfo },
-      tenants: this.listTenants(),
+      userInfo: { ...userInfo },
+      tenants: tenants.map((tenant) => ({ ...tenant })),
       tenantRecoveryNotice: null,
       initialized: true,
     };
   }
 
   reset() {
+    this.generation += 1;
     this.userInfo = { ...EMPTY_USER };
     this.tenants = [];
     this.configurations.clear();
@@ -101,6 +123,8 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
     this.activeRoles.clear();
     this.visualizationThemes.clear();
     this.workbenchLayouts.clear();
+    this.loadedTenants.clear();
+    this.tenantLoadRequests.clear();
   }
 
   listTenants() {
@@ -141,11 +165,36 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
     this.configurations.delete(tenantId);
     this.configurationRevisions.delete(tenantId);
     this.members.delete(tenantId);
+    this.loadedTenants.delete(tenantId);
+    this.tenantLoadRequests.delete(tenantId);
     this.activeRoles.delete(tenantId);
     this.visualizationThemes.delete(tenantId);
     for (const key of this.workbenchLayouts.keys()) {
       if (key.startsWith(`${tenantId}:`)) this.workbenchLayouts.delete(key);
     }
+  }
+
+  async ensureTenantLoaded(tenant: TenantInfo) {
+    if (this.loadedTenants.has(tenant.id)) return;
+    const pending = this.tenantLoadRequests.get(tenant.id);
+    if (pending) return pending;
+    const generation = this.generation;
+    const request = (async () => {
+      const state = await supabaseOperationPlatformRepository.loadTenantState(tenant);
+      if (generation !== this.generation) return;
+      if (state.configuration) {
+        this.configurations.set(tenant.id, cloneJson(state.configuration.configuration));
+        this.configurationRevisions.set(tenant.id, state.configuration.revision);
+      }
+      this.members.set(tenant.id, state.members.map(cloneTenantMember));
+      this.loadedTenants.add(tenant.id);
+    })();
+    this.tenantLoadRequests.set(tenant.id, request);
+    return request.finally(() => {
+      if (this.tenantLoadRequests.get(tenant.id) === request) {
+        this.tenantLoadRequests.delete(tenant.id);
+      }
+    });
   }
 
   loadConfiguration(tenant: TenantInfo) {
@@ -216,9 +265,12 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
 
   async saveWorkbenchLayout(
     context: WorkbenchLayoutContext,
-    _template: WorkbenchTemplate,
+    template: WorkbenchTemplate,
     layout: UserWorkbenchLayout,
   ) {
+    if (!validateWorkbenchLayout(layout, context, template)) {
+      throw new Error("工作台布局不完整，无法保存");
+    }
     await supabaseOperationPlatformRepository.saveWorkbenchLayout(context.userId, layout);
     const saved = cloneWorkbenchLayout(layout);
     this.workbenchLayouts.set(

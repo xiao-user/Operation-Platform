@@ -347,7 +347,7 @@ describe("navigation store", () => {
       },
     ]);
     userStore.refreshMemberRoles();
-    userStore.switchTenant(schoolA.id);
+    await userStore.switchTenant(schoolA.id);
     const store = useNavigationStore();
     store.loadTenant(schoolA);
 

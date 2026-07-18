@@ -72,6 +72,34 @@ export interface OperationPlatformBootstrap {
   workbenchLayouts: Map<string, UserWorkbenchLayout>;
 }
 
+export interface RemoteTenantState {
+  configuration: RemoteTenantConfiguration | null;
+  members: TenantMemberRecord[];
+}
+
+interface RemoteTenantStateRows {
+  configuration: ConfigurationRow | null;
+  members: MemberRow[];
+}
+
+const memberColumns = [
+  "id",
+  "tenant_id",
+  "auth_user_id",
+  "legacy_user_id",
+  "name",
+  "initials",
+  "account",
+  "phone",
+  "title",
+  "enabled",
+  "role_ids",
+  "source_created_at",
+  "source_updated_at",
+  "created_at",
+  "updated_at",
+].join(",");
+
 function assertNoError(error: { message: string } | null, fallback: string) {
   if (error) throw new Error(error.message || fallback);
 }
@@ -118,32 +146,39 @@ function layoutKey(tenantId: string, profile: WorkbenchProfile) {
 }
 
 export class SupabaseOperationPlatformRepository {
-  async bootstrap(user: PersistenceIdentity): Promise<OperationPlatformBootstrap> {
+  async bootstrap(
+    user: PersistenceIdentity,
+    preferredTenantId: string | null,
+  ): Promise<OperationPlatformBootstrap> {
     const client = getSupabaseClient();
-    const [profileResult, tenantsResult, configurationsResult, membersResult, preferencesResult, layoutsResult] = await Promise.all([
+    const preferredStateRequest = preferredTenantId
+      ? this.loadTenantStateRows(preferredTenantId)
+      : Promise.resolve(null);
+    const [
+      profileResult,
+      tenantsResult,
+      membersResult,
+      preferencesResult,
+      layoutsResult,
+      preferredStateRows,
+    ] = await Promise.all([
       client.from("profiles").select("id,display_name,initials,platform_admin").eq("id", user.id).single(),
       client.from("tenants").select("id,name,short_name,type,enabled").order("type").order("name"),
-      client.from("tenant_configurations").select("tenant_id,revision,configuration"),
-      client.from("tenant_members").select("id,tenant_id,auth_user_id,legacy_user_id,name,initials,account,phone,title,enabled,role_ids,source_created_at,source_updated_at,created_at,updated_at"),
+      client.from("tenant_members").select(memberColumns).eq("auth_user_id", user.id),
       client.from("user_tenant_preferences").select("tenant_id,active_role_id,visualization_theme_id").eq("auth_user_id", user.id),
       client.from("workbench_layouts").select("tenant_id,profile,layout").eq("auth_user_id", user.id),
+      preferredStateRequest,
     ]);
     assertNoError(profileResult.error, "用户资料读取失败");
     assertNoError(tenantsResult.error, "组织读取失败");
-    assertNoError(configurationsResult.error, "组织配置读取失败");
     assertNoError(membersResult.error, "组织成员读取失败");
     assertNoError(preferencesResult.error, "当前角色读取失败");
     assertNoError(layoutsResult.error, "工作台布局读取失败");
 
+    const profile = profileResult.data as ProfileRow;
     const tenants = (tenantsResult.data as TenantRow[]).map(toTenant);
-    const tenantsById = new Map(tenants.map((tenant) => [tenant.id, tenant]));
-    const configurations = new Map<string, RemoteTenantConfiguration>();
-    for (const row of configurationsResult.data as ConfigurationRow[]) {
-      const tenant = tenantsById.get(row.tenant_id);
-      if (tenant) configurations.set(row.tenant_id, configurationFromRow(row, tenant));
-    }
     const members = new Map<string, TenantMemberRecord[]>();
-    for (const row of membersResult.data as MemberRow[]) {
+    for (const row of membersResult.data as unknown as MemberRow[]) {
       const records = members.get(row.tenant_id) ?? [];
       records.push(toMember(row));
       members.set(row.tenant_id, records);
@@ -169,14 +204,84 @@ export class SupabaseOperationPlatformRepository {
         { ...row.layout, tenantId: row.tenant_id, userId: user.id, profile: row.profile },
       ]),
     );
+    const initialTenant = this.resolveInitialTenant(
+      tenants,
+      members,
+      profile.platform_admin,
+      preferredTenantId,
+    );
+    const initialState = initialTenant
+      ? preferredStateRows && initialTenant.id === preferredTenantId
+        ? this.tenantStateFromRows(preferredStateRows, initialTenant)
+        : await this.loadTenantState(initialTenant)
+      : null;
+    const configurations = new Map<string, RemoteTenantConfiguration>();
+    if (initialTenant && initialState?.configuration) {
+      configurations.set(initialTenant.id, initialState.configuration);
+      members.set(initialTenant.id, initialState.members);
+    }
     return {
-      profile: profileResult.data as ProfileRow,
+      profile,
       tenants,
       configurations,
       members,
       activeRoles,
       visualizationThemes,
       workbenchLayouts,
+    };
+  }
+
+  private resolveInitialTenant(
+    tenants: readonly TenantInfo[],
+    members: Map<string, TenantMemberRecord[]>,
+    isPlatformAdmin: boolean,
+    preferredTenantId: string | null,
+  ) {
+    const accessible = tenants.filter((tenant) => {
+      if (tenant.enabled === false) return false;
+      if (isPlatformAdmin) return true;
+      return (members.get(tenant.id) ?? []).some((member) => member.enabled && member.roleIds.length > 0);
+    });
+    return accessible.find((tenant) => tenant.id === preferredTenantId)
+      ?? accessible.find((tenant) => tenant.type !== "platform")
+      ?? accessible[0]
+      ?? null;
+  }
+
+  async loadTenantState(tenant: TenantInfo): Promise<RemoteTenantState> {
+    return this.tenantStateFromRows(await this.loadTenantStateRows(tenant.id), tenant);
+  }
+
+  private async loadTenantStateRows(tenantId: string): Promise<RemoteTenantStateRows> {
+    const client = getSupabaseClient();
+    const [configurationResult, membersResult] = await Promise.all([
+      client
+        .from("tenant_configurations")
+        .select("tenant_id,revision,configuration")
+        .eq("tenant_id", tenantId)
+        .maybeSingle(),
+      client
+        .from("tenant_members")
+        .select(memberColumns)
+        .eq("tenant_id", tenantId),
+    ]);
+    assertNoError(configurationResult.error, "组织配置读取失败");
+    assertNoError(membersResult.error, "组织成员读取失败");
+    return {
+      configuration: configurationResult.data as ConfigurationRow | null,
+      members: membersResult.data as unknown as MemberRow[],
+    };
+  }
+
+  private tenantStateFromRows(rows: RemoteTenantStateRows, tenant: TenantInfo): RemoteTenantState {
+    const members = rows.members
+      .map(toMember)
+      .sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+    return {
+      configuration: rows.configuration
+        ? configurationFromRow(rows.configuration, tenant)
+        : null,
+      members,
     };
   }
 
