@@ -10,7 +10,12 @@ export type WorkbenchWidgetKind =
   | "list"
   | "schedule"
   | "distribution"
-  | "quick-links";
+  | "quick-links"
+  | "ranking"
+  | "calendar"
+  | "growth"
+  | "education-chart"
+  | "activity-rank";
 export type WorkbenchWidgetTone = "primary" | "success" | "warning" | "danger" | "neutral";
 export type WorkbenchWidgetSizePreset = "small" | "medium" | "large";
 
@@ -98,6 +103,7 @@ export interface WorkbenchListItemData {
   id: string;
   title: string;
   meta: string;
+  label?: string;
   tone?: WorkbenchWidgetTone;
 }
 
@@ -132,12 +138,131 @@ export interface WorkbenchQuickLinksData {
   items: WorkbenchQuickLinkData[];
 }
 
+export interface WorkbenchRankingItemData {
+  id: string;
+  name: string;
+  usage: number;
+  trend: string;
+  uploads?: number;
+}
+
+export interface WorkbenchRankingData {
+  kind: "ranking";
+  mode?: "application" | "resource";
+  items: WorkbenchRankingItemData[];
+}
+
+export type WorkbenchEducationChartVariant =
+  | "grade-applications"
+  | "application-types"
+  | "resource-sharing"
+  | "resource-growth"
+  | "resource-contribution"
+  | "subject-resources";
+
+export interface WorkbenchChartSeriesData {
+  name: string;
+  values: number[];
+}
+
+export interface WorkbenchChartMetricData {
+  label: string;
+  value: string;
+  tone?: "primary" | "neutral";
+}
+
+export interface WorkbenchEducationChartData {
+  kind: "education-chart";
+  variant: WorkbenchEducationChartVariant;
+  labels: string[];
+  series: WorkbenchChartSeriesData[];
+  summary?: string;
+  unit?: string;
+  centerLabel?: string;
+  centerValue?: string;
+  metrics?: WorkbenchChartMetricData[];
+}
+
+export interface WorkbenchActivityRankData {
+  kind: "activity-rank";
+  rank: number;
+  change: number;
+  summary: string;
+}
+
+export type WorkbenchCalendarEventType = "meeting" | "review" | "task";
+export type WorkbenchCalendarEventStatus = "pending" | "completed";
+
+export interface WorkbenchCalendarEventData {
+  id: string;
+  date: string;
+  time: string;
+  title: string;
+  type: WorkbenchCalendarEventType;
+  status: WorkbenchCalendarEventStatus;
+}
+
+export interface WorkbenchCalendarData {
+  kind: "calendar";
+  events: WorkbenchCalendarEventData[];
+}
+
+export interface WorkbenchFeedItemData extends WorkbenchListItemData {
+  summary: string;
+  source: string;
+  unread?: boolean;
+}
+
+export interface WorkbenchFeedData {
+  kind: "feed";
+  items: WorkbenchFeedItemData[];
+}
+
+export interface WorkbenchTaskItemData extends WorkbenchListItemData {
+  status: "pending" | "completed";
+}
+
+export interface WorkbenchTaskCenterData {
+  kind: "task-center";
+  items: WorkbenchTaskItemData[];
+}
+
+export interface WorkbenchSubscriptionItemData extends WorkbenchListItemData {
+  subscribed: boolean;
+}
+
+export interface WorkbenchSubscriptionsData {
+  kind: "subscriptions";
+  items: WorkbenchSubscriptionItemData[];
+}
+
+export interface WorkbenchGrowthItemData {
+  label: string;
+  value: number;
+  displayValue: string;
+}
+
+export interface WorkbenchGrowthData {
+  kind: "growth";
+  score: string;
+  summary: string;
+  items: WorkbenchGrowthItemData[];
+}
+
 export type WorkbenchWidgetData =
   | WorkbenchMetricData
   | WorkbenchTrendData
   | WorkbenchListData
   | WorkbenchDistributionData
-  | WorkbenchQuickLinksData;
+  | WorkbenchQuickLinksData
+  | WorkbenchRankingData
+  | WorkbenchCalendarData
+  | WorkbenchFeedData
+  | WorkbenchTaskCenterData
+  | WorkbenchSubscriptionsData
+  | WorkbenchGrowthData
+  | WorkbenchEducationChartData
+  | WorkbenchActivityRankData;
 
 export interface WorkbenchDataContext {
   tenant: TenantInfo;

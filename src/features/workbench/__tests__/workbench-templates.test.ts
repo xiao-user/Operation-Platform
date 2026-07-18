@@ -33,8 +33,8 @@ describe("workbench templates", () => {
     }
   });
 
-  it("uses a stable total per profile while allowing admin and business catalogs to differ", () => {
-    for (const tenantType of tenantTypes) {
+  it("keeps the existing catalog size outside the education bureau", () => {
+    for (const tenantType of tenantTypes.filter((type) => type !== "bureau")) {
       const admin = getWorkbenchTemplate(tenantType, "admin");
       const business = getWorkbenchTemplate(tenantType, "business");
 
@@ -44,6 +44,59 @@ describe("workbench templates", () => {
         business.widgets.map((item) => item.widgetKey),
       );
     }
+  });
+
+  it("adds portal and education resource widgets only to education bureau profiles", () => {
+    const portalWidgetIds = [
+      "quick-apps",
+      "bureau-news",
+      "information-disclosure",
+      "teaching-app-ranking",
+      "message-todo-center",
+      "calendar-tasks",
+      "personal-growth",
+      "subscriptions",
+      "announcements",
+      "grade-applications",
+      "application-types",
+      "activity-rank",
+      "resource-sharing",
+      "resource-growth",
+      "resource-contribution",
+      "subject-resources",
+      "resource-ranking",
+    ];
+
+    for (const profile of ["admin", "business"] as const) {
+      const bureau = getWorkbenchTemplate("bureau", profile);
+      expect(bureau.revision).toBe(5);
+      expect(portalWidgetIds.every((id) =>
+        bureau.widgets.some((item) => item.widgetKey === `bureau.${profile}.${id}`),
+      )).toBe(true);
+    }
+
+    for (const tenantType of tenantTypes.filter((type) => type !== "bureau")) {
+      for (const profile of ["admin", "business"] as const) {
+        expect(getWorkbenchTemplate(tenantType, profile).widgets.some((item) =>
+          portalWidgetIds.some((id) => item.widgetKey.endsWith(`.${id}`)),
+        )).toBe(false);
+      }
+    }
+
+    expect(getWorkbenchTemplate("bureau", "admin").widgets).toHaveLength(23);
+    expect(getWorkbenchTemplate("bureau", "business").widgets).toHaveLength(20);
+
+    const businessWidgets = getWorkbenchTemplate("bureau", "business").widgets;
+    expect(businessWidgets.find((item) => item.widgetKey.endsWith(".calendar-tasks"))).toMatchObject({
+      y: 2,
+      h: 5,
+    });
+    expect(businessWidgets.find((item) => item.widgetKey.endsWith(".quick-apps"))).toMatchObject({
+      y: 7,
+    });
+    expect(businessWidgets.find((item) => item.widgetKey.endsWith(".grade-applications"))).toMatchObject({
+      y: 18,
+    });
   });
 
   it("maps only the built-in administrator to the admin profile", () => {
@@ -82,5 +135,63 @@ describe("workbench templates", () => {
     if (first.kind === "metric" && second.kind === "metric") {
       expect(first.value).not.toBe(second.value);
     }
+  });
+
+  it("provides structured interactive and chart data for bureau widgets", async () => {
+    const source = new MockWorkbenchDataSource();
+    const tenant: TenantInfo = {
+      id: "bureau-001",
+      name: "体验区教育局",
+      shortName: "体验区教育局",
+      type: "bureau",
+      enabled: true,
+    };
+    const context = { tenant, userId: "user-a", profile: "business" as const };
+
+    const results = await Promise.all([
+      source.load(
+        workbenchWidgetRegistry.get("bureau.business.teaching-app-ranking")!,
+        { kind: "none" },
+        context,
+        [],
+      ),
+      source.load(
+        workbenchWidgetRegistry.get("bureau.business.calendar-tasks")!,
+        { kind: "none" },
+        context,
+        [],
+      ),
+      source.load(
+        workbenchWidgetRegistry.get("bureau.business.personal-growth")!,
+        { kind: "none" },
+        context,
+        [],
+      ),
+      source.load(
+        workbenchWidgetRegistry.get("bureau.business.grade-applications")!,
+        { kind: "none" },
+        context,
+        [],
+      ),
+      source.load(
+        workbenchWidgetRegistry.get("bureau.business.resource-ranking")!,
+        { kind: "none" },
+        context,
+        [],
+      ),
+    ]);
+
+    expect(results.map((result) => result.kind)).toEqual([
+      "ranking",
+      "calendar",
+      "growth",
+      "education-chart",
+      "ranking",
+    ]);
+    expect(results[0]).toMatchObject({ kind: "ranking", items: { length: 5 } });
+    expect(results[1]).toMatchObject({ kind: "calendar", events: { length: 5 } });
+    expect(results[2]).toMatchObject({ kind: "growth", score: "86" });
+    expect(results[3]).toMatchObject({ kind: "education-chart", variant: "grade-applications" });
+    expect(results[4]).toMatchObject({ kind: "ranking", mode: "resource", items: { length: 5 } });
   });
 });

@@ -118,11 +118,15 @@ const managerVisible = ref(false);
 const settingsVisible = ref(false);
 const settingsWidgetKey = ref("");
 const viewportWidth = ref(window.innerWidth);
-const gridRenderVersion = ref(0);
+const gridLayoutVersion = ref(0);
 const canEdit = computed(() => viewportWidth.value >= 1200);
 const gridRenderKey = computed(() =>
-  `${currentTenant.value.id}:${workbenchStore.profile}:${gridRenderVersion.value}`,
+  `${currentTenant.value.id}:${workbenchStore.profile}:${gridLayoutVersion.value}`,
 );
+
+function resetGridLayout() {
+  gridLayoutVersion.value += 1;
+}
 const settingsItem = computed(() =>
   draftLayout.value?.items.find((item) => item.widgetKey === settingsWidgetKey.value) ?? null,
 );
@@ -140,7 +144,7 @@ function loadWorkbench() {
     role.value,
     navigationStore.tree,
   );
-  gridRenderVersion.value += 1;
+  resetGridLayout();
 }
 
 watch(
@@ -160,7 +164,7 @@ watch(canEdit, (editable) => {
     workbenchStore.cancelEditing();
     managerVisible.value = false;
     settingsVisible.value = false;
-    gridRenderVersion.value += 1;
+    resetGridLayout();
     ElMessage.warning("窗口宽度不足，已退出工作台编辑模式");
   }
 });
@@ -168,7 +172,6 @@ watch(canEdit, (editable) => {
 function startEditing() {
   if (!canEdit.value) return;
   workbenchStore.beginEditing();
-  gridRenderVersion.value += 1;
 }
 
 async function cancelEditing() {
@@ -186,7 +189,7 @@ async function cancelEditing() {
   workbenchStore.cancelEditing();
   managerVisible.value = false;
   settingsVisible.value = false;
-  gridRenderVersion.value += 1;
+  resetGridLayout();
 }
 
 async function saveEditing() {
@@ -194,7 +197,6 @@ async function saveEditing() {
     await workbenchStore.saveEditing();
     managerVisible.value = false;
     settingsVisible.value = false;
-    gridRenderVersion.value += 1;
     ElMessage.success("工作台布局已保存");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "工作台布局保存失败");
@@ -216,7 +218,7 @@ async function restoreDefault() {
     return;
   }
   workbenchStore.restoreDefaultDraft();
-  gridRenderVersion.value += 1;
+  resetGridLayout();
   ElMessage.success("已恢复默认草稿，请保存后生效");
 }
 
@@ -228,7 +230,7 @@ function handlePositionsChange(
 
 function handleVisibilityChange(widgetKey: string, visible: boolean) {
   workbenchStore.setVisible(widgetKey, visible);
-  gridRenderVersion.value += 1;
+  resetGridLayout();
 }
 
 function openSettings(widgetKey: string) {
@@ -259,11 +261,11 @@ function handleWidgetAction(widgetKey: string, action: WorkbenchWidgetAction) {
       ElMessage.warning("目标位置不可用");
       return;
     }
-    gridRenderVersion.value += 1;
+    resetGridLayout();
     return;
   }
   const preset = action.replace("size-", "") as WorkbenchWidgetSizePreset;
-  if (workbenchStore.resizeWidget(widgetKey, preset)) gridRenderVersion.value += 1;
+  if (workbenchStore.resizeWidget(widgetKey, preset)) resetGridLayout();
 }
 
 function updateViewportWidth() {

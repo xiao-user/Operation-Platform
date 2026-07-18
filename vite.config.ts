@@ -67,6 +67,12 @@ export default defineConfig({
           if (id.includes("/node_modules/@supabase/")) {
             return "supabase";
           }
+          if (id.includes("/node_modules/echarts/")) {
+            return "echarts";
+          }
+          if (id.includes("/node_modules/zrender/")) {
+            return "zrender";
+          }
           if (id.includes("/node_modules/three/examples/jsm/controls/")) {
             return "three-controls";
           }

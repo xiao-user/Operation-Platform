@@ -10,6 +10,15 @@
   --color-primary-line: #558bf0;
   --color-primary-line-light: #c9e0ff;
 
+  /* Chart Categories */
+  --color-chart-violet: #4f28e8;
+  --color-chart-purple: #6a1fe8;
+  --color-chart-lilac: #8f4fd8;
+  --color-chart-green: #36d187;
+  --color-chart-mint: #65dc95;
+  --color-chart-yellow-light: #ffe8a3;
+  --color-chart-yellow: #ffb429;
+
   /* Status */
   --color-success: #0ed57d;
   --color-success-light: #e6ffef;

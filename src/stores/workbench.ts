@@ -79,6 +79,7 @@ export const useWorkbenchStore = defineStore("workbench", () => {
   const recoveryNotice = ref<string | null>(null);
   const isEditing = ref(false);
   const quickLinks = ref<WorkbenchQuickLinkData[]>([]);
+  const widgetDataCache = new Map<string, Promise<WorkbenchWidgetData>>();
 
   const activeLayout = computed(() =>
     isEditing.value ? draftLayout.value : savedLayout.value,
@@ -111,8 +112,13 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     roleIds: string | readonly string[] | null,
     navigationTree: readonly MenuTreeNode[],
   ) {
+    const previousContextKey = context.value
+      ? `${context.value.tenant.id}:${context.value.userId}:${context.value.profile}`
+      : "";
     const nextProfile = resolveWorkbenchProfile(roleIds);
     const nextContext: WorkbenchLayoutContext = { tenant, userId, profile: nextProfile };
+    const nextContextKey = `${tenant.id}:${userId}:${nextProfile}`;
+    if (previousContextKey !== nextContextKey) widgetDataCache.clear();
     const nextTemplate = getWorkbenchTemplate(tenant.type, nextProfile);
     const result = operationPlatformPersistence.loadWorkbenchLayout(nextContext, nextTemplate);
     context.value = { ...nextContext, tenant: { ...tenant } };
@@ -254,7 +260,10 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     return workbenchWidgetRegistry.get(widgetKey) ?? null;
   }
 
-  async function loadWidgetData(item: WorkbenchLayoutItem): Promise<WorkbenchWidgetData> {
+  async function loadWidgetData(
+    item: WorkbenchLayoutItem,
+    options: { force?: boolean } = {},
+  ): Promise<WorkbenchWidgetData> {
     const loaded = requireLoaded();
     const definition = definitionFor(item.widgetKey);
     if (!definition) throw new Error("工作台组件不存在");
@@ -263,7 +272,25 @@ export const useWorkbenchStore = defineStore("workbench", () => {
       userId: loaded.context.userId,
       profile: loaded.context.profile,
     };
-    return workbenchDataSource.load(definition, item.settings, dataContext, quickLinks.value);
+    const cacheKey = JSON.stringify([
+      dataContext.tenant.id,
+      dataContext.userId,
+      dataContext.profile,
+      item.widgetKey,
+      item.settings,
+      quickLinks.value,
+    ]);
+    if (options.force) widgetDataCache.delete(cacheKey);
+    const cached = widgetDataCache.get(cacheKey);
+    if (cached) return cached;
+    const request = workbenchDataSource
+      .load(definition, item.settings, dataContext, quickLinks.value)
+      .catch((error) => {
+        widgetDataCache.delete(cacheKey);
+        throw error;
+      });
+    widgetDataCache.set(cacheKey, request);
+    return request;
   }
 
   return {

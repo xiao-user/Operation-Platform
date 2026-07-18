@@ -2,9 +2,13 @@ import type {
   WorkbenchDataContext,
   WorkbenchDataSource,
   WorkbenchDistributionItemData,
+  WorkbenchEducationChartData,
+  WorkbenchFeedItemData,
   WorkbenchListItemData,
   WorkbenchMetricData,
   WorkbenchQuickLinkData,
+  WorkbenchSubscriptionItemData,
+  WorkbenchTaskItemData,
   WorkbenchWidgetData,
   WorkbenchWidgetDefinition,
   WorkbenchWidgetSettings,
@@ -19,9 +23,9 @@ const metricValues: Record<string, Omit<WorkbenchMetricData, "kind">> = {
   "school.business.pending-tasks": { value: "7", trend: "2 项今天到期", trendTone: "neutral" },
   "school.business.class-attendance": { value: "98.1%", trend: "48 人已到校", trendTone: "up" },
   "bureau.admin.school-count": { value: "36", trend: "全部正常接入", trendTone: "up" },
-  "bureau.admin.org-count": { value: "82", trend: "本月新增 4 家", trendTone: "up" },
-  "bureau.admin.signup-count": { value: "12,680", trend: "较上期 +12.4%", trendTone: "up" },
-  "bureau.admin.pending-reviews": { value: "24", trend: "6 项临近截止", trendTone: "neutral" },
+  "bureau.admin.student-count": { value: "48,620", trend: "本学期净增 386 人", trendTone: "up" },
+  "bureau.admin.teacher-count": { value: "3,286", trend: "专任教师占比 91.4%", trendTone: "up" },
+  "bureau.admin.pending-actions": { value: "24", trend: "6 项临近截止", trendTone: "neutral" },
   "bureau.business.my-reviews": { value: "16", trend: "今日新增 3 项", trendTone: "neutral" },
   "bureau.business.due-today": { value: "4", trend: "最早 14:00 到期", trendTone: "neutral" },
   "bureau.business.weekly-completed": { value: "31", trend: "较上周 +6 项", trendTone: "up" },
@@ -46,6 +50,93 @@ const tenantNotices: Record<WorkbenchDataContext["tenant"]["type"], string[]> = 
   bureau: ["托管课程审核规范已更新", "本月机构数据报送截止至周五", "退款审核流程新增复核节点"],
   org: ["春季课程续报活动已开始", "教师资质年审材料请及时补充", "本月结算单已生成"],
   platform: ["租户配置完整性检查已完成", "系统维护窗口安排在周六凌晨", "权限配置审计报告已生成"],
+};
+
+const bureauFeedData: Record<string, WorkbenchFeedItemData[]> = {
+  "bureau-news": [
+    { id: "news-1", title: "全区基础教育高质量发展推进会召开", meta: "今天", label: "局内动态", tone: "primary", source: "办公室", summary: "会议部署秋季学期重点工作，明确教育质量提升、校园安全和数字化建设三项任务的责任单位与完成时限。", unread: true },
+    { id: "news-2", title: "暑期校园安全专项检查工作启动", meta: "07-17", label: "重点工作", source: "安全科", summary: "专项检查覆盖消防、校舍、食品和暑期值班四类事项，各学校需按计划完成自查和整改反馈。", unread: true },
+    { id: "news-3", title: "数字化教学应用培训完成首期授课", meta: "07-16", label: "教育数字化", source: "电教中心", summary: "首期培训完成 12 所学校的教师实操辅导，后续将按学段组织专题应用工作坊。" },
+    { id: "news-4", title: "区级名师工作室联合教研活动举行", meta: "07-15", label: "教研活动", source: "教研室", summary: "活动围绕跨学科主题学习开展课例研讨，并形成下一阶段联合教研任务清单。" },
+    { id: "news-5", title: "课后服务质量监测结果完成复核", meta: "07-14", label: "工作简报", source: "基教科", summary: "本轮监测完成数据复核，学校覆盖率和课程开设达标率均较上期提升。" },
+  ],
+  "information-disclosure": [
+    { id: "disclosure-1", title: "2026 年义务教育招生工作实施方案", meta: "07-18", label: "政策文件", tone: "primary", source: "基础教育科", summary: "方案明确招生对象、学区安排、报名流程及特殊群体入学保障要求。", unread: true },
+    { id: "disclosure-2", title: "校外培训机构年度检查结果公示", meta: "07-16", label: "公示公告", source: "监管科", summary: "年度检查结果按合格、限期整改和不合格分类公示，公示期为七个工作日。" },
+    { id: "disclosure-3", title: "教育行政事项办事指南更新", meta: "07-12", label: "办事指南", source: "行政审批科", summary: "更新教师资格认定、民办学校审批等事项的办理材料、流程和咨询方式。" },
+    { id: "disclosure-4", title: "学生资助政策与申请流程说明", meta: "07-09", label: "政策解读", source: "学生资助中心", summary: "梳理各学段资助项目、认定条件、申请材料及办理时限。" },
+    { id: "disclosure-5", title: "教育经费年度执行情况公开", meta: "07-05", label: "财政信息", source: "财务科", summary: "公开年度教育经费预算执行和重点项目资金使用情况。" },
+  ],
+  announcements: [
+    { id: "announcement-1", title: "关于报送暑期值班安排的通知", meta: "今天", label: "工作通知", tone: "primary", source: "办公室", summary: "请各单位于本周五前完成暑期值班表在线填报，并确认应急联系人信息。", unread: true },
+    { id: "announcement-2", title: "全区教师信息更新工作提醒", meta: "07-17", label: "数据报送", source: "人事科", summary: "教师基础信息更新将在 7 月 24 日截止，请及时处理系统校验提示。", unread: true },
+    { id: "announcement-3", title: "秋季学期校历安排发布", meta: "07-15", label: "重要公告", source: "基础教育科", summary: "新学期报到、开学、考试及假期时间已确定，请各学校据此安排教学计划。" },
+    { id: "announcement-4", title: "教育系统网络维护窗口说明", meta: "07-12", label: "系统通知", source: "电教中心", summary: "本周六 00:00 至 04:00 进行网络维护，部分平台服务可能短时不可用。" },
+    { id: "announcement-5", title: "校外培训治理专项检查通知", meta: "07-10", label: "专项工作", source: "监管科", summary: "专项检查聚焦违规收费、隐形变异培训和安全管理，具体分组安排已下发。" },
+  ],
+};
+
+const bureauTaskData: WorkbenchTaskItemData[] = [
+  { id: "todo-1", title: "复核星辰艺术机构资质", meta: "今天 16:00", label: "待审核", tone: "warning", status: "pending" },
+  { id: "todo-2", title: "确认秋季招生计划汇总数据", meta: "明天", label: "待办", status: "pending" },
+  { id: "todo-3", title: "处理课程细则补充材料", meta: "2 天内", label: "待补充", status: "pending" },
+  { id: "todo-4", title: "完成本周审核工作汇总", meta: "周五", label: "任务", status: "pending" },
+  { id: "todo-5", title: "查看校园安全预警信息", meta: "昨天", label: "消息", tone: "danger", status: "completed" },
+];
+
+const bureauSubscriptionData: WorkbenchSubscriptionItemData[] = [
+  { id: "subscription-1", title: "基础教育政策速递", meta: "更新 3 条", label: "政策", subscribed: true },
+  { id: "subscription-2", title: "教育数字化建设动态", meta: "更新 2 条", label: "专题", subscribed: true },
+  { id: "subscription-3", title: "区域教学质量监测", meta: "每周一", label: "数据", subscribed: true },
+  { id: "subscription-4", title: "教师发展与教研资讯", meta: "更新 1 条", label: "教研", subscribed: false },
+  { id: "subscription-5", title: "校园安全风险提示", meta: "实时", label: "安全", tone: "warning", subscribed: true },
+];
+
+const educationChartData: Record<string, Omit<WorkbenchEducationChartData, "kind">> = {
+  "grade-applications": {
+    variant: "grade-applications",
+    labels: ["一年级", "二年级", "三年级", "四年级", "五年级", "六年级", "初一", "初二", "初三", "高一", "高二", "高三"],
+    series: [{ name: "应用量", values: [8_260, 7_850, 7_530, 7_110, 6_940, 6_620, 5_780, 5_420, 5_060, 4_880, 4_510, 4_120] }],
+    centerLabel: "小学",
+    centerValue: "44,310",
+  },
+  "application-types": {
+    variant: "application-types",
+    labels: ["作业", "上课", "班测", "备课", "考试", "课程任务"],
+    series: [{ name: "应用量", values: [2_383, 2_728, 1_128, 12_839, 240, 2_293] }],
+    centerLabel: "作业",
+    centerValue: "2,383",
+  },
+  "resource-sharing": {
+    variant: "resource-sharing",
+    labels: ["公开分享", "本校分享", "私人分享"],
+    series: [{ name: "资源量", values: [7_383, 2_728, 1_128] }],
+    centerLabel: "公开分享",
+    centerValue: "7,383",
+    metrics: [
+      { label: "浏览量", value: "98", tone: "primary" },
+      { label: "下载量", value: "32" },
+      { label: "收藏量", value: "24" },
+    ],
+  },
+  "resource-growth": {
+    variant: "resource-growth",
+    labels: ["11-09", "11-12", "11-15", "11-18", "11-21", "11-24", "11-27", "11-30", "12-03"],
+    series: [{ name: "新增资源", values: [22, 40, 58, 48, 44, 64, 96, 112, 142] }],
+    summary: "最近 30 天日均上传 471",
+  },
+  "resource-contribution": {
+    variant: "resource-contribution",
+    labels: ["作业", "班测", "备课", "考试", "课程任务"],
+    series: [{ name: "资源贡献", values: [190, 170, 185, 100, 130] }],
+    unit: "单位（个数）",
+  },
+  "subject-resources": {
+    variant: "subject-resources",
+    labels: ["语文", "英语", "数学", "政治", "思想品德", "历史", "化学", "美术", "物理", "体育"],
+    series: [{ name: "资源量", values: [5.9, 5.1, 5.7, 2.7, 3.7, 4.6, 5.3, 2, 5.8, 1.9] }],
+    unit: "单位（万）",
+  },
 };
 
 function tenantSeed(tenantId: string) {
@@ -97,6 +188,72 @@ function scheduleItems(context: WorkbenchDataContext): WorkbenchListItemData[] {
   });
 }
 
+function localIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function calendarData() {
+  const today = new Date();
+  const dateAfter = (offset: number) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() + offset);
+    return localIsoDate(date);
+  };
+  return {
+    kind: "calendar" as const,
+    events: [
+      { id: "agenda-1", date: dateAfter(0), time: "09:30", title: "重点项目周调度会", type: "meeting" as const, status: "pending" as const },
+      { id: "agenda-2", date: dateAfter(0), time: "14:00", title: "学校数据质量复核", type: "review" as const, status: "pending" as const },
+      { id: "agenda-3", date: dateAfter(1), time: "10:00", title: "秋季招生数据会审", type: "review" as const, status: "pending" as const },
+      { id: "agenda-4", date: dateAfter(3), time: "15:30", title: "校园安全整改反馈", type: "task" as const, status: "pending" as const },
+      { id: "agenda-5", date: dateAfter(-2), time: "11:00", title: "教研项目立项沟通", type: "meeting" as const, status: "completed" as const },
+    ],
+  };
+}
+
+function rankingData() {
+  return {
+    kind: "ranking" as const,
+    items: [
+      { id: "ranking-1", name: "智慧课堂", usage: 18.6, trend: "+12.8%" },
+      { id: "ranking-2", name: "作业管理", usage: 15.2, trend: "+8.4%" },
+      { id: "ranking-3", name: "在线教研", usage: 12.9, trend: "+6.7%" },
+      { id: "ranking-4", name: "资源中心", usage: 10.4, trend: "+5.1%" },
+      { id: "ranking-5", name: "学情分析", usage: 8.7, trend: "+3.6%" },
+    ],
+  };
+}
+
+function resourceRankingData() {
+  return {
+    kind: "ranking" as const,
+    mode: "resource" as const,
+    items: [
+      { id: "resource-ranking-1", name: "七年级上册语文同步备课包", usage: 12_580, uploads: 2_180, trend: "+18.2%" },
+      { id: "resource-ranking-2", name: "小学数学思维训练专题", usage: 10_960, uploads: 1_860, trend: "+15.6%" },
+      { id: "resource-ranking-3", name: "初中英语听说训练资源", usage: 9_740, uploads: 1_520, trend: "+12.4%" },
+      { id: "resource-ranking-4", name: "高中物理实验课程素材", usage: 8_160, uploads: 1_290, trend: "+9.8%" },
+      { id: "resource-ranking-5", name: "跨学科主题学习案例集", usage: 7_430, uploads: 1_080, trend: "+8.1%" },
+    ],
+  };
+}
+
+function growthData() {
+  return {
+    kind: "growth" as const,
+    score: "86",
+    summary: "本月成长值 +12",
+    items: [
+      { label: "研修学习", value: 82, displayValue: "18 学时" },
+      { label: "业务协同", value: 68, displayValue: "24 次" },
+      { label: "知识贡献", value: 56, displayValue: "9 篇" },
+    ],
+  };
+}
+
 function taskItems(context: WorkbenchDataContext, dataKey: string) {
   const values = dataKey.includes("review")
     ? ["复核星辰艺术机构资质", "处理课程细则补充材料", "确认教师黑名单申诉", "完成本周审核汇总", "跟进退款异常记录"]
@@ -118,9 +275,9 @@ function distributionItems(context: WorkbenchDataContext): WorkbenchDistribution
   }
   if (context.tenant.type === "bureau") {
     return [
-      { label: "正常合作", value: 72, displayValue: "59 家", tone: "success" },
-      { label: "审核中", value: 20, displayValue: "16 家", tone: "primary" },
-      { label: "需整改", value: 8, displayValue: "7 家", tone: "warning" },
+      { label: "运行正常", value: 83, displayValue: "30 所", tone: "success" },
+      { label: "待补报数据", value: 11, displayValue: "4 所", tone: "primary" },
+      { label: "存在风险", value: 6, displayValue: "2 所", tone: "warning" },
     ];
   }
   if (context.tenant.type === "org") {
@@ -182,6 +339,16 @@ export class MockWorkbenchDataSource implements WorkbenchDataSource {
       return { kind: "metric", ...metricForTenant(metric, context) };
     }
     if (definition.kind === "trend") return trendData(definition, settings, context);
+    if (definition.kind === "education-chart") {
+      const dataKeyParts = definition.dataKey.split(".");
+      const chartKey = dataKeyParts[dataKeyParts.length - 1] ?? "";
+      const chart = educationChartData[chartKey];
+      if (!chart) throw new Error(`未找到工作台图表数据：${definition.dataKey}`);
+      return { kind: "education-chart", ...chart };
+    }
+    if (definition.kind === "activity-rank") {
+      return { kind: "activity-rank", rank: 32, change: -12, summary: "较上月" };
+    }
     if (definition.kind === "distribution") {
       return { kind: "distribution", items: distributionItems(context) };
     }
@@ -192,9 +359,25 @@ export class MockWorkbenchDataSource implements WorkbenchDataSource {
         : selectedIds.flatMap((id) => quickLinks.find((item) => item.id === id) ?? []);
       return { kind: "quick-links", items };
     }
+    if (definition.kind === "ranking") {
+      return definition.dataKey.endsWith("resource-ranking") ? resourceRankingData() : rankingData();
+    }
+    if (definition.kind === "calendar") return calendarData();
+    if (definition.kind === "growth") return growthData();
     const limit = settings.kind === "list" ? settings.limit : 5;
     if (definition.kind === "schedule") {
       return { kind: "schedule", items: scheduleItems(context).slice(0, limit) };
+    }
+    const dataKeyParts = definition.dataKey.split(".");
+    const bureauDataKey = dataKeyParts[dataKeyParts.length - 1] ?? "";
+    if (context.tenant.type === "bureau" && bureauFeedData[bureauDataKey]) {
+      return { kind: "feed", items: bureauFeedData[bureauDataKey].slice(0, limit) };
+    }
+    if (context.tenant.type === "bureau" && bureauDataKey === "message-todo-center") {
+      return { kind: "task-center", items: bureauTaskData.slice(0, limit) };
+    }
+    if (context.tenant.type === "bureau" && bureauDataKey === "subscriptions") {
+      return { kind: "subscriptions", items: bureauSubscriptionData.slice(0, limit) };
     }
     const values = definition.dataKey.endsWith(".notices")
       ? listItems(tenantNotices[context.tenant.type], definition.dataKey)

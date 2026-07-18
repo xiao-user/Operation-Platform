@@ -48,7 +48,7 @@
       <el-skeleton v-if="loading" :rows="3" animated />
       <div v-else-if="errorMessage" class="widget-error">
         <span>{{ errorMessage }}</span>
-        <el-button link type="primary" @click="loadData">重新加载</el-button>
+        <el-button link type="primary" @click="retryLoadData">重新加载</el-button>
       </div>
       <WorkbenchWidgetContent v-else-if="data" :data="data" />
     </div>
@@ -79,17 +79,26 @@ const errorMessage = ref("");
 const data = ref<WorkbenchWidgetData | null>(null);
 const definition = computed(() => workbenchStore.definitionFor(props.item.widgetKey));
 const hasSettings = computed(() => props.item.settings.kind !== "none");
+let loadRequestId = 0;
 
-async function loadData() {
+async function loadData(force = false) {
+  const requestId = ++loadRequestId;
   loading.value = true;
   errorMessage.value = "";
   try {
-    data.value = await workbenchStore.loadWidgetData(props.item);
+    const nextData = await workbenchStore.loadWidgetData(props.item, { force });
+    if (requestId !== loadRequestId) return;
+    data.value = nextData;
   } catch (error) {
+    if (requestId !== loadRequestId) return;
     errorMessage.value = error instanceof Error ? error.message : "组件数据加载失败";
   } finally {
-    loading.value = false;
+    if (requestId === loadRequestId) loading.value = false;
   }
+}
+
+function retryLoadData() {
+  void loadData(true);
 }
 
 function handleCommand(command: WorkbenchWidgetAction) {
@@ -103,7 +112,7 @@ watch(
     workbenchStore.context?.tenant.id,
     JSON.stringify(workbenchStore.quickLinks),
   ],
-  loadData,
+  () => void loadData(),
   { immediate: true },
 );
 </script>
@@ -118,29 +127,12 @@ watch(
   background: var(--color-white);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-s);
+  transition: border-color 160ms ease, background-color 160ms ease;
 }
-
-.workbench-widget::before {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 3px;
-  height: 100%;
-  content: "";
-  background: var(--widget-accent, var(--color-border-strong));
-  opacity: 0.75;
-}
-
-.workbench-widget.tone-primary { --widget-accent: var(--color-primary); }
-.workbench-widget.tone-success { --widget-accent: var(--color-success-dark-text); }
-.workbench-widget.tone-warning { --widget-accent: var(--color-warning); }
-.workbench-widget.tone-danger { --widget-accent: var(--color-error); }
-.workbench-widget.tone-neutral { --widget-accent: var(--color-secondary); }
 
 .workbench-widget.is-editing {
+  background: color-mix(in srgb, var(--color-primary-light) 18%, var(--color-white));
   border-color: var(--color-primary-line-light);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
 
 .widget-header {
@@ -149,7 +141,7 @@ watch(
   justify-content: space-between;
   min-height: 44px;
   gap: var(--spacing-12);
-  padding: var(--spacing-14) var(--spacing-16) 0 var(--spacing-20);
+  padding: var(--spacing-16) var(--spacing-20) 0;
 }
 
 .widget-title-block {
@@ -170,9 +162,9 @@ watch(
 .widget-title-block h2 {
   margin: 0;
   color: var(--color-title);
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-md);
+  line-height: var(--line-height-lg);
 }
 
 .widget-title-block p {
@@ -201,9 +193,10 @@ watch(
 }
 
 .widget-body {
+  container-type: inline-size;
   flex: 1;
   min-height: 0;
-  padding: var(--spacing-10) var(--spacing-16) var(--spacing-16) var(--spacing-20);
+  padding: var(--spacing-12) var(--spacing-20) var(--spacing-20);
   overflow: auto;
 }
 

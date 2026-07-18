@@ -36,6 +36,10 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { GridStack, type GridStackNode } from "gridstack";
 import "gridstack/dist/gridstack.min.css";
 import WorkbenchWidgetCard from "@/features/workbench/components/WorkbenchWidgetCard.vue";
+import {
+  MEDIUM_WORKBENCH_COLUMNS,
+  projectWorkbenchItemsToMediumGrid,
+} from "@/features/workbench/workbench-responsive-layout";
 import type {
   WorkbenchLayoutItem,
   WorkbenchWidgetDefinition,
@@ -66,6 +70,9 @@ const emit = defineEmits<{
 const workbenchStore = useWorkbenchStore();
 const gridElement = ref<HTMLElement | null>(null);
 let grid: GridStack | null = null;
+let gridResizeObserver: ResizeObserver | null = null;
+let gridResizeFrame = 0;
+let appliedResponsiveColumn = 0;
 
 function definitionFor(widgetKey: string): WorkbenchWidgetDefinition | null {
   return workbenchStore.definitionFor(widgetKey);
@@ -105,7 +112,7 @@ async function initializeGrid() {
       columnOpts: {
         layout: "moveScale",
         breakpoints: [
-          { w: 1199, c: 6, layout: "moveScale" },
+          { w: 1199, c: 6, layout: "compact" },
           { w: 767, c: 1, layout: "list" },
         ],
       },
@@ -113,9 +120,44 @@ async function initializeGrid() {
     gridElement.value,
   );
   grid.on("change", (_event, nodes) => emitChanges(nodes));
+  gridResizeObserver = new ResizeObserver(() => {
+    cancelAnimationFrame(gridResizeFrame);
+    gridResizeFrame = requestAnimationFrame(applyResponsiveLayout);
+  });
+  gridResizeObserver.observe(gridElement.value);
+  applyResponsiveLayout();
+}
+
+function applyResponsiveLayout() {
+  if (!grid || !gridElement.value) return;
+  grid.setAnimation(false);
+  grid.onResize(gridElement.value.clientWidth);
+  const column = grid.getColumn();
+  if (column === appliedResponsiveColumn) {
+    grid.setAnimation(true);
+    return;
+  }
+  appliedResponsiveColumn = column;
+  const isMediumLayout = column === MEDIUM_WORKBENCH_COLUMNS;
+  grid.float(isMediumLayout);
+  if (isMediumLayout) {
+    const projected = projectWorkbenchItemsToMediumGrid(props.items).map((item) => ({
+      id: item.widgetKey,
+      x: item.x,
+      y: item.y,
+      w: item.w,
+      h: item.h,
+    }));
+    grid.load(projected, false);
+  }
+  requestAnimationFrame(() => grid?.setAnimation(true));
 }
 
 function destroyGrid() {
+  gridResizeObserver?.disconnect();
+  gridResizeObserver = null;
+  cancelAnimationFrame(gridResizeFrame);
+  appliedResponsiveColumn = 0;
   grid?.offAll();
   grid?.destroy(false);
   grid = null;

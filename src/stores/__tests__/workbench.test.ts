@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { ADMIN_ROLE_ID, STAFF_ROLE_ID } from "@/features/access-control/types";
 import { workbenchLayoutStorageKey } from "@/features/workbench/local-storage-workbench-layout-repository";
 import type { MenuTreeNode } from "@/features/menu-config/types";
+import { workbenchDataSource } from "@/features/workbench/mock-workbench-data-source";
 import { useWorkbenchStore } from "@/stores/workbench";
 import type { TenantInfo } from "@/types/user";
 
@@ -18,6 +19,7 @@ const emptyTree: MenuTreeNode[] = [];
 describe("workbench store", () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.restoreAllMocks();
     setActivePinia(createPinia());
   });
 
@@ -115,5 +117,21 @@ describe("workbench store", () => {
     store.load(school, "user-a", ADMIN_ROLE_ID, emptyTree);
     expect(store.items.find((item) => item.widgetKey === widgetKey)!.visible).toBe(false);
     expect(store.hasOverride).toBe(true);
+  });
+
+  it("deduplicates widget data requests within one workbench context", async () => {
+    const loadSpy = vi.spyOn(workbenchDataSource, "load");
+    const store = useWorkbenchStore();
+    store.load(school, "user-a", ADMIN_ROLE_ID, emptyTree);
+    const item = store.items[0]!;
+
+    await Promise.all([
+      store.loadWidgetData(item),
+      store.loadWidgetData(item),
+    ]);
+    expect(loadSpy).toHaveBeenCalledTimes(1);
+
+    await store.loadWidgetData(item, { force: true });
+    expect(loadSpy).toHaveBeenCalledTimes(2);
   });
 });
