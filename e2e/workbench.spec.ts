@@ -108,6 +108,14 @@ test("教育局日程、待办和门户信息支持真实操作", async ({ page 
   ]);
   expect(tabBounds[1].top).toBeGreaterThanOrEqual(tabBounds[0].top);
   expect(tabBounds[1].bottom).toBeLessThanOrEqual(tabBounds[0].bottom);
+
+  const constrainedViewportHeight = await quickApps.evaluate((element) => {
+    const viewport = element.querySelector(".secondary-tabs-viewport");
+    if (!viewport) throw new Error("Secondary tabs viewport not found");
+    element.style.height = "24px";
+    return viewport.getBoundingClientRect().height;
+  });
+  expect(constrainedViewportHeight).toBe(36);
 });
 
 test("隐藏不会删除组件并在保存刷新后保持，重新显示后仍为完整清单", async ({ page }) => {

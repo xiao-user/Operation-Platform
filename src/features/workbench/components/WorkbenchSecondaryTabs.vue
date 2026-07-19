@@ -36,6 +36,10 @@ const model = defineModel<string>({ required: true });
 
 <style scoped>
 .secondary-tabs-viewport {
+  --secondary-tab-height: 32px;
+  height: calc(var(--secondary-tab-height) + var(--spacing-4));
+  min-height: calc(var(--secondary-tab-height) + var(--spacing-4));
+  flex: 0 0 calc(var(--secondary-tab-height) + var(--spacing-4));
   max-width: 100%;
   padding: var(--spacing-2);
   margin: calc(-1 * var(--spacing-2));
@@ -54,7 +58,7 @@ const model = defineModel<string>({ required: true });
 }
 
 .secondary-tab {
-  height: 32px;
+  height: var(--secondary-tab-height);
   flex-shrink: 0;
   padding: var(--spacing-4) var(--spacing-16);
   color: var(--color-title);
