@@ -60,9 +60,9 @@ function collectQuickLinks(
   tenantId: string,
 ): WorkbenchQuickLinkData[] {
   const result: WorkbenchQuickLinkData[] = [];
-  const visit = (items: readonly MenuTreeNode[]) => {
+  const visit = (items: readonly MenuTreeNode[], module: MenuTreeNode) => {
     for (const node of items) {
-      if (node.type === "page" || node.type === "external") {
+      if (node.type === "page") {
         const target = resolveFirstTarget(node, pageRegistryByKey);
         if (target?.kind === "internal") {
           result.push({
@@ -72,21 +72,19 @@ function collectQuickLinks(
             target: target.path,
             openMode: target.openMode,
             tenantId,
-          });
-        } else if (target?.kind === "external") {
-          result.push({
-            id: node.id,
-            name: node.name,
-            kind: "external",
-            target: target.url,
-            openMode: target.openMode,
+            icon: node.icon,
+            moduleId: module.id,
+            moduleName: module.name,
+            moduleIcon: module.icon,
           });
         }
       }
-      visit(node.children);
+      visit(node.children, module);
     }
   };
-  visit(nodes);
+  for (const module of nodes) {
+    if (module.type === "module") visit(module.children, module);
+  }
   return result;
 }
 
@@ -99,6 +97,12 @@ export const useWorkbenchStore = defineStore("workbench", () => {
   const recoveryNotice = ref<string | null>(null);
   const isEditing = ref(false);
   const quickLinks = ref<WorkbenchQuickLinkData[]>([]);
+  const dataIdentity = ref({
+    name: "",
+    initials: "",
+    account: "",
+    roleName: "",
+  });
   const widgetDataCache = new Map<string, Promise<WorkbenchWidgetData>>();
 
   const activeLayout = computed(() =>
@@ -144,6 +148,7 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     userId: string,
     roleIds: string | readonly string[] | null,
     navigationTree: readonly MenuTreeNode[],
+    identity?: { name: string; initials: string; account: string; roleName: string },
   ) {
     const previousContextKey = context.value
       ? `${context.value.tenant.id}:${context.value.userId}:${context.value.profile}`
@@ -161,6 +166,12 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     hasOverride.value = result.hasOverride;
     recoveryNotice.value = result.recoveryNotice;
     quickLinks.value = collectQuickLinks(navigationTree, tenant.id);
+    dataIdentity.value = identity ?? {
+      name: userId,
+      initials: userId.slice(0, 1).toUpperCase(),
+      account: userId,
+      roleName: nextProfile === "admin" ? "管理员" : "业务角色",
+    };
     isEditing.value = false;
   }
 
@@ -448,6 +459,10 @@ export const useWorkbenchStore = defineStore("workbench", () => {
       tenant: loaded.context.tenant,
       userId: loaded.context.userId,
       profile: loaded.context.profile,
+      userName: dataIdentity.value.name,
+      userInitials: dataIdentity.value.initials,
+      userAccount: dataIdentity.value.account,
+      roleName: dataIdentity.value.roleName,
     };
     const cacheKey = JSON.stringify([
       dataContext.tenant.id,
@@ -472,6 +487,7 @@ export const useWorkbenchStore = defineStore("workbench", () => {
 
   return {
     context,
+    dataIdentity,
     template,
     savedLayout,
     draftLayout,

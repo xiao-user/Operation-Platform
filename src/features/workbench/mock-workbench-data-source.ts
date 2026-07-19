@@ -330,6 +330,21 @@ export class MockWorkbenchDataSource implements WorkbenchDataSource {
     context: WorkbenchDataContext,
     quickLinks: readonly WorkbenchQuickLinkData[],
   ): Promise<WorkbenchWidgetData> {
+    if (definition.kind === "user-overview") {
+      const overviewTarget = (pattern: RegExp) => quickLinks.find((item) => pattern.test(item.name));
+      return {
+        kind: "user-overview",
+        name: context.userName ?? context.userId,
+        initials: context.userInitials ?? (context.userName ?? context.userId).slice(0, 1).toUpperCase(),
+        account: context.userAccount ?? context.userId,
+        roleName: context.roleName ?? (context.profile === "admin" ? "管理员" : "业务角色"),
+        stats: [
+          { label: "通知消息", value: 0, target: overviewTarget(/通知|消息|公告/) },
+          { label: "我的邮件", value: 0, target: overviewTarget(/邮件|邮箱/) },
+          { label: "我的订阅", value: 0, target: overviewTarget(/订阅/) },
+        ],
+      };
+    }
     if (definition.kind === "metric") {
       const metric = metricValues[definition.dataKey] ?? {
         value: "--",
@@ -353,11 +368,7 @@ export class MockWorkbenchDataSource implements WorkbenchDataSource {
       return { kind: "distribution", items: distributionItems(context) };
     }
     if (definition.kind === "quick-links") {
-      const selectedIds = settings.kind === "quick-links" ? settings.menuIds : null;
-      const items = selectedIds === null
-        ? quickLinks.slice(0, 8)
-        : selectedIds.flatMap((id) => quickLinks.find((item) => item.id === id) ?? []);
-      return { kind: "quick-links", items };
+      return { kind: "quick-links", items: [...quickLinks] };
     }
     if (definition.kind === "ranking") {
       return definition.dataKey.endsWith("resource-ranking") ? resourceRankingData() : rankingData();

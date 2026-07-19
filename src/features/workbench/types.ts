@@ -1,4 +1,5 @@
 import type { TenantInfo, TenantType } from "@/types/user";
+import type { MenuIconKey } from "@/types/navigation";
 
 export const WORKBENCH_LAYOUT_VERSION = 4;
 export const WORKBENCH_GRID_COLUMNS = 12;
@@ -18,7 +19,8 @@ export type WorkbenchWidgetKind =
   | "calendar"
   | "growth"
   | "education-chart"
-  | "activity-rank";
+  | "activity-rank"
+  | "user-overview";
 export type WorkbenchWidgetTone = "primary" | "success" | "warning" | "danger" | "neutral";
 export type WorkbenchWidgetSizePreset = "small" | "medium" | "large";
 export type WorkbenchLayoutMode = "classic" | "simple";
@@ -165,15 +167,34 @@ export interface WorkbenchDistributionData {
 export interface WorkbenchQuickLinkData {
   id: string;
   name: string;
-  kind: "internal" | "external";
+  kind: "internal";
   target: string;
   openMode?: "current" | "new-tab";
   tenantId?: string;
+  icon: MenuIconKey | null;
+  moduleId: string;
+  moduleName: string;
+  moduleIcon: MenuIconKey | null;
 }
 
 export interface WorkbenchQuickLinksData {
   kind: "quick-links";
   items: WorkbenchQuickLinkData[];
+}
+
+export interface WorkbenchUserOverviewStatData {
+  label: string;
+  value: number;
+  target?: WorkbenchQuickLinkData;
+}
+
+export interface WorkbenchUserOverviewData {
+  kind: "user-overview";
+  name: string;
+  initials: string;
+  account: string;
+  roleName: string;
+  stats: WorkbenchUserOverviewStatData[];
 }
 
 export interface WorkbenchRankingItemData {
@@ -309,12 +330,17 @@ export type WorkbenchWidgetData =
   | WorkbenchSubscriptionsData
   | WorkbenchGrowthData
   | WorkbenchEducationChartData
-  | WorkbenchActivityRankData;
+  | WorkbenchActivityRankData
+  | WorkbenchUserOverviewData;
 
 export interface WorkbenchDataContext {
   tenant: TenantInfo;
   profile: WorkbenchProfile;
   userId: string;
+  userName?: string;
+  userInitials?: string;
+  userAccount?: string;
+  roleName?: string;
 }
 
 export interface WorkbenchDataSource {

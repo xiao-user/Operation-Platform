@@ -15,29 +15,6 @@
         </el-radio-group>
       </el-form-item>
 
-      <el-form-item v-else-if="draft.kind === 'quick-links'" label="快捷入口">
-        <el-radio-group v-model="quickLinkMode" class="quick-link-mode">
-          <el-radio-button value="auto">自动展示</el-radio-button>
-          <el-radio-button value="custom">手动选择</el-radio-button>
-        </el-radio-group>
-        <el-checkbox-group
-          v-if="quickLinkMode === 'custom'"
-          v-model="selectedMenuIds"
-          class="quick-link-options"
-        >
-          <el-checkbox
-            v-for="link in quickLinks"
-            :key="link.id"
-            :value="link.id"
-            :disabled="selectedMenuIds.length >= 8 && !selectedMenuIds.includes(link.id)"
-          >
-            {{ link.name }}
-          </el-checkbox>
-        </el-checkbox-group>
-        <p class="settings-help">
-          自动展示会始终使用当前角色有权访问的前 8 个菜单；手动选择最多保留 8 个已授权菜单。
-        </p>
-      </el-form-item>
     </el-form>
 
     <template #footer>
@@ -48,9 +25,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { ref, watch } from "vue";
 import type {
-  WorkbenchQuickLinkData,
   WorkbenchWidgetDefinition,
   WorkbenchWidgetItem,
   WorkbenchWidgetSettings,
@@ -60,7 +36,6 @@ import { cloneWorkbenchSettings } from "@/features/workbench/workbench-layout";
 const props = defineProps<{
   item: WorkbenchWidgetItem | null;
   definition: WorkbenchWidgetDefinition | null;
-  quickLinks: WorkbenchQuickLinkData[];
 }>();
 
 const emit = defineEmits<{
@@ -68,56 +43,18 @@ const emit = defineEmits<{
 }>();
 const visible = defineModel<boolean>({ required: true });
 const draft = ref<WorkbenchWidgetSettings>({ kind: "none" });
-const selectedMenuIds = ref<string[]>([]);
-const quickLinkMode = ref<"auto" | "custom">("auto");
-
-const availableLinkIds = computed(() => new Set(props.quickLinks.map((link) => link.id)));
 
 watch(
   () => [visible.value, props.item?.widgetKey] as const,
   ([isVisible]) => {
     if (!isVisible || !props.item) return;
     draft.value = cloneWorkbenchSettings(props.item.settings);
-    if (props.item.settings.kind === "quick-links") {
-      quickLinkMode.value = props.item.settings.menuIds === null ? "auto" : "custom";
-      selectedMenuIds.value = props.item.settings.menuIds?.filter((id) => availableLinkIds.value.has(id)) ??
-        props.quickLinks.slice(0, 8).map((link) => link.id);
-    } else {
-      quickLinkMode.value = "auto";
-      selectedMenuIds.value = [];
-    }
   },
   { immediate: true },
 );
 
 function save() {
-  if (draft.value.kind === "quick-links") {
-    emit("save", {
-      kind: "quick-links",
-      menuIds: quickLinkMode.value === "auto" ? null : [...selectedMenuIds.value],
-    });
-  } else {
-    emit("save", cloneWorkbenchSettings(draft.value));
-  }
+  emit("save", cloneWorkbenchSettings(draft.value));
   visible.value = false;
 }
 </script>
-
-<style scoped>
-.quick-link-mode {
-  margin-bottom: var(--spacing-12);
-}
-
-.quick-link-options {
-  display: grid;
-  width: 100%;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-8) var(--spacing-16);
-}
-
-.settings-help {
-  margin: var(--spacing-8) 0 0;
-  color: var(--color-secondary);
-  font-size: var(--font-size-sm);
-}
-</style>

@@ -113,7 +113,6 @@
       v-model="settingsVisible"
       :item="settingsItem"
       :definition="settingsDefinition"
-      :quick-links="quickLinks"
       @save="saveWidgetSettings"
     />
   </div>
@@ -148,7 +147,7 @@ const userStore = useUserStore();
 const navigationStore = useNavigationStore();
 const workbenchStore = useWorkbenchStore();
 const { currentTenant, role, userInfo } = storeToRefs(userStore);
-const { tree } = storeToRefs(navigationStore);
+const { activeRoleRecord, tree } = storeToRefs(navigationStore);
 const {
   draftLayout,
   visibleItems,
@@ -157,7 +156,6 @@ const {
   recoveryNotice,
   isEditing,
   hasUnsavedChanges,
-  quickLinks,
   layoutMode,
 } = storeToRefs(workbenchStore);
 
@@ -221,12 +219,27 @@ function loadWorkbench() {
     userInfo.value.id,
     role.value,
     navigationStore.tree,
+    {
+      name: userInfo.value.name,
+      initials: userInfo.value.initials,
+      account: userInfo.value.email ?? userInfo.value.id,
+      roleName: activeRoleRecord.value?.name ?? "暂无角色",
+    },
   );
   resetGridLayout();
 }
 
 watch(
-  () => [currentTenant.value.id, userInfo.value.id, role.value] as const,
+  () => [
+    currentTenant.value.id,
+    userInfo.value.id,
+    userInfo.value.name,
+    userInfo.value.initials,
+    userInfo.value.email,
+    role.value,
+    activeRoleRecord.value?.id,
+    activeRoleRecord.value?.name,
+  ] as const,
   loadWorkbench,
   { immediate: true },
 );

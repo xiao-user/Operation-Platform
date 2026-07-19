@@ -35,6 +35,67 @@ describe("workbench store", () => {
     expect(store.totalCount).toBe(7);
   });
 
+  it("groups only internal page entries by their configured top-level module", () => {
+    const store = useWorkbenchStore();
+    const module: MenuTreeNode = {
+      id: "module-services",
+      tenantId: school.id,
+      parentId: null,
+      type: "module",
+      name: "公共服务",
+      icon: "LayoutGrid",
+      pageKey: null,
+      externalUrl: null,
+      externalOpenMode: null,
+      sort: 1,
+      visible: true,
+      children: [
+        {
+          id: "menu-internal",
+          tenantId: school.id,
+          parentId: "module-services",
+          type: "page",
+          name: "内部服务",
+          icon: "School",
+          pageKey: "developing-placeholder",
+          externalUrl: null,
+          externalOpenMode: null,
+          sort: 1,
+          visible: true,
+          children: [],
+        },
+        {
+          id: "menu-external",
+          tenantId: school.id,
+          parentId: "module-services",
+          type: "external",
+          name: "外部服务",
+          icon: null,
+          pageKey: null,
+          externalUrl: "https://example.com",
+          externalOpenMode: "new-tab",
+          sort: 2,
+          visible: true,
+          children: [],
+        },
+      ],
+    };
+
+    store.load(school, "user-a", ADMIN_ROLE_ID, [module]);
+
+    expect(store.quickLinks).toEqual([
+      expect.objectContaining({
+        id: "menu-internal",
+        name: "内部服务",
+        kind: "internal",
+        moduleId: "module-services",
+        moduleName: "公共服务",
+        icon: "School",
+        moduleIcon: "LayoutGrid",
+      }),
+    ]);
+  });
+
   it("hides without deleting and restores a colliding widget at the nearest free position", () => {
     const store = useWorkbenchStore();
     store.load(school, "user-a", ADMIN_ROLE_ID, emptyTree);

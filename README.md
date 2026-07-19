@@ -212,7 +212,7 @@ flowchart LR
 - `features/persistence/runtime-operation-platform-persistence.ts` 是唯一数据源装配入口，当前默认装配 Supabase，测试和本地回退装配 localStorage。
 - 启动后当前租户配置通过内存快照同步读取，其他可访问租户的配置与成员数据在切换租户或进入管理页时按需补齐；所有写入统一使用异步契约，数据源切换不得在 Store 中增加类型判断。
 - `features/workbench/workbench-templates.ts` 是 8 套固定组件清单和默认布局的代码级事实源；个人布局始终保留模板中的全部组件。
-- `features/workbench/` 将模板、布局校验、个人 repository、类型化数据源和两种版本的布局容器隔离；经典版保存 `x/y/w/h`，新版保存布局方式、列宽比例及组件的 `order/columnOrder/span/column`。读取 version 1 经典布局时保留原坐标并生成新版初始顺序，读取 version 2 顺序流布局时保留组件顺序并补齐双列归属，读取 version 3 双列布局时保留原布局设置并生成独立列内顺序。快捷入口只接收 Navigation Store 已过滤的可见叶子菜单。
+- `features/workbench/` 将模板、布局校验、个人 repository、类型化数据源和两种版本的布局容器隔离；经典版保存 `x/y/w/h`，新版保存布局方式、列宽比例及组件的 `order/columnOrder/span/column`。读取 version 1 经典布局时保留原坐标并生成新版初始顺序，读取 version 2 顺序流布局时保留组件顺序并补齐双列归属，读取 version 3 双列布局时保留原布局设置并生成独立列内顺序。教育局工作台包含当前账号与角色概览；快捷导航只接收 Navigation Store 已按当前角色过滤的内部页面，并按租户菜单配置的一级模块切换，一个内部页面对应一个入口，外部链接不进入工作台快捷导航。
 - `features/tenant-members/` 按租户隔离组织成员，负责当前用户多角色来源、成员数据校验、损坏备份和删除组织时的清理。
 - Pinia Store 负责组合租户、菜单、工作台和角色状态。
 - `tenant-route-access.ts` 负责前端路由可访问性和回退地址。

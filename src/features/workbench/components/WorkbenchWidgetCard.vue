@@ -7,10 +7,12 @@
         'is-editing': editable,
         'is-simple': layoutMode === 'simple',
         'is-simple-flow': simpleLayoutType === 'flow',
+        'is-user-overview': definition?.kind === 'user-overview',
+        'is-quick-links': definition?.kind === 'quick-links',
       },
     ]"
   >
-    <header class="widget-header">
+    <header v-if="editable || definition?.kind !== 'user-overview'" class="widget-header">
       <div
         class="widget-title-block"
         :class="{ 'widget-drag-handle': editable }"
@@ -119,7 +121,9 @@ const calendarContext = computed(() => workbenchStore.context ? {
   userId: workbenchStore.context.userId,
   profile: workbenchStore.context.profile,
 } : undefined);
-const hasSettings = computed(() => props.item.settings.kind !== "none");
+const hasSettings = computed(
+  () => props.item.settings.kind !== "none" && definition.value?.kind !== "quick-links",
+);
 let loadRequestId = 0;
 
 async function loadData(force = false) {
@@ -151,6 +155,7 @@ watch(
     props.item.widgetKey,
     JSON.stringify(props.item.settings),
     workbenchStore.context?.tenant.id,
+    JSON.stringify(workbenchStore.dataIdentity),
     JSON.stringify(workbenchStore.quickLinks),
   ],
   () => void loadData(),
@@ -184,8 +189,18 @@ watch(
   height: 100%;
 }
 
+.workbench-widget.is-user-overview .widget-body {
+  padding: 0;
+}
+
 .workbench-widget.is-simple .widget-body {
   overflow: visible;
+}
+
+.workbench-widget.is-simple.is-quick-links .widget-body {
+  height: 350px;
+  flex: none;
+  overflow: hidden;
 }
 
 .widget-header {

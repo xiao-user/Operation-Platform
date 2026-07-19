@@ -53,6 +53,8 @@
   <WorkbenchActivityRank v-else-if="data.kind === 'activity-rank'" :data="data" />
 
   <WorkbenchQuickApps v-else-if="data.kind === 'quick-links'" :data="data" />
+
+  <WorkbenchUserOverview v-else-if="data.kind === 'user-overview'" :data="data" />
 </template>
 
 <script setup lang="ts">
@@ -66,6 +68,7 @@ import WorkbenchRankingList from "@/features/workbench/components/WorkbenchRanki
 import WorkbenchSubscriptions from "@/features/workbench/components/WorkbenchSubscriptions.vue";
 import WorkbenchTaskCenter from "@/features/workbench/components/WorkbenchTaskCenter.vue";
 import WorkbenchTrendChart from "@/features/workbench/components/WorkbenchTrendChart.vue";
+import WorkbenchUserOverview from "@/features/workbench/components/WorkbenchUserOverview.vue";
 import type { WorkbenchDataContext, WorkbenchWidgetData } from "@/features/workbench/types";
 
 defineProps<{

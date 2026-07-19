@@ -48,6 +48,7 @@ describe("workbench templates", () => {
 
   it("adds portal and education resource widgets only to education bureau profiles", () => {
     const portalWidgetIds = [
+      "user-overview",
       "quick-apps",
       "bureau-news",
       "information-disclosure",
@@ -69,7 +70,7 @@ describe("workbench templates", () => {
 
     for (const profile of ["admin", "business"] as const) {
       const bureau = getWorkbenchTemplate("bureau", profile);
-      expect(bureau.revision).toBe(5);
+      expect(bureau.revision).toBe(6);
       expect(portalWidgetIds.every((id) =>
         bureau.widgets.some((item) => item.widgetKey === `bureau.${profile}.${id}`),
       )).toBe(true);
@@ -83,19 +84,19 @@ describe("workbench templates", () => {
       }
     }
 
-    expect(getWorkbenchTemplate("bureau", "admin").widgets).toHaveLength(23);
-    expect(getWorkbenchTemplate("bureau", "business").widgets).toHaveLength(20);
+    expect(getWorkbenchTemplate("bureau", "admin").widgets).toHaveLength(24);
+    expect(getWorkbenchTemplate("bureau", "business").widgets).toHaveLength(21);
 
     const businessWidgets = getWorkbenchTemplate("bureau", "business").widgets;
     expect(businessWidgets.find((item) => item.widgetKey.endsWith(".calendar-tasks"))).toMatchObject({
-      y: 2,
+      y: 4,
       h: 5,
     });
     expect(businessWidgets.find((item) => item.widgetKey.endsWith(".quick-apps"))).toMatchObject({
-      y: 7,
+      y: 9,
     });
     expect(businessWidgets.find((item) => item.widgetKey.endsWith(".grade-applications"))).toMatchObject({
-      y: 18,
+      y: 21,
     });
   });
 
@@ -179,6 +180,18 @@ describe("workbench templates", () => {
         context,
         [],
       ),
+      source.load(
+        workbenchWidgetRegistry.get("bureau.business.user-overview")!,
+        { kind: "none" },
+        {
+          ...context,
+          userName: "罗吴航",
+          userInitials: "罗",
+          userAccount: "luowuhang@example.com",
+          roleName: "教研员",
+        },
+        [],
+      ),
     ]);
 
     expect(results.map((result) => result.kind)).toEqual([
@@ -187,7 +200,14 @@ describe("workbench templates", () => {
       "growth",
       "education-chart",
       "ranking",
+      "user-overview",
     ]);
+    expect(results[5]).toMatchObject({
+      kind: "user-overview",
+      name: "罗吴航",
+      account: "luowuhang@example.com",
+      roleName: "教研员",
+    });
     expect(results[0]).toMatchObject({ kind: "ranking", items: { length: 5 } });
     expect(results[1]).toMatchObject({ kind: "calendar", events: { length: 5 } });
     expect(results[2]).toMatchObject({ kind: "growth", score: "86" });

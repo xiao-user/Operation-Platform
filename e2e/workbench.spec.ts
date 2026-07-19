@@ -31,13 +31,23 @@ test("刷新后恢复用户最后切换的机构", async ({ page }) => {
 });
 
 test("教育局工作台展示门户与区域资源组件", async ({ page }) => {
+  const runtimeErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") runtimeErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => runtimeErrors.push(error.message));
   await page.goto("/workbench");
   await switchTenant(page, "体验区教育局");
 
   await expect(page.getByRole("button", { name: "教育局 体验区教育局" })).toBeVisible();
-  await expect(page.locator(".grid-stack-item")).toHaveCount(20);
+  await expect(page.locator(".grid-stack-item")).toHaveCount(21);
+  const userOverview = page.locator('[data-widget-key="bureau.business.user-overview"]');
+  await expect(userOverview).toContainText("账号 ID");
+  await expect(userOverview).toContainText("通知消息");
+  await expect(userOverview).toContainText("我的邮件");
+  await expect(userOverview).toContainText("我的订阅");
   for (const title of [
-    "快捷应用入口",
+    "快捷导航",
     "局内新闻",
     "信息公开",
     "教学应用排行榜",
@@ -57,6 +67,7 @@ test("教育局工作台展示门户与区域资源组件", async ({ page }) => 
   ]) {
     await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
   }
+  expect(runtimeErrors).toEqual([]);
 });
 
 test("教育局日程、待办和门户信息支持真实操作", async ({ page }) => {
@@ -94,7 +105,7 @@ test("教育局日程、待办和门户信息支持真实操作", async ({ page 
   await expect(subscriptions.getByRole("switch", { name: "取消订阅教师发展与教研资讯" })).toBeChecked();
 
   const quickApps = page.locator('[data-widget-key="bureau.business.quick-apps"]');
-  const activeTab = quickApps.getByRole("tab", { name: "协同管理", exact: true });
+  const activeTab = quickApps.getByRole("tab", { name: "基础平台", exact: true });
   await activeTab.click();
   const tabBounds = await Promise.all([
     quickApps.locator(".secondary-tabs-viewport").evaluate((element) => {
@@ -347,7 +358,7 @@ test("教育局资源组件在手机端保持单列且图表可见", async ({ pa
   await page.setViewportSize({ width: 390, height: 844 });
 
   const widgets = page.locator(".grid-stack-item");
-  await expect(widgets).toHaveCount(20);
+  await expect(widgets).toHaveCount(21);
   const boxes = await widgets.evaluateAll((items) => items.map((item) => {
     const box = item.getBoundingClientRect();
     return { x: box.x, width: box.width };
@@ -417,29 +428,53 @@ test("宽度切换时紧凑重排且恢复桌面布局", async ({ page }) => {
     .toEqual(["0", "0", "0", "0"]);
 });
 
-test("业务工作台快捷入口只使用当前角色获权菜单", async ({ page }) => {
+test("业务工作台快捷导航按一级菜单展示获权内部页面", async ({ page }) => {
   await page.goto("/workbench");
   await switchTenant(page, "天河区第二实验小学");
 
   const permitted = await page.evaluate(() => {
     const key = "operation-platform:tenant-configuration:v1:school-002";
     const configuration = JSON.parse(localStorage.getItem(key)!) as {
-      menuRecords: Array<{ id: string; name: string; type: string }>;
+      menuRecords: Array<{
+        id: string;
+        name: string;
+        type: string;
+        parentId: string | null;
+      }>;
       roles: Array<{ id: string; menuIds: string[] }>;
     };
-    const leaves = configuration.menuRecords.filter(
-      (record) => record.type === "page" || record.type === "external",
-    );
+    const internalPages = configuration.menuRecords.filter((record) => record.type === "page");
+    const modules = configuration.menuRecords.filter((record) => record.type === "module");
+    const ancestors = new Map(configuration.menuRecords.map((record) => [record.id, record]));
+    const rootModule = (record: (typeof configuration.menuRecords)[number]) => {
+      let current = record;
+      while (current.parentId) current = ancestors.get(current.parentId)!;
+      return current;
+    };
+    const firstPage = internalPages[0]!;
+    const firstModule = rootModule(firstPage);
+    const secondModule = modules.find((module) => module.id !== firstModule.id)!;
+    const secondPage = internalPages.find((record) => rootModule(record).id === secondModule.id)!;
     const teacher = configuration.roles.find((role) => role.id === "teacher")!;
-    teacher.menuIds = [leaves[0]!.id];
+    teacher.menuIds = [firstPage.id, secondPage.id];
     localStorage.setItem(key, JSON.stringify(configuration));
-    return { allowedName: leaves[0]!.name, deniedName: leaves[1]!.name };
+    return {
+      firstModuleName: firstModule.name,
+      firstPageName: firstPage.name,
+      secondModuleName: secondModule.name,
+      secondPageName: secondPage.name,
+    };
   });
 
   await page.reload();
   await switchTenant(page, "天河区第二实验小学");
   const quickLinks = page.locator('[data-widget-key="school.business.quick-links"]');
 
-  await expect(quickLinks.getByRole("link", { name: new RegExp(permitted.allowedName) })).toBeVisible();
-  await expect(quickLinks.getByText(permitted.deniedName, { exact: true })).toHaveCount(0);
+  await expect(quickLinks.getByRole("tab", { name: permitted.firstModuleName, exact: true })).toBeVisible();
+  await expect(quickLinks.getByRole("link", { name: permitted.firstPageName, exact: true })).toBeVisible();
+  await expect(quickLinks.getByRole("link", { name: permitted.secondPageName, exact: true })).toHaveCount(0);
+
+  await quickLinks.getByRole("tab", { name: permitted.secondModuleName, exact: true }).click();
+  await expect(quickLinks.getByRole("link", { name: permitted.secondPageName, exact: true })).toBeVisible();
+  await expect(quickLinks.getByRole("link", { name: permitted.firstPageName, exact: true })).toHaveCount(0);
 });
