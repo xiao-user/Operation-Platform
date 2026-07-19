@@ -130,6 +130,9 @@ defineExpose({
     engine?.focusFeature(featureCode, applyTownshipDefaults) ?? Promise.resolve()
   ),
   animateCameraView: (view: MapCameraView) => engine?.animateCameraView(view) ?? Promise.resolve(),
+  setSelectedEnergyTower: (energyTowerId?: string) => (
+    engine?.setSelectedEnergyTower(energyTowerId)
+  ),
 });
 
 onBeforeUnmount(() => {
@@ -264,7 +267,7 @@ onBeforeUnmount(() => {
 .map-canvas-host :deep(.tower-school-list-cycle span) { height: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-canvas-host :deep(.tower-school-list.is-scrolling .tower-school-list-track) { animation: tower-school-list-scroll var(--school-scroll-duration) linear infinite; }
 .map-canvas-host :deep(.map-energy-tower-label.is-pinned.is-revealed) { opacity: calc(0.78 * var(--tower-reveal, 1)); visibility: visible; }
-.map-canvas-host :deep(.map-energy-tower-label.is-hovered.is-revealed) { transform: translateY(-12px) scale(1.06); border-color: var(--map-primary); opacity: var(--tower-reveal, 1); visibility: visible; }
+.map-canvas-host :deep(.map-energy-tower-label:is(.is-hovered, .is-selected).is-revealed) { transform: translateY(-12px) scale(1.06); border-color: var(--map-primary); opacity: var(--tower-reveal, 1); visibility: visible; }
 
 @keyframes tower-school-list-scroll {
   from { transform: translateY(0); }

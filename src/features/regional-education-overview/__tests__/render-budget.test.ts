@@ -8,6 +8,7 @@ import {
   filterLocationsForMapState,
   initialMapState,
   loadMapLevel,
+  regionalContextGeoData,
 } from "../map-data-adapter";
 import { digitalTwinMapThemes, getDigitalTwinMapTheme } from "../map-themes";
 import { AmbientEffectsLayer } from "../rendering/ambient-effects-layer";
@@ -38,6 +39,7 @@ import {
   largestOuterRingOfFeature,
 } from "../rendering/map-projection";
 import { RegionLayer, regionTopZ } from "../rendering/region-layer";
+import { RegionalContextLayer } from "../rendering/regional-context-layer";
 import { defaultMapVisualTuning } from "../rendering/map-visual-tuning";
 import {
   anchorDynamicOverlay,
@@ -135,10 +137,11 @@ describe("regional map render budget", () => {
   });
 
   it("resumes planar auto rotation only after controls have been idle", () => {
-    expect(shouldRunMapAutoRotation(true, false, 10_000, 10_000)).toBe(true);
-    expect(shouldRunMapAutoRotation(true, false, 9_999, 10_000)).toBe(false);
-    expect(shouldRunMapAutoRotation(true, true, 12_000, 10_000)).toBe(false);
-    expect(shouldRunMapAutoRotation(false, false, 12_000, 10_000)).toBe(false);
+    expect(shouldRunMapAutoRotation(true, true, false, 10_000, 10_000)).toBe(true);
+    expect(shouldRunMapAutoRotation(true, true, false, 9_999, 10_000)).toBe(false);
+    expect(shouldRunMapAutoRotation(true, true, true, 12_000, 10_000)).toBe(false);
+    expect(shouldRunMapAutoRotation(true, false, false, 12_000, 10_000)).toBe(false);
+    expect(shouldRunMapAutoRotation(false, true, false, 12_000, 10_000)).toBe(false);
   });
 
   it("keeps the geographic pivot fixed on screen during Z-up orbit rotation", () => {
@@ -227,6 +230,26 @@ describe("regional map render budget", () => {
     expect(institutionRoot.position.z).toBe(30);
     expect(connectionRoot.renderOrder).toBeGreaterThan(40);
     expect(institutionRoot.renderOrder).toBeGreaterThan(connectionRoot.renderOrder);
+  });
+
+  it("depth-tests external context outlines against the active map surface", () => {
+    const context = new RegionalContextLayer(
+      regionalContextGeoData,
+      projection,
+      theme,
+      defaultMapVisualTuning,
+    );
+    const lineMaterials: THREE.LineBasicMaterial[] = [];
+    context.root.traverse((object) => {
+      if (object instanceof THREE.Line && object.material instanceof THREE.LineBasicMaterial) {
+        lineMaterials.push(object.material);
+      }
+    });
+
+    expect(lineMaterials.length).toBeGreaterThan(0);
+    expect(lineMaterials.every((material) => material.depthTest)).toBe(true);
+    expect(lineMaterials.every((material) => !material.depthWrite)).toBe(true);
+    context.dispose();
   });
 
   it("keeps institution and connection draw objects constant as schools grow", () => {
@@ -325,6 +348,27 @@ describe("regional map render budget", () => {
     institutions.dispose();
   });
 
+  it("rotates only the selected school's segmented halo", () => {
+    const theme = getDigitalTwinMapTheme("cyan");
+    const layer = new InstitutionLayer(
+      rongchengEducationLocations,
+      createMapProjection(initialMapState.geoData, 760, 760, 20),
+      theme,
+      rongchengEducationLocations.find((location) => location.type !== "bureau")?.id,
+      1,
+      defaultMapVisualTuning,
+    );
+    const pointMaterial = layer.root.children
+      .filter((object): object is THREE.Points => object instanceof THREE.Points)
+      .map((points) => points.material)
+      .find((material): material is THREE.ShaderMaterial => material instanceof THREE.ShaderMaterial);
+
+    expect(pointMaterial?.fragmentShader).toContain(
+      "schoolRingAngle = angle + uTime * 0.72 * vSelected",
+    );
+    layer.dispose();
+  });
+
   it("animates a selected school stem to its configured emphasized height", () => {
     const locations = rongchengEducationLocations.slice(0, 3);
     const institutions = new InstitutionLayer(
@@ -415,6 +459,23 @@ describe("regional map render budget", () => {
     expect(layer.root.children.every((group) => group.position.z > regionTopZ)).toBe(true);
     expect(layer.root.children.every((group) => group.scale.z === 0.001)).toBe(true);
     expect(towerMaterials.every((material) => material.uniforms.uReveal?.value === 0)).toBe(true);
+    const firstTowerGroup = layer.root.children[0];
+    const firstTowerMesh = firstTowerGroup?.children.find(
+      (object): object is THREE.Mesh => object instanceof THREE.Mesh
+        && object.material instanceof THREE.ShaderMaterial,
+    );
+    const firstTowerLabel = firstTowerGroup?.children.find(
+      (object): object is CSS2DObject => object instanceof CSS2DObject,
+    );
+    const firstTowerId = firstTowerMesh?.userData.energyTowerDatum?.id as string | undefined;
+    expect(firstTowerId).toBeDefined();
+    expect(firstTowerMesh).toBeDefined();
+    layer.setSelected(firstTowerId);
+    expect((firstTowerMesh!.material as THREE.ShaderMaterial).uniforms.uHover?.value).toBe(1);
+    expect(firstTowerLabel?.element.classList.contains("is-selected")).toBe(true);
+    layer.setSelected();
+    expect((firstTowerMesh!.material as THREE.ShaderMaterial).uniforms.uHover?.value).toBe(0);
+    expect(firstTowerLabel?.element.classList.contains("is-selected")).toBe(false);
     expect(towerMaterials.every((material) => (
       material.uniforms.uGridLineWidth?.value
       === defaultMapVisualTuning.energyTowerGridLineWidth

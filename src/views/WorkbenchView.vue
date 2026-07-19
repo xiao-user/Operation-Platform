@@ -1,6 +1,15 @@
 <template>
   <div class="workbench-page">
     <section v-if="!isEditing" class="workbench-actions" aria-label="工作台操作">
+      <div class="workbench-version">
+        <span class="version-label">{{ layoutMode === "simple" ? "新版工作台" : "经典工作台" }}</span>
+        <span class="version-description">
+          {{ versionDescription }}
+        </span>
+      </div>
+      <el-button :icon="Switch" :loading="switchingMode" @click="switchVersion">
+        {{ layoutMode === "simple" ? "回到经典版" : "切换为新版" }}
+      </el-button>
       <el-button
         :icon="Edit"
         :disabled="!canEdit"
@@ -21,7 +30,28 @@
     <section v-if="isEditing" class="editor-toolbar" aria-label="工作台编辑工具栏">
       <div class="editor-summary">
         <strong>正在调整工作台</strong>
-        <span>拖动标题调整位置，拖动右下角调整大小。</span>
+        <span>{{ editorDescription }}</span>
+      </div>
+      <div v-if="layoutMode === 'simple'" class="simple-layout-controls">
+        <el-radio-group
+          :model-value="simpleLayoutType"
+          size="small"
+          aria-label="新版布局方式"
+          @change="changeSimpleLayoutType"
+        >
+          <el-radio-button value="flow">完整流式</el-radio-button>
+          <el-radio-button value="columns">分两列</el-radio-button>
+        </el-radio-group>
+        <el-radio-group
+          v-if="simpleLayoutType === 'columns'"
+          :model-value="simpleColumnRatio"
+          size="small"
+          aria-label="双列宽度比例"
+          @change="changeSimpleColumnRatio"
+        >
+          <el-radio-button value="4:2">4 : 2</el-radio-button>
+          <el-radio-button value="6:2">6 : 2</el-radio-button>
+        </el-radio-group>
       </div>
       <div class="editor-actions">
         <el-button @click="managerVisible = true">
@@ -36,9 +66,20 @@
     </section>
 
     <section v-if="visibleItems.length" class="workbench-canvas">
+      <WorkbenchSimpleGrid
+        v-if="layoutMode === 'simple'"
+        :items="simpleVisibleItems"
+        :editable="isEditing && canEdit"
+        :layout-type="simpleLayoutType"
+        :column-ratio="simpleColumnRatio"
+        @reorder="handleSimpleReorder"
+        @widget-action="handleWidgetAction"
+        @open-settings="openSettings"
+      />
       <WorkbenchGrid
+        v-else
         :key="gridRenderKey"
-        :items="visibleItems"
+        :items="classicVisibleItems"
         :editable="isEditing && canEdit"
         @positions-change="handlePositionsChange"
         @widget-action="handleWidgetAction"
@@ -64,7 +105,7 @@
     <WorkbenchWidgetManager
       v-if="draftLayout"
       v-model="managerVisible"
-      :items="draftLayout.items"
+      :items="managerItems"
       @visibility-change="handleVisibilityChange"
     />
 
@@ -83,16 +124,21 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave } from "vue-router";
 import { storeToRefs } from "pinia";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Edit, RefreshLeft } from "@element-plus/icons-vue";
-import WorkbenchGrid, {
-  type WorkbenchWidgetAction,
-} from "@/features/workbench/components/WorkbenchGrid.vue";
+import { Edit, RefreshLeft, Switch } from "@element-plus/icons-vue";
+import WorkbenchGrid from "@/features/workbench/components/WorkbenchGrid.vue";
+import WorkbenchSimpleGrid from "@/features/workbench/components/WorkbenchSimpleGrid.vue";
 import WorkbenchWidgetManager from "@/features/workbench/components/WorkbenchWidgetManager.vue";
 import WorkbenchWidgetSettingsDialog from "@/features/workbench/components/WorkbenchWidgetSettingsDialog.vue";
 import type {
   WorkbenchLayoutItem,
+  SimpleWorkbenchLayoutItem,
+  FlowWorkbenchSpan,
+  SimpleWorkbenchColumn,
+  SimpleWorkbenchColumnRatio,
+  SimpleWorkbenchDropPlacement,
+  SimpleWorkbenchLayoutType,
+  WorkbenchWidgetAction,
   WorkbenchWidgetSettings,
-  WorkbenchWidgetSizePreset,
 } from "@/features/workbench/types";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
@@ -112,6 +158,7 @@ const {
   isEditing,
   hasUnsavedChanges,
   quickLinks,
+  layoutMode,
 } = storeToRefs(workbenchStore);
 
 const managerVisible = ref(false);
@@ -119,16 +166,47 @@ const settingsVisible = ref(false);
 const settingsWidgetKey = ref("");
 const viewportWidth = ref(window.innerWidth);
 const gridLayoutVersion = ref(0);
+const switchingMode = ref(false);
 const canEdit = computed(() => viewportWidth.value >= 1200);
 const gridRenderKey = computed(() =>
-  `${currentTenant.value.id}:${workbenchStore.profile}:${gridLayoutVersion.value}`,
+  `${currentTenant.value.id}:${workbenchStore.profile}:${layoutMode.value}:${gridLayoutVersion.value}`,
 );
+const classicVisibleItems = computed(() =>
+  visibleItems.value.filter((item): item is WorkbenchLayoutItem => "x" in item),
+);
+const simpleVisibleItems = computed(() =>
+  visibleItems.value.filter((item): item is SimpleWorkbenchLayoutItem => "order" in item),
+);
+const managerItems = computed(() => {
+  if (!draftLayout.value) return [];
+  return draftLayout.value.mode === "simple"
+    ? draftLayout.value.simpleItems
+    : draftLayout.value.items;
+});
+const editorDescription = computed(() => layoutMode.value === "simple"
+  ? simpleLayoutType.value === "flow"
+    ? "每行展示一个或两个组件；双列时自动等高填满，拖动标题调整先后顺序。"
+    : "主列和辅列各自从上到下排列，组件可在两列之间拖动，彼此高度互不影响。"
+  : "拖动标题调整位置，拖动右下角调整大小。",
+);
+const simpleLayoutType = computed(() =>
+  workbenchStore.activeLayout?.simpleLayoutType ?? "flow",
+);
+const simpleColumnRatio = computed(() =>
+  workbenchStore.activeLayout?.simpleColumnRatio ?? "4:2",
+);
+const versionDescription = computed(() => {
+  if (layoutMode.value === "classic") return "自由网格布局";
+  return simpleLayoutType.value === "flow"
+    ? "完整流式 · 单/双列等高"
+    : `双列瀑布 · ${simpleColumnRatio.value}`;
+});
 
 function resetGridLayout() {
   gridLayoutVersion.value += 1;
 }
 const settingsItem = computed(() =>
-  draftLayout.value?.items.find((item) => item.widgetKey === settingsWidgetKey.value) ?? null,
+  managerItems.value.find((item) => item.widgetKey === settingsWidgetKey.value) ?? null,
 );
 const settingsDefinition = computed(() =>
   settingsItem.value ? workbenchStore.definitionFor(settingsItem.value.widgetKey) : null,
@@ -174,6 +252,19 @@ function startEditing() {
   workbenchStore.beginEditing();
 }
 
+async function switchVersion() {
+  switchingMode.value = true;
+  try {
+    await workbenchStore.switchLayoutMode(layoutMode.value === "simple" ? "classic" : "simple");
+    resetGridLayout();
+    ElMessage.success(layoutMode.value === "simple" ? "已切换为新版工作台" : "已回到经典工作台");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "工作台版本切换失败");
+  } finally {
+    switchingMode.value = false;
+  }
+}
+
 async function cancelEditing() {
   if (hasUnsavedChanges.value) {
     try {
@@ -206,7 +297,9 @@ async function saveEditing() {
 async function restoreDefault() {
   try {
     await ElMessageBox.confirm(
-      "将恢复当前组织和角色的默认组件显隐、位置、尺寸及设置，保存后生效。",
+      layoutMode.value === "simple"
+        ? "将恢复新版工作台的默认布局方式、组件显隐、顺序、分列及宽度，保存后生效。"
+        : "将恢复经典工作台的默认组件显隐、位置、尺寸及设置，保存后生效。",
       "恢复默认工作台",
       {
         type: "warning",
@@ -245,27 +338,78 @@ function saveWidgetSettings(settings: WorkbenchWidgetSettings) {
 }
 
 function handleWidgetAction(widgetKey: string, action: WorkbenchWidgetAction) {
-  if (action === "hide") {
-    handleVisibilityChange(widgetKey, false);
-    return;
-  }
-  const moveMap: Partial<Record<WorkbenchWidgetAction, [number, number]>> = {
-    "move-left": [-1, 0],
-    "move-right": [1, 0],
-    "move-up": [0, -1],
-    "move-down": [0, 1],
-  };
-  const move = moveMap[action];
-  if (move) {
-    if (!workbenchStore.moveWidget(widgetKey, move[0], move[1])) {
-      ElMessage.warning("目标位置不可用");
+  switch (action) {
+    case "hide":
+      handleVisibilityChange(widgetKey, false);
+      return;
+    case "move-backward":
+    case "move-forward":
+      if (!workbenchStore.moveSimpleWidget(widgetKey, action === "move-backward" ? -1 : 1)) {
+        ElMessage.warning(action === "move-backward" ? "已经是第一个组件" : "已经是最后一个组件");
+      }
+      return;
+    case "move-primary":
+    case "move-secondary":
+      if (!workbenchStore.moveSimpleWidgetToColumn(
+        widgetKey,
+        action === "move-primary" ? "primary" : "secondary",
+      )) {
+        ElMessage.warning(action === "move-primary" ? "组件已在主列" : "组件已在辅列");
+      }
+      return;
+    case "span-3":
+    case "span-6":
+      workbenchStore.resizeSimpleWidget(widgetKey, Number(action.slice(5)) as FlowWorkbenchSpan);
+      return;
+    case "move-left":
+    case "move-right":
+    case "move-up":
+    case "move-down": {
+      const move = {
+        "move-left": [-1, 0],
+        "move-right": [1, 0],
+        "move-up": [0, -1],
+        "move-down": [0, 1],
+      }[action] as [number, number];
+      if (!workbenchStore.moveWidget(widgetKey, move[0], move[1])) {
+        ElMessage.warning("目标位置不可用");
+        return;
+      }
+      resetGridLayout();
       return;
     }
-    resetGridLayout();
-    return;
+    case "size-small":
+      if (workbenchStore.resizeWidget(widgetKey, "small")) resetGridLayout();
+      return;
+    case "size-medium":
+      if (workbenchStore.resizeWidget(widgetKey, "medium")) resetGridLayout();
+      return;
+    case "size-large":
+      if (workbenchStore.resizeWidget(widgetKey, "large")) resetGridLayout();
   }
-  const preset = action.replace("size-", "") as WorkbenchWidgetSizePreset;
-  if (workbenchStore.resizeWidget(widgetKey, preset)) resetGridLayout();
+}
+
+function handleSimpleReorder(
+  widgetKey: string,
+  targetWidgetKey: string,
+  targetColumn: SimpleWorkbenchColumn,
+  placement: SimpleWorkbenchDropPlacement,
+) {
+  workbenchStore.reorderSimpleWidget(
+    widgetKey,
+    targetWidgetKey,
+    targetColumn,
+    placement,
+    simpleLayoutType.value === "flow",
+  );
+}
+
+function changeSimpleLayoutType(value: string | number | boolean | undefined) {
+  workbenchStore.setSimpleLayoutType(value as SimpleWorkbenchLayoutType);
+}
+
+function changeSimpleColumnRatio(value: string | number | boolean | undefined) {
+  workbenchStore.setSimpleColumnRatio(value as SimpleWorkbenchColumnRatio);
 }
 
 function updateViewportWidth() {
@@ -313,8 +457,28 @@ onBeforeUnmount(() => {
 
 .workbench-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: var(--spacing-8);
   margin-bottom: var(--spacing-12);
+}
+
+.workbench-version {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-8);
+  margin-right: auto;
+}
+
+.version-label {
+  color: var(--color-title);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.version-description {
+  color: var(--color-secondary);
+  font-size: var(--font-size-xs);
 }
 
 .editor-toolbar {
@@ -339,6 +503,13 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2);
+}
+
+.simple-layout-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  margin-left: auto;
 }
 
 .editor-summary strong {
@@ -380,7 +551,26 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1199px) {
   .workbench-actions {
+    flex-wrap: wrap;
     margin-bottom: var(--spacing-8);
+  }
+}
+
+@media (max-width: 1399px) {
+  .editor-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .simple-layout-controls {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .workbench-version {
+    width: 100%;
   }
 }
 </style>

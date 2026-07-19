@@ -43,18 +43,9 @@ import {
 import type {
   WorkbenchLayoutItem,
   WorkbenchWidgetDefinition,
+  WorkbenchWidgetAction,
 } from "@/features/workbench/types";
 import { useWorkbenchStore } from "@/stores/workbench";
-
-export type WorkbenchWidgetAction =
-  | "hide"
-  | "move-left"
-  | "move-right"
-  | "move-up"
-  | "move-down"
-  | "size-small"
-  | "size-medium"
-  | "size-large";
 
 const props = defineProps<{
   items: WorkbenchLayoutItem[];

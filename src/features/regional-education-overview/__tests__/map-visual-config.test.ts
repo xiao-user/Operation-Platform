@@ -52,6 +52,7 @@ describe("regional map visual configuration", () => {
 
   it("keeps the production district, township, and energy-tower defaults", () => {
     expect(defaultMapVisualTuning).toMatchObject({
+      autoRotationEnabled: true,
       districtFramingOffsetX: -160,
       cameraPositionZ: 520,
       townshipCameraPositionZ: 80,
@@ -79,6 +80,8 @@ describe("regional map visual configuration", () => {
       institutionBureauStemHeight: 64,
       institutionStemTransitionRate: 8,
       institutionSelectionCycleSeconds: 5,
+      autoFocusDistrictDwellSeconds: 300,
+      autoFocusTownshipDwellSeconds: 30,
       institutionDefaultOpacity: 0.56,
       institutionSelectedOpacity: 1,
       institutionRippleStartScale: 0.5,

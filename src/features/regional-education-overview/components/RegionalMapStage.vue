@@ -33,6 +33,7 @@ interface MapRendererApi {
   getCameraView: () => MapCameraView | undefined;
   focusFeature: (featureCode: string, applyTownshipDefaults: boolean) => Promise<void>;
   animateCameraView: (view: MapCameraView) => Promise<void>;
+  setSelectedEnergyTower: (energyTowerId?: string) => void;
 }
 
 interface HistoryEntry {
@@ -50,10 +51,10 @@ const visibleLocations = computed(() => filterLocationsForMapState(
 ));
 
 async function focusRegion(feature: GeoFeature) {
-  if (transitioning.value) return;
+  if (transitioning.value) return false;
   const code = feature.properties.code;
-  if (typeof code !== "string") return;
-  if (currentState.value.focusFeatureCode === code) return;
+  if (typeof code !== "string") return false;
+  if (currentState.value.focusFeatureCode === code) return false;
   transitioning.value = true;
   try {
     const nextState = loadMapLevel(code);
@@ -67,20 +68,22 @@ async function focusRegion(feature: GeoFeature) {
     currentState.value = nextState;
     await nextTick();
     await mapRenderer.value?.focusFeature(code, enteringFromDistrict);
+    return true;
   } finally {
     transitioning.value = false;
   }
 }
 
 async function goBack() {
-  if (transitioning.value) return;
+  if (transitioning.value) return false;
   const previous = history.value.pop();
-  if (!previous) return;
+  if (!previous) return false;
   transitioning.value = true;
   try {
     currentState.value = previous.state;
     await nextTick();
     if (previous.cameraView) await mapRenderer.value?.animateCameraView(previous.cameraView);
+    return true;
   } finally {
     transitioning.value = false;
   }
@@ -97,13 +100,27 @@ async function focusLocation(location: EducationLocation) {
   if (feature) await focusRegion(feature);
 }
 
+async function focusTownship(code: string) {
+  const feature = initialMapState.geoData.features.find(
+    (item) => item.properties.code === code,
+  );
+  return feature ? focusRegion(feature) : false;
+}
+
 watch(
   [currentState, visibleLocations],
   () => emit("scopeChange", currentState.value, visibleLocations.value),
   { immediate: true },
 );
 
-defineExpose({ focusLocation, goBack });
+defineExpose({
+  focusLocation,
+  focusTownship,
+  goBack,
+  setSelectedEnergyTower: (energyTowerId?: string) => (
+    mapRenderer.value?.setSelectedEnergyTower(energyTowerId)
+  ),
+});
 
 </script>
 

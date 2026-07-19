@@ -2,6 +2,11 @@ import { ADMIN_ROLE_ID } from "@/features/access-control/types";
 import {
   WORKBENCH_GRID_COLUMNS,
   WORKBENCH_LAYOUT_VERSION,
+  FLOW_WORKBENCH_SPANS,
+  SIMPLE_WORKBENCH_SPANS,
+  type FlowWorkbenchSpan,
+  type SimpleWorkbenchLayoutItem,
+  type SimpleWorkbenchSpan,
   type UserWorkbenchLayout,
   type WorkbenchLayoutContext,
   type WorkbenchLayoutItem,
@@ -31,11 +36,43 @@ export function cloneWorkbenchItem(item: WorkbenchLayoutItem): WorkbenchLayoutIt
   return { ...item, settings: cloneWorkbenchSettings(item.settings) };
 }
 
+export function cloneSimpleWorkbenchItem(
+  item: SimpleWorkbenchLayoutItem,
+): SimpleWorkbenchLayoutItem {
+  return { ...item, settings: cloneWorkbenchSettings(item.settings) };
+}
+
 export function cloneWorkbenchLayout(layout: UserWorkbenchLayout): UserWorkbenchLayout {
   return {
     ...layout,
     items: layout.items.map(cloneWorkbenchItem),
+    simpleItems: Array.isArray(layout.simpleItems)
+      ? layout.simpleItems.map(cloneSimpleWorkbenchItem)
+      : [],
   };
+}
+
+export function simpleSpanFromClassicWidth(width: number): FlowWorkbenchSpan {
+  if (width <= 6) return 3;
+  return 6;
+}
+
+function simpleColumnFromClassicItem(item: WorkbenchLayoutItem) {
+  return item.x >= 8 ? "secondary" as const : "primary" as const;
+}
+
+function createSimpleItems(items: readonly WorkbenchLayoutItem[]) {
+  return [...items]
+    .sort((first, second) => first.y - second.y || first.x - second.x)
+    .map((item, order): SimpleWorkbenchLayoutItem => ({
+      widgetKey: item.widgetKey,
+      visible: item.visible,
+      settings: cloneWorkbenchSettings(item.settings),
+      order,
+      columnOrder: order,
+      span: simpleSpanFromClassicWidth(item.w),
+      column: simpleColumnFromClassicItem(item),
+    }));
 }
 
 export function createDefaultWorkbenchLayout(
@@ -48,7 +85,11 @@ export function createDefaultWorkbenchLayout(
     tenantId: context.tenant.id,
     userId: context.userId,
     profile: context.profile,
+    mode: "classic",
+    simpleLayoutType: "flow",
+    simpleColumnRatio: "4:2",
     items: template.widgets.map(cloneWorkbenchItem),
+    simpleItems: createSimpleItems(template.widgets),
   };
 }
 
@@ -165,7 +206,10 @@ export function validateWorkbenchLayout(
     layout.templateRevision !== template.revision ||
     layout.tenantId !== context.tenant.id ||
     layout.userId !== context.userId ||
-    layout.profile !== context.profile
+    layout.profile !== context.profile ||
+    (layout.mode !== "classic" && layout.mode !== "simple") ||
+    (layout.simpleLayoutType !== "flow" && layout.simpleLayoutType !== "columns") ||
+    (layout.simpleColumnRatio !== "4:2" && layout.simpleColumnRatio !== "6:2")
   ) {
     return false;
   }
@@ -177,12 +221,13 @@ export function validateWorkbenchLayout(
     layoutKeys.size !== layout.items.length ||
     layoutKeys.size !== templateKeys.size ||
     [...templateKeys].some((key) => !layoutKeys.has(key)) ||
-    hasVisibleOverlap(layout.items)
+    hasVisibleOverlap(layout.items) ||
+    layout.simpleItems.length !== template.widgets.length
   ) {
     return false;
   }
 
-  return layout.items.every((item) => {
+  const classicValid = layout.items.every((item) => {
     const definition = definitionForTemplateItem(item, template);
     return Boolean(
       definition &&
@@ -192,6 +237,45 @@ export function validateWorkbenchLayout(
       isValidWorkbenchSettings(item.settings, definition),
     );
   });
+  if (!classicValid) return false;
+
+  const simpleKeys = new Set(layout.simpleItems.map((item) => item.widgetKey));
+  if (
+    simpleKeys.size !== layout.simpleItems.length ||
+    simpleKeys.size !== templateKeys.size ||
+    [...templateKeys].some((key) => !simpleKeys.has(key))
+  ) {
+    return false;
+  }
+  const orders = new Set(layout.simpleItems.map((item) => item.order));
+  const columnOrdersValid = (["primary", "secondary"] as const).every((column) => {
+    const columnItems = layout.simpleItems.filter((item) => item.column === column);
+    const columnOrders = new Set(columnItems.map((item) => item.columnOrder));
+    return columnOrders.size === columnItems.length;
+  });
+  return (
+    orders.size === layout.simpleItems.length &&
+    columnOrdersValid &&
+    layout.simpleItems.every((item) => {
+      const templateItem = templateByWidgetKey(template, item.widgetKey);
+      const definition = templateItem ? definitionForTemplateItem(templateItem, template) : null;
+      return Boolean(
+        definition &&
+        typeof item.visible === "boolean" &&
+        isInteger(item.order) &&
+        item.order >= 0 &&
+        isInteger(item.columnOrder) &&
+        item.columnOrder >= 0 &&
+        FLOW_WORKBENCH_SPANS.includes(item.span as FlowWorkbenchSpan) &&
+        (item.column === "primary" || item.column === "secondary") &&
+        isValidWorkbenchSettings(item.settings, definition),
+      );
+    })
+  );
+}
+
+function templateByWidgetKey(template: WorkbenchTemplate, widgetKey: string) {
+  return template.widgets.find((item) => item.widgetKey === widgetKey) ?? null;
 }
 
 function isStoredItem(value: unknown): value is WorkbenchLayoutItem {
@@ -212,11 +296,14 @@ function isStoredItem(value: unknown): value is WorkbenchLayoutItem {
 function isStoredLayoutEnvelope(
   value: unknown,
   context: WorkbenchLayoutContext,
-): value is UserWorkbenchLayout {
+): value is Record<string, unknown> & { items: WorkbenchLayoutItem[] } {
   if (!value || typeof value !== "object") return false;
   const layout = value as Record<string, unknown>;
   return (
-    layout.version === WORKBENCH_LAYOUT_VERSION &&
+    (layout.version === 1 ||
+      layout.version === 2 ||
+      layout.version === 3 ||
+      layout.version === WORKBENCH_LAYOUT_VERSION) &&
     isInteger(layout.templateRevision) &&
     layout.tenantId === context.tenant.id &&
     layout.userId === context.userId &&
@@ -224,6 +311,58 @@ function isStoredLayoutEnvelope(
     Array.isArray(layout.items) &&
     layout.items.every(isStoredItem)
   );
+}
+
+function isStoredSimpleItem(value: unknown): value is SimpleWorkbenchLayoutItem {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.widgetKey === "string" &&
+    typeof item.visible === "boolean" &&
+    isInteger(item.order) &&
+    isInteger(item.columnOrder) &&
+    FLOW_WORKBENCH_SPANS.includes(item.span as FlowWorkbenchSpan) &&
+    (item.column === "primary" || item.column === "secondary") &&
+    Boolean(item.settings) &&
+    typeof item.settings === "object"
+  );
+}
+
+function isVersionThreeSimpleItem(value: unknown) {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.widgetKey === "string" &&
+    typeof item.visible === "boolean" &&
+    isInteger(item.order) &&
+    SIMPLE_WORKBENCH_SPANS.includes(item.span as SimpleWorkbenchSpan) &&
+    (item.column === "primary" || item.column === "secondary") &&
+    Boolean(item.settings) &&
+    typeof item.settings === "object"
+  );
+}
+
+function isVersionTwoSimpleItem(value: unknown) {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.widgetKey === "string" &&
+    typeof item.visible === "boolean" &&
+    isInteger(item.order) &&
+    SIMPLE_WORKBENCH_SPANS.includes(item.span as SimpleWorkbenchSpan) &&
+    Boolean(item.settings) &&
+    typeof item.settings === "object"
+  );
+}
+
+function assignColumnOrders(items: SimpleWorkbenchLayoutItem[]) {
+  for (const column of ["primary", "secondary"] as const) {
+    items
+      .filter((item) => item.column === column)
+      .sort((first, second) => first.columnOrder - second.columnOrder || first.order - second.order)
+      .forEach((item, columnOrder) => { item.columnOrder = columnOrder; });
+  }
+  return items;
 }
 
 function bottomY(items: readonly WorkbenchLayoutItem[]) {
@@ -284,13 +423,96 @@ export function reconcileStoredWorkbenchLayout(
 
   if (hasVisibleOverlap(retained)) return null;
   const missing = template.widgets.filter((item) => !seen.has(item.widgetKey));
+  const classicItems = appendNewTemplateItems(retained, missing);
+  const classicByKey = new Map(classicItems.map((item) => [item.widgetKey, item]));
+  let storedSimpleItems: SimpleWorkbenchLayoutItem[];
+  if (value.version === WORKBENCH_LAYOUT_VERSION) {
+    if (value.mode !== "classic" && value.mode !== "simple") return null;
+    if (value.simpleLayoutType !== "flow" && value.simpleLayoutType !== "columns") return null;
+    if (value.simpleColumnRatio !== "4:2" && value.simpleColumnRatio !== "6:2") return null;
+    if (!Array.isArray(value.simpleItems) || !value.simpleItems.every(isStoredSimpleItem)) {
+      return null;
+    }
+    const simpleKeys = new Set<string>();
+    for (const item of value.simpleItems) {
+      if (simpleKeys.has(item.widgetKey)) return null;
+      simpleKeys.add(item.widgetKey);
+    }
+    storedSimpleItems = value.simpleItems;
+  } else if (value.version === 3) {
+    if (value.mode !== "classic" && value.mode !== "simple") return null;
+    if (value.simpleLayoutType !== "flow" && value.simpleLayoutType !== "columns") return null;
+    if (value.simpleColumnRatio !== "4:2" && value.simpleColumnRatio !== "6:2") return null;
+    if (!Array.isArray(value.simpleItems) || !value.simpleItems.every(isVersionThreeSimpleItem)) {
+      return null;
+    }
+    storedSimpleItems = value.simpleItems.map((item) => {
+      const legacy = item as Record<string, unknown>;
+      return {
+        widgetKey: legacy.widgetKey as string,
+        visible: legacy.visible as boolean,
+        settings: cloneWorkbenchSettings(legacy.settings as WorkbenchWidgetSettings),
+        order: legacy.order as number,
+        columnOrder: legacy.order as number,
+        span: legacy.span === 6 ? 6 : 3,
+        column: legacy.column as "primary" | "secondary",
+      };
+    });
+    assignColumnOrders(storedSimpleItems);
+  } else if (value.version === 2) {
+    if (value.mode !== "classic" && value.mode !== "simple") return null;
+    if (!Array.isArray(value.simpleItems) || !value.simpleItems.every(isVersionTwoSimpleItem)) {
+      return null;
+    }
+    storedSimpleItems = value.simpleItems.map((item) => {
+      const legacy = item as Record<string, unknown>;
+      const classicItem = classicByKey.get(legacy.widgetKey as string);
+      return {
+        widgetKey: legacy.widgetKey as string,
+        visible: legacy.visible as boolean,
+        settings: cloneWorkbenchSettings(legacy.settings as WorkbenchWidgetSettings),
+        order: legacy.order as number,
+        columnOrder: legacy.order as number,
+        span: legacy.span === 6 ? 6 : 3,
+        column: classicItem ? simpleColumnFromClassicItem(classicItem) : "primary",
+      };
+    });
+    assignColumnOrders(storedSimpleItems);
+  } else {
+    storedSimpleItems = createSimpleItems(classicItems);
+  }
+  const simpleByKey = new Map(storedSimpleItems.map((item) => [item.widgetKey, item]));
+  const simpleItems = classicItems
+    .map((item) => simpleByKey.get(item.widgetKey) ?? {
+      widgetKey: item.widgetKey,
+      visible: true,
+      settings: cloneWorkbenchSettings(item.settings),
+      order: Number.MAX_SAFE_INTEGER,
+      columnOrder: Number.MAX_SAFE_INTEGER,
+      span: simpleSpanFromClassicWidth(item.w),
+      column: simpleColumnFromClassicItem(item),
+    })
+    .sort((first, second) => first.order - second.order)
+    .map((item, order) => ({ ...cloneSimpleWorkbenchItem(item), order }));
+  assignColumnOrders(simpleItems);
   const reconciled: UserWorkbenchLayout = {
     version: WORKBENCH_LAYOUT_VERSION,
     templateRevision: template.revision,
     tenantId: context.tenant.id,
     userId: context.userId,
     profile: context.profile,
-    items: appendNewTemplateItems(retained, missing),
+    mode: (value.version === WORKBENCH_LAYOUT_VERSION || value.version === 3 || value.version === 2) &&
+      value.mode === "simple"
+      ? "simple"
+      : "classic",
+    simpleLayoutType: value.version === WORKBENCH_LAYOUT_VERSION || value.version === 3
+      ? value.simpleLayoutType as "flow" | "columns"
+      : "flow",
+    simpleColumnRatio: value.version === WORKBENCH_LAYOUT_VERSION || value.version === 3
+      ? value.simpleColumnRatio as "4:2" | "6:2"
+      : "4:2",
+    items: classicItems,
+    simpleItems,
   };
   return validateWorkbenchLayout(reconciled, context, template) ? reconciled : null;
 }

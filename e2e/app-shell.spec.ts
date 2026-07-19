@@ -139,6 +139,8 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   await expect(overviewPage.locator(".map-layer-switch")).toHaveCount(0);
   await expect(overviewPage.locator(".map-camera-control > .map-layer-button"))
     .toHaveCount(2);
+  await expect(overviewPage.getByRole("button", { name: "能量锥峰", exact: true }))
+    .toHaveAttribute("aria-pressed", "true");
   const resetViewButton = overviewPage.getByRole("button", { name: "重置视角" });
   const materialButton = overviewPage.getByRole("button", { name: "地图材质" });
   const sharedControlStyle = async (button: typeof resetViewButton) => button.evaluate(
@@ -150,6 +152,9 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   expect(await sharedControlStyle(materialButton)).toEqual(
     await sharedControlStyle(resetViewButton),
   );
+  await overviewPage.getByRole("button", { name: "学校网络", exact: true }).click();
+  await expect(overviewPage.getByRole("button", { name: "学校网络", exact: true }))
+    .toHaveAttribute("aria-pressed", "true");
   await overviewPage.getByRole("button", { name: "切换至多维光谱" }).click();
   await expect(overviewPage.getByRole("button", { name: "切换至多维光谱" }))
     .toHaveClass(/is-active/);
@@ -165,6 +170,16 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   await expect(overviewPage.getByText("学校飞线", { exact: true })).toBeVisible();
   await expect(overviewPage.getByText("默认透明度", { exact: true })).toBeVisible();
   await expect(overviewPage.getByText("学校轮播间隔", { exact: true })).toBeVisible();
+  await expect(overviewPage.getByText("区级停留时间", { exact: true })).toBeVisible();
+  await expect(overviewPage.getByText("子集停留时间", { exact: true })).toBeVisible();
+  const autoRotationCheckbox = overviewPage.getByRole("checkbox", {
+    name: "自动平面旋转",
+  });
+  await expect(autoRotationCheckbox).toBeChecked();
+  await autoRotationCheckbox.uncheck();
+  await expect(autoRotationCheckbox).not.toBeChecked();
+  await autoRotationCheckbox.check();
+  await expect(autoRotationCheckbox).toBeChecked();
   await expect(overviewPage.getByText("离地高度", { exact: true })).toBeVisible();
   await expect(overviewPage.getByLabel("行政区顶面颜色")).toBeVisible();
   await expect(overviewPage.getByText("分区明暗变化", { exact: true })).toBeVisible();

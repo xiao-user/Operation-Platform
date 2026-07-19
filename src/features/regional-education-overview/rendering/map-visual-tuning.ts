@@ -35,6 +35,7 @@ export interface MapVisualTuning {
   offsetY: number;
   scale: number;
   rotationZ: number;
+  autoRotationEnabled: boolean;
   autoRotationSpeed: number;
   autoRotationResumeDelaySeconds: number;
   cameraFov: number;
@@ -115,6 +116,8 @@ export interface MapVisualTuning {
   institutionBureauStemHeight: number;
   institutionStemTransitionRate: number;
   institutionSelectionCycleSeconds: number;
+  autoFocusDistrictDwellSeconds: number;
+  autoFocusTownshipDwellSeconds: number;
   institutionDefaultOpacity: number;
   institutionSelectedOpacity: number;
   institutionHaloInnerRadius: number;
@@ -146,6 +149,7 @@ export const defaultMapVisualTuning: Readonly<MapVisualTuning> = Object.freeze({
   offsetY: -30,
   scale: 0.8,
   rotationZ: -0,
+  autoRotationEnabled: true,
   autoRotationSpeed: 0.2,
   autoRotationResumeDelaySeconds: 10,
   cameraFov: 30,
@@ -226,6 +230,8 @@ export const defaultMapVisualTuning: Readonly<MapVisualTuning> = Object.freeze({
   institutionBureauStemHeight: 64,
   institutionStemTransitionRate: 8,
   institutionSelectionCycleSeconds: 5,
+  autoFocusDistrictDwellSeconds: 300,
+  autoFocusTownshipDwellSeconds: 30,
   institutionDefaultOpacity: 0.56,
   institutionSelectedOpacity: 1,
   institutionHaloInnerRadius: 0.49,

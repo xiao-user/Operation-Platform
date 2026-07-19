@@ -1,7 +1,10 @@
 import type { TenantInfo, TenantType } from "@/types/user";
 
-export const WORKBENCH_LAYOUT_VERSION = 1;
+export const WORKBENCH_LAYOUT_VERSION = 4;
 export const WORKBENCH_GRID_COLUMNS = 12;
+export const SIMPLE_WORKBENCH_COLUMNS = 6;
+export const SIMPLE_WORKBENCH_SPANS = [2, 3, 6] as const;
+export const FLOW_WORKBENCH_SPANS = [3, 6] as const;
 
 export type WorkbenchProfile = "admin" | "business";
 export type WorkbenchWidgetKind =
@@ -18,6 +21,28 @@ export type WorkbenchWidgetKind =
   | "activity-rank";
 export type WorkbenchWidgetTone = "primary" | "success" | "warning" | "danger" | "neutral";
 export type WorkbenchWidgetSizePreset = "small" | "medium" | "large";
+export type WorkbenchLayoutMode = "classic" | "simple";
+export type SimpleWorkbenchSpan = (typeof SIMPLE_WORKBENCH_SPANS)[number];
+export type FlowWorkbenchSpan = (typeof FLOW_WORKBENCH_SPANS)[number];
+export type SimpleWorkbenchLayoutType = "flow" | "columns";
+export type SimpleWorkbenchColumnRatio = "4:2" | "6:2";
+export type SimpleWorkbenchColumn = "primary" | "secondary";
+export type SimpleWorkbenchDropPlacement = "before" | "after" | "end";
+export type WorkbenchWidgetAction =
+  | "hide"
+  | "move-left"
+  | "move-right"
+  | "move-up"
+  | "move-down"
+  | "move-backward"
+  | "move-forward"
+  | "move-primary"
+  | "move-secondary"
+  | "size-small"
+  | "size-medium"
+  | "size-large"
+  | "span-3"
+  | "span-6";
 
 export type WorkbenchWidgetSettings =
   | { kind: "none" }
@@ -51,10 +76,19 @@ export interface WorkbenchWidgetDefinition {
   sizePresets: Record<WorkbenchWidgetSizePreset, WorkbenchWidgetSize>;
 }
 
-export interface WorkbenchLayoutItem extends WorkbenchWidgetPosition {
+export interface WorkbenchWidgetItem {
   widgetKey: string;
   visible: boolean;
   settings: WorkbenchWidgetSettings;
+}
+
+export interface WorkbenchLayoutItem extends WorkbenchWidgetItem, WorkbenchWidgetPosition {}
+
+export interface SimpleWorkbenchLayoutItem extends WorkbenchWidgetItem {
+  order: number;
+  columnOrder: number;
+  span: FlowWorkbenchSpan;
+  column: SimpleWorkbenchColumn;
 }
 
 export interface WorkbenchTemplate {
@@ -70,7 +104,11 @@ export interface UserWorkbenchLayout {
   tenantId: string;
   userId: string;
   profile: WorkbenchProfile;
+  mode: WorkbenchLayoutMode;
+  simpleLayoutType: SimpleWorkbenchLayoutType;
+  simpleColumnRatio: SimpleWorkbenchColumnRatio;
   items: WorkbenchLayoutItem[];
+  simpleItems: SimpleWorkbenchLayoutItem[];
 }
 
 export interface WorkbenchLayoutContext {

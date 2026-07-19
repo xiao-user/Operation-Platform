@@ -81,6 +81,93 @@ describe("workbench layout repository", () => {
     expect(validateWorkbenchLayout(result.layout, activeContext, template)).toBe(true);
   });
 
+  it("migrates a version 1 grid layout without changing its classic positions", () => {
+    const repository = new LocalStorageWorkbenchLayoutRepository(localStorage);
+    const activeContext = context();
+    const current = createDefaultWorkbenchLayout(activeContext, template);
+    current.items[0]!.visible = false;
+    const legacy = {
+      version: 1,
+      templateRevision: current.templateRevision,
+      tenantId: current.tenantId,
+      userId: current.userId,
+      profile: current.profile,
+      items: current.items,
+    };
+    localStorage.setItem(workbenchLayoutStorageKey(activeContext), JSON.stringify(legacy));
+
+    const result = repository.list(activeContext, template);
+
+    expect(result.hasOverride).toBe(true);
+    expect(result.layout.version).toBe(4);
+    expect(result.layout.mode).toBe("classic");
+    expect(result.layout.simpleLayoutType).toBe("flow");
+    expect(result.layout.simpleColumnRatio).toBe("4:2");
+    expect(result.layout.items[0]).toMatchObject({
+      widgetKey: current.items[0]!.widgetKey,
+      visible: false,
+      x: current.items[0]!.x,
+      y: current.items[0]!.y,
+    });
+    expect(result.layout.simpleItems).toHaveLength(template.widgets.length);
+    expect(validateWorkbenchLayout(result.layout, activeContext, template)).toBe(true);
+  });
+
+  it("migrates the version 2 simple grid into the new flow and column model", () => {
+    const repository = new LocalStorageWorkbenchLayoutRepository(localStorage);
+    const activeContext = context();
+    const current = createDefaultWorkbenchLayout(activeContext, template);
+    const versionTwo = {
+      version: 2,
+      templateRevision: current.templateRevision,
+      tenantId: current.tenantId,
+      userId: current.userId,
+      profile: current.profile,
+      mode: "simple",
+      items: current.items,
+      simpleItems: current.simpleItems.map(({ column: _column, ...item }, index) => ({
+        ...item,
+        span: index === 0 ? 2 : item.span,
+      })),
+    };
+    localStorage.setItem(workbenchLayoutStorageKey(activeContext), JSON.stringify(versionTwo));
+
+    const result = repository.list(activeContext, template);
+
+    expect(result.layout.version).toBe(4);
+    expect(result.layout.mode).toBe("simple");
+    expect(result.layout.simpleLayoutType).toBe("flow");
+    expect(result.layout.simpleItems[0]!.span).toBe(3);
+    expect(result.layout.simpleItems.every((item) =>
+      item.column === "primary" || item.column === "secondary"
+    )).toBe(true);
+    expect(validateWorkbenchLayout(result.layout, activeContext, template)).toBe(true);
+  });
+
+  it("migrates version 3 column order without losing its layout settings", () => {
+    const repository = new LocalStorageWorkbenchLayoutRepository(localStorage);
+    const activeContext = context();
+    const current = createDefaultWorkbenchLayout(activeContext, template);
+    const versionThree = {
+      ...current,
+      version: 3,
+      mode: "simple",
+      simpleLayoutType: "columns",
+      simpleColumnRatio: "6:2",
+      simpleItems: current.simpleItems.map(({ columnOrder: _columnOrder, ...item }) => item),
+    };
+    localStorage.setItem(workbenchLayoutStorageKey(activeContext), JSON.stringify(versionThree));
+
+    const result = repository.list(activeContext, template);
+
+    expect(result.layout.version).toBe(4);
+    expect(result.layout.mode).toBe("simple");
+    expect(result.layout.simpleLayoutType).toBe("columns");
+    expect(result.layout.simpleColumnRatio).toBe("6:2");
+    expect(result.layout.simpleItems.every((item) => Number.isInteger(item.columnOrder))).toBe(true);
+    expect(validateWorkbenchLayout(result.layout, activeContext, template)).toBe(true);
+  });
+
   it("backs up damaged data before returning the current default", () => {
     const activeContext = context();
     const repository = new LocalStorageWorkbenchLayoutRepository(localStorage, () => 1234);

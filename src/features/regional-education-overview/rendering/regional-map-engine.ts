@@ -42,7 +42,7 @@ const mapHeight = 520;
 const mapPadding = 30;
 const connectionOverlayRenderOrder = 60;
 const institutionOverlayRenderOrder = 70;
-const idleFrameRate = 30;
+const idleFrameRate = 24;
 const interactionFrameRate = 60;
 const hoverFrameBoostDuration = 500;
 const scopeFrameBoostDuration = 1400;
@@ -146,12 +146,16 @@ export function townshipFocusTargetZ(
 }
 
 export function shouldRunMapAutoRotation(
+  autoRotationEnabled: boolean,
   motionEnabled: boolean,
   controlsInteracting: boolean,
   timestamp: number,
   resumeAt: number,
 ) {
-  return motionEnabled && !controlsInteracting && timestamp >= resumeAt;
+  return autoRotationEnabled
+    && motionEnabled
+    && !controlsInteracting
+    && timestamp >= resumeAt;
 }
 
 export class RegionalMapEngine {
@@ -191,6 +195,7 @@ export class RegionalMapEngine {
   private disposed = false;
   private motionEnabled = true;
   private selectedLocationId?: string;
+  private selectedEnergyTowerId?: string;
   private townshipInstitutionTargetZ?: number;
   private dataLayerMode: MapDataLayerMode;
   private mapState: MapState;
@@ -423,6 +428,7 @@ export class RegionalMapEngine {
         this.theme,
         this.visualTuning,
       );
+      this.energyTowerLayer.setSelected(this.selectedEnergyTowerId);
       anchorDynamicOverlay(
         this.energyTowerLayer.root,
         this.regionLayer?.getCurrentActiveSurfaceZ() ?? regionTopZ,
@@ -602,6 +608,7 @@ export class RegionalMapEngine {
     // OrbitControls advances from its current spherical pose, so resuming after
     // user input neither allocates a per-frame tween nor snaps to a preset view.
     this.controls.autoRotate = shouldRunMapAutoRotation(
+      this.visualTuning.autoRotationEnabled,
       this.motionEnabled,
       this.controlsInteracting,
       timestamp,
@@ -734,6 +741,7 @@ export class RegionalMapEngine {
     const previousScope = this.mapState.scope;
     this.mapState = mapState;
     this.locations = locations;
+    this.selectedEnergyTowerId = undefined;
     if (mapState.scope === "district") this.townshipInstitutionTargetZ = undefined;
     this.controls.minDistance = minimumCameraDistanceDuringScopeChange(
       previousScope,
@@ -766,6 +774,12 @@ export class RegionalMapEngine {
     this.requestHighFrameRate(scopeFrameBoostDuration);
   }
 
+  setSelectedEnergyTower(energyTowerId?: string) {
+    this.selectedEnergyTowerId = energyTowerId;
+    this.energyTowerLayer?.setSelected(energyTowerId);
+    this.requestHighFrameRate(scopeFrameBoostDuration);
+  }
+
   setDataLayerMode(mode: MapDataLayerMode) {
     if (this.dataLayerMode === mode) return;
     this.pauseAutoRotation();
@@ -773,6 +787,7 @@ export class RegionalMapEngine {
       this.townshipInstitutionTargetZ = this.controls.target.z;
     }
     const animateEnergyExit = this.dataLayerMode === "energy-towers";
+    this.selectedEnergyTowerId = undefined;
     this.disposeDynamicLayers(animateEnergyExit);
     this.dataLayerMode = mode;
     this.buildDynamicLayers();
@@ -796,6 +811,7 @@ export class RegionalMapEngine {
 
   setVisualTuning(tuning: Readonly<MapVisualTuning>) {
     this.visualTuning = cloneMapVisualTuning(tuning);
+    if (!this.visualTuning.autoRotationEnabled) this.controls.autoRotate = false;
     this.applyMapTransform();
     this.applyCameraFraming(mapScreenFraming(this.mapState, this.visualTuning));
     for (const layer of this.activeLayers()) {

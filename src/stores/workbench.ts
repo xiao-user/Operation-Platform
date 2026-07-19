@@ -14,7 +14,14 @@ import {
 } from "@/features/workbench/workbench-layout";
 import type {
   UserWorkbenchLayout,
+  FlowWorkbenchSpan,
+  SimpleWorkbenchLayoutItem,
+  SimpleWorkbenchColumn,
+  SimpleWorkbenchColumnRatio,
+  SimpleWorkbenchDropPlacement,
+  SimpleWorkbenchLayoutType,
   WorkbenchDataContext,
+  WorkbenchLayoutMode,
   WorkbenchLayoutContext,
   WorkbenchLayoutItem,
   WorkbenchQuickLinkData,
@@ -23,6 +30,7 @@ import type {
   WorkbenchWidgetDefinition,
   WorkbenchWidgetSettings,
   WorkbenchWidgetSizePreset,
+  WorkbenchWidgetItem,
 } from "@/features/workbench/types";
 import { WORKBENCH_GRID_COLUMNS } from "@/features/workbench/types";
 import {
@@ -33,6 +41,18 @@ import type { TenantInfo } from "@/types/user";
 
 function layoutsEqual(first: UserWorkbenchLayout | null, second: UserWorkbenchLayout | null) {
   return JSON.stringify(first) === JSON.stringify(second);
+}
+
+function resolveSimpleInsertionIndex(
+  placement: SimpleWorkbenchDropPlacement | undefined,
+  targetIndex: number,
+  movedBeforeTarget: boolean,
+  destinationLength: number,
+) {
+  if (placement === "end") return destinationLength;
+  if (placement === "before") return targetIndex;
+  if (placement === "after") return targetIndex + 1;
+  return movedBeforeTarget ? targetIndex + 1 : targetIndex;
 }
 
 function collectQuickLinks(
@@ -84,10 +104,23 @@ export const useWorkbenchStore = defineStore("workbench", () => {
   const activeLayout = computed(() =>
     isEditing.value ? draftLayout.value : savedLayout.value,
   );
+  const layoutMode = computed(() => activeLayout.value?.mode ?? "classic");
   const items = computed(() => activeLayout.value?.items ?? []);
-  const visibleItems = computed(() => items.value.filter((item) => item.visible));
-  const hiddenItems = computed(() => items.value.filter((item) => !item.visible));
-  const totalCount = computed(() => items.value.length);
+  const simpleItems = computed(() => activeLayout.value?.simpleItems ?? []);
+  const currentItems = computed<(WorkbenchLayoutItem | SimpleWorkbenchLayoutItem)[]>(() => {
+    const layout = activeLayout.value;
+    if (!layout) return [];
+    return layout.mode === "simple"
+      ? [...layout.simpleItems].sort((first, second) =>
+        layout.simpleLayoutType === "columns"
+          ? first.columnOrder - second.columnOrder
+          : first.order - second.order
+      )
+      : layout.items;
+  });
+  const visibleItems = computed(() => currentItems.value.filter((item) => item.visible));
+  const hiddenItems = computed(() => currentItems.value.filter((item) => !item.visible));
+  const totalCount = computed(() => currentItems.value.length);
   const visibleCount = computed(() => visibleItems.value.length);
   const hasUnsavedChanges = computed(
     () => isEditing.value && !layoutsEqual(savedLayout.value, draftLayout.value),
@@ -169,16 +202,30 @@ export const useWorkbenchStore = defineStore("workbench", () => {
 
   function restoreDefaultDraft() {
     const loaded = requireLoaded();
-    requireDraft();
-    draftLayout.value = createDefaultWorkbenchLayout(loaded.context, loaded.template);
+    const draft = requireDraft();
+    const defaults = createDefaultWorkbenchLayout(loaded.context, loaded.template);
+    if (draft.mode === "simple") {
+      draft.simpleItems = defaults.simpleItems;
+      draft.simpleLayoutType = defaults.simpleLayoutType;
+      draft.simpleColumnRatio = defaults.simpleColumnRatio;
+    } else {
+      draft.items = defaults.items;
+    }
   }
 
   function findDraftItem(widgetKey: string) {
-    return requireDraft().items.find((item) => item.widgetKey === widgetKey) ?? null;
+    const layout = requireDraft();
+    const items = layout.mode === "simple" ? layout.simpleItems : layout.items;
+    return items.find((item) => item.widgetKey === widgetKey) ?? null;
   }
 
   function setVisible(widgetKey: string, visible: boolean) {
     const layout = requireDraft();
+    if (layout.mode === "simple") {
+      const item = layout.simpleItems.find((entry) => entry.widgetKey === widgetKey);
+      if (item && item.visible !== visible) item.visible = visible;
+      return;
+    }
     const item = layout.items.find((entry) => entry.widgetKey === widgetKey);
     if (!item || item.visible === visible) return;
     if (visible) {
@@ -194,6 +241,7 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     changes: Array<Pick<WorkbenchLayoutItem, "widgetKey" | "x" | "y" | "w" | "h">>,
   ) {
     const layout = requireDraft();
+    if (layout.mode !== "classic") return;
     const byKey = new Map(layout.items.map((item) => [item.widgetKey, item]));
     for (const change of changes) {
       const item = byKey.get(change.widgetKey);
@@ -214,6 +262,7 @@ export const useWorkbenchStore = defineStore("workbench", () => {
 
   function moveWidget(widgetKey: string, deltaX: number, deltaY: number) {
     const layout = requireDraft();
+    if (layout.mode !== "classic") return false;
     const item = layout.items.find((entry) => entry.widgetKey === widgetKey);
     if (!item?.visible) return false;
     const next = {
@@ -235,6 +284,7 @@ export const useWorkbenchStore = defineStore("workbench", () => {
 
   function resizeWidget(widgetKey: string, preset: WorkbenchWidgetSizePreset) {
     const layout = requireDraft();
+    if (layout.mode !== "classic") return false;
     const item = layout.items.find((entry) => entry.widgetKey === widgetKey);
     const definition = workbenchWidgetRegistry.get(widgetKey);
     if (!item?.visible || !definition) return false;
@@ -256,12 +306,139 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     return true;
   }
 
+  function reorderSimpleWidget(
+    widgetKey: string,
+    targetWidgetKey: string,
+    targetColumn?: SimpleWorkbenchColumn,
+    placement?: SimpleWorkbenchDropPlacement,
+    adaptSpanToTarget = false,
+  ) {
+    const layout = requireDraft();
+    if (layout.mode !== "simple" || widgetKey === targetWidgetKey) return false;
+    const ordered = layout.simpleItems
+      .map((item) => ({ ...item }))
+      .sort((first, second) => first.order - second.order);
+    const fromIndex = ordered.findIndex((item) => item.widgetKey === widgetKey);
+    const targetOriginal = targetWidgetKey
+      ? ordered.find((item) => item.widgetKey === targetWidgetKey)
+      : null;
+    if (fromIndex < 0) return false;
+    const [moved] = ordered.splice(fromIndex, 1);
+    if (!moved) return false;
+    if (layout.simpleLayoutType === "columns") {
+      const destinationColumn = targetColumn ?? moved.column;
+      const primary = ordered
+        .filter((item) => item.column === "primary")
+        .sort((first, second) => first.columnOrder - second.columnOrder);
+      const secondary = ordered
+        .filter((item) => item.column === "secondary")
+        .sort((first, second) => first.columnOrder - second.columnOrder);
+      const destination = destinationColumn === "primary" ? primary : secondary;
+      const targetIndex = targetWidgetKey
+        ? destination.findIndex((item) => item.widgetKey === targetWidgetKey)
+        : destination.length;
+      if (targetWidgetKey && targetIndex < 0) return false;
+      moved.column = destinationColumn;
+      const insertionIndex = resolveSimpleInsertionIndex(
+        placement,
+        targetIndex,
+        Boolean(targetOriginal && moved.column === targetOriginal.column &&
+          moved.columnOrder < targetOriginal.columnOrder),
+        destination.length,
+      );
+      destination.splice(insertionIndex, 0, moved);
+      primary.forEach((item, columnOrder) => { item.columnOrder = columnOrder; });
+      secondary.forEach((item, columnOrder) => { item.columnOrder = columnOrder; });
+      layout.simpleItems = [...primary, ...secondary];
+    } else {
+      const targetIndex = ordered.findIndex((item) => item.widgetKey === targetWidgetKey);
+      if (targetIndex < 0) return false;
+      if (adaptSpanToTarget && targetOriginal) moved.span = targetOriginal.span === 6 ? 6 : 3;
+      const insertionIndex = resolveSimpleInsertionIndex(
+        placement,
+        targetIndex,
+        Boolean(targetOriginal && moved.order < targetOriginal.order),
+        ordered.length,
+      );
+      ordered.splice(insertionIndex, 0, moved);
+      layout.simpleItems = ordered;
+      layout.simpleItems.forEach((item, order) => { item.order = order; });
+    }
+    return true;
+  }
+
+  function moveSimpleWidget(widgetKey: string, offset: -1 | 1) {
+    const layout = requireDraft();
+    if (layout.mode !== "simple") return false;
+    const active = layout.simpleItems.find((item) => item.widgetKey === widgetKey);
+    if (!active) return false;
+    const ordered = [...layout.simpleItems]
+      .filter((item) => layout.simpleLayoutType !== "columns" || item.column === active.column)
+      .sort((first, second) => layout.simpleLayoutType === "columns"
+        ? first.columnOrder - second.columnOrder
+        : first.order - second.order
+      );
+    const index = ordered.findIndex((item) => item.widgetKey === widgetKey);
+    const target = ordered[index + offset];
+    if (index < 0 || !target) return false;
+    return reorderSimpleWidget(
+      widgetKey,
+      target.widgetKey,
+      active.column,
+      offset === 1 ? "after" : "before",
+    );
+  }
+
+  function resizeSimpleWidget(widgetKey: string, span: FlowWorkbenchSpan) {
+    const layout = requireDraft();
+    if (layout.mode !== "simple") return false;
+    const item = layout.simpleItems.find((entry) => entry.widgetKey === widgetKey);
+    if (!item || item.span === span) return false;
+    item.span = span;
+    return true;
+  }
+
+  function moveSimpleWidgetToColumn(widgetKey: string, column: SimpleWorkbenchColumn) {
+    const layout = requireDraft();
+    if (layout.mode !== "simple" || layout.simpleLayoutType !== "columns") return false;
+    const item = layout.simpleItems.find((entry) => entry.widgetKey === widgetKey);
+    if (!item || item.column === column) return false;
+    return reorderSimpleWidget(widgetKey, "", column, "end");
+  }
+
+  function setSimpleLayoutType(layoutType: SimpleWorkbenchLayoutType) {
+    const layout = requireDraft();
+    if (layout.mode !== "simple" || layout.simpleLayoutType === layoutType) return;
+    layout.simpleLayoutType = layoutType;
+  }
+
+  function setSimpleColumnRatio(ratio: SimpleWorkbenchColumnRatio) {
+    const layout = requireDraft();
+    if (layout.mode !== "simple" || layout.simpleColumnRatio === ratio) return;
+    layout.simpleColumnRatio = ratio;
+  }
+
+  async function switchLayoutMode(mode: WorkbenchLayoutMode) {
+    const loaded = requireLoaded();
+    if (isEditing.value) throw new Error("请先保存或取消当前调整");
+    if (savedLayout.value?.mode === mode) return savedLayout.value;
+    const next = cloneWorkbenchLayout(savedLayout.value!);
+    next.mode = mode;
+    const defaults = createDefaultWorkbenchLayout(loaded.context, loaded.template);
+    savedLayout.value = layoutsEqual(next, defaults)
+      ? await operationPlatformPersistence.resetWorkbenchLayout(loaded.context, loaded.template)
+      : await operationPlatformPersistence.saveWorkbenchLayout(loaded.context, loaded.template, next);
+    hasOverride.value = !layoutsEqual(savedLayout.value, defaults);
+    recoveryNotice.value = null;
+    return savedLayout.value;
+  }
+
   function definitionFor(widgetKey: string): WorkbenchWidgetDefinition | null {
     return workbenchWidgetRegistry.get(widgetKey) ?? null;
   }
 
   async function loadWidgetData(
-    item: WorkbenchLayoutItem,
+    item: WorkbenchWidgetItem,
     options: { force?: boolean } = {},
   ): Promise<WorkbenchWidgetData> {
     const loaded = requireLoaded();
@@ -299,7 +476,10 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     savedLayout,
     draftLayout,
     activeLayout,
+    layoutMode,
     items,
+    simpleItems,
+    currentItems,
     visibleItems,
     hiddenItems,
     totalCount,
@@ -321,6 +501,13 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     updateSettings,
     moveWidget,
     resizeWidget,
+    reorderSimpleWidget,
+    moveSimpleWidget,
+    resizeSimpleWidget,
+    moveSimpleWidgetToColumn,
+    setSimpleLayoutType,
+    setSimpleColumnRatio,
+    switchLayoutMode,
     definitionFor,
     loadWidgetData,
   };

@@ -31,7 +31,7 @@ export class RegionalContextLayer implements TuningAwareMapSceneLayer {
     }));
     this.lineMaterial = this.owner.material(new THREE.LineBasicMaterial({
       transparent: true,
-      depthTest: false,
+      depthTest: true,
       depthWrite: false,
     }));
     for (const feature of geoData.features) {

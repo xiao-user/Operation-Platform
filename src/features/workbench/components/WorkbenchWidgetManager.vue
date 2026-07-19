@@ -30,10 +30,10 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import type { WorkbenchLayoutItem } from "@/features/workbench/types";
+import type { WorkbenchWidgetItem } from "@/features/workbench/types";
 import { useWorkbenchStore } from "@/stores/workbench";
 
-const props = defineProps<{ items: WorkbenchLayoutItem[] }>();
+const props = defineProps<{ items: WorkbenchWidgetItem[] }>();
 const emit = defineEmits<{
   visibilityChange: [widgetKey: string, visible: boolean];
 }>();

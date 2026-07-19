@@ -8,8 +8,12 @@ import AiDataAssistantEntry from "@/features/regional-education-overview/compone
 import LocationProfilePanel from "@/features/regional-education-overview/components/LocationProfilePanel.vue";
 import RegionalMapStage from "@/features/regional-education-overview/components/RegionalMapStage.vue";
 import RegionalOverviewPanel from "@/features/regional-education-overview/components/RegionalOverviewPanel.vue";
+import { AutoFocusTour } from "@/features/regional-education-overview/auto-focus-tour";
 import { rongchengEducationLocations } from "@/features/regional-education-overview/education-locations";
-import { initialMapState } from "@/features/regional-education-overview/map-data-adapter";
+import {
+  initialMapState,
+  townshipMapStateForCoordinate,
+} from "@/features/regional-education-overview/map-data-adapter";
 import type { MapState } from "@/features/regional-education-overview/map-data-adapter";
 import {
   cloneDigitalTwinMapTheme,
@@ -47,7 +51,7 @@ const mapStage = ref<InstanceType<typeof RegionalMapStage>>();
 const selectedLocation = ref<EducationLocation | undefined>(rongchengEducationLocations[0]);
 const activeLocations = ref<EducationLocation[]>([...rongchengEducationLocations]);
 const activeMapState = ref<MapState>(initialMapState);
-const dataLayerMode = ref<MapDataLayerMode>("institutions");
+const dataLayerMode = ref<MapDataLayerMode>("energy-towers");
 const mapVisualTuning = ref(cloneMapVisualTuning(defaultMapVisualTuning));
 const now = ref(new Date());
 const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
@@ -126,6 +130,43 @@ function restartSchoolSelectionCycle() {
   schoolSelectionTimer = window.setInterval(cycleSelectedSchool, duration * 1000);
 }
 
+function autoFocusTownshipCodes() {
+  const codesWithSchools = new Set(rongchengEducationLocations.flatMap((location) => {
+    if (location.type === "bureau") return [];
+    const township = townshipMapStateForCoordinate(location.coordinate);
+    return township ? [township.code] : [];
+  }));
+  return initialMapState.geoData.features.flatMap((feature) => {
+    const code = feature.properties.code;
+    return typeof code === "string" && codesWithSchools.has(code) ? [code] : [];
+  });
+}
+
+const autoFocusTour = new AutoFocusTour({
+  isVisible: () => !document.hidden,
+  isTownshipScope: () => activeMapState.value.scope === "township",
+  currentTownshipCode: () => activeMapState.value.scope === "township"
+    ? activeMapState.value.code
+    : undefined,
+  townshipCodes: autoFocusTownshipCodes,
+  enterTownship: async (code) => await mapStage.value?.focusTownship(code) ?? false,
+  leaveTownship: async () => await mapStage.value?.goBack() ?? false,
+  districtDwellDurationMs: () => (
+    Math.max(1, mapVisualTuning.value.autoFocusDistrictDwellSeconds) * 1000
+  ),
+  townshipDwellDurationMs: () => (
+    Math.max(1, mapVisualTuning.value.autoFocusTownshipDwellSeconds) * 1000
+  ),
+});
+
+function handleUserActivity() {
+  autoFocusTour.notifyUserActivity();
+}
+
+function handlePageVisibilityChange() {
+  autoFocusTour.handleVisibilityChange();
+}
+
 function updateActiveTheme(theme: DigitalTwinMapTheme) {
   themeDrafts.value = {
     ...themeDrafts.value,
@@ -195,6 +236,11 @@ watch(
 onMounted(() => {
   pageMounted = true;
   restartSchoolSelectionCycle();
+  autoFocusTour.start();
+  window.addEventListener("pointerdown", handleUserActivity, { capture: true, passive: true });
+  window.addEventListener("wheel", handleUserActivity, { capture: true, passive: true });
+  window.addEventListener("keydown", handleUserActivity, true);
+  document.addEventListener("visibilitychange", handlePageVisibilityChange);
   clockTimer = window.setInterval(() => {
     now.value = new Date();
   }, 1000);
@@ -244,6 +290,11 @@ onMounted(() => {
 onBeforeUnmount(() => {
   pageMounted = false;
   stopSchoolSelectionCycle();
+  autoFocusTour.dispose();
+  window.removeEventListener("pointerdown", handleUserActivity, true);
+  window.removeEventListener("wheel", handleUserActivity, true);
+  window.removeEventListener("keydown", handleUserActivity, true);
+  document.removeEventListener("visibilitychange", handlePageVisibilityChange);
   if (clockTimer !== undefined) window.clearInterval(clockTimer);
   entranceMedia?.revert();
 });

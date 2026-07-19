@@ -247,7 +247,8 @@ export class InstitutionLayer implements TuningAwareMapSceneLayer {
           float emphasis = max(vSelected, vBureau);
           float ring = 1.0 - smoothstep(0.018, 0.04, abs(distanceToCenter - 0.34));
           float angle = atan(centered.y, centered.x);
-          float threeSegmentMask = smoothstep(0.32, 0.52, abs(sin(angle * 1.5)));
+          float schoolRingAngle = angle + uTime * 0.72 * vSelected;
+          float threeSegmentMask = smoothstep(0.32, 0.52, abs(sin(schoolRingAngle * 1.5)));
           float schoolHaloShape = 1.0 - smoothstep(uCoreRadius, 0.5, distanceToCenter);
           float schoolHalo = schoolHaloShape
             * mix(uHaloOpacity * 0.3, uEmphasisHaloOpacity * 0.65, vSelected);

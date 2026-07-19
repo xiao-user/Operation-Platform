@@ -52,6 +52,11 @@ const sideControls: NumericControl[] = [
   { key: "regionSideBottomOpacityScale", label: "侧边底部透明度", min: 0, max: 1, step: 0.01 },
 ];
 
+const autoTourControls: NumericControl[] = [
+  { key: "autoFocusDistrictDwellSeconds", label: "区级停留时间", min: 30, max: 600, step: 30 },
+  { key: "autoFocusTownshipDwellSeconds", label: "子集停留时间", min: 10, max: 60, step: 5 },
+];
+
 const towerOpacityControls: NumericControl[] = [
   { key: "energyTowerBaseOpacity", label: "锥体基础透明度", min: 0, max: 1, step: 0.01 },
   { key: "energyTowerHeightOpacity", label: "高度透明增量", min: 0, max: 1, step: 0.01 },
@@ -158,6 +163,14 @@ function updateNumber(key: NumericTuningKey, event: Event) {
   const value = Number(input.value);
   if (!Number.isFinite(value)) return;
   emit("update:tuning", { ...cloneMapVisualTuning(props.tuning), [key]: value });
+}
+
+function updateBoolean(key: "autoRotationEnabled", event: Event) {
+  const input = event.currentTarget as HTMLInputElement;
+  emit("update:tuning", {
+    ...cloneMapVisualTuning(props.tuning),
+    [key]: input.checked,
+  });
 }
 
 function resetMaterialTuning() {
@@ -267,6 +280,28 @@ function resetMaterialTuning() {
         </section>
 
         <section>
+          <h3>地图交互</h3>
+          <label class="material-tuning__check-row">
+            <span>自动平面旋转</span>
+            <input
+              type="checkbox"
+              aria-label="自动平面旋转"
+              :checked="tuning.autoRotationEnabled"
+              @change="updateBoolean('autoRotationEnabled', $event)"
+            >
+          </label>
+        </section>
+
+        <section>
+          <h3>自动聚焦巡航</h3>
+          <label v-for="control in autoTourControls" :key="control.key" class="material-tuning__row">
+            <span>{{ control.label }}</span>
+            <input type="range" :min="control.min" :max="control.max" :step="control.step" :value="tuning[control.key]" @input="updateNumber(control.key, $event)">
+            <output>{{ Number(tuning[control.key]).toFixed(2) }}</output>
+          </label>
+        </section>
+
+        <section>
           <h3>学校立标</h3>
           <label v-for="control in schoolMarkerControls" :key="control.key" class="material-tuning__row">
             <span>{{ control.label }}</span>
@@ -353,6 +388,8 @@ function resetMaterialTuning() {
 .material-tuning__row { display: grid; min-height: 27px; grid-template-columns: var(--dt-tuning-label-width) 1fr var(--dt-tuning-value-width); align-items: center; gap: var(--dt-space-2); color: var(--dt-color-text-secondary); font-size: var(--dt-font-size-2xs); }
 .material-tuning__row input[type="range"] { width: 100%; height: 2px; margin: 0; accent-color: var(--hud-primary); cursor: ew-resize; }
 .material-tuning__row output { color: var(--dt-color-text-strong); font-variant-numeric: tabular-nums; text-align: right; }
+.material-tuning__check-row { display: flex; min-height: 27px; align-items: center; justify-content: space-between; gap: var(--dt-space-2); color: var(--dt-color-text-secondary); font-size: var(--dt-font-size-2xs); cursor: pointer; }
+.material-tuning__check-row input { width: 14px; height: 14px; margin: 0; accent-color: var(--hud-primary); cursor: pointer; }
 .material-tuning__color-row { display: grid; min-height: 32px; grid-template-columns: var(--dt-tuning-label-width) 34px 1fr; align-items: center; gap: var(--dt-space-2); color: var(--dt-color-text-secondary); font-size: var(--dt-font-size-2xs); }
 .material-tuning__color-row input { width: 30px; height: 20px; border: var(--dt-border-width) solid var(--dt-color-line-soft); border-radius: 2px; padding: 0; background: transparent; cursor: pointer; }
 .material-tuning__color-row output { overflow: hidden; color: var(--dt-color-text-strong); font-variant-numeric: tabular-nums; text-align: right; text-overflow: ellipsis; }

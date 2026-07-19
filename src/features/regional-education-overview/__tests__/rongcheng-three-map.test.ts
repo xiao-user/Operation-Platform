@@ -9,6 +9,7 @@ import RongchengThreeMap from "../components/RongchengThreeMap.vue";
 const engineMocks = vi.hoisted(() => ({
   animateCameraView: vi.fn(() => Promise.resolve()),
   dispose: vi.fn(),
+  setSelectedEnergyTower: vi.fn(),
   setVisualTuning: vi.fn(),
 }));
 
@@ -28,6 +29,7 @@ vi.mock("../rendering/regional-map-engine", () => ({
     setLocations = vi.fn();
     setMapState = vi.fn();
     setSelectedLocation = vi.fn();
+    setSelectedEnergyTower = engineMocks.setSelectedEnergyTower;
     setTheme = vi.fn();
   },
 }));
@@ -111,5 +113,23 @@ describe("RongchengThreeMap controls", () => {
     wrapper.unmount();
     requestFrame.mockRestore();
     cancelFrame.mockRestore();
+  });
+
+  it("forwards an automatic energy-tower selection to the renderer", () => {
+    const wrapper = mount(RongchengThreeMap, {
+      props: {
+        mapState: initialMapState,
+        theme: getDigitalTwinMapTheme("cyan"),
+        locations: rongchengEducationLocations,
+        dataLayerMode: "energy-towers",
+        visualTuning: defaultMapVisualTuning,
+      },
+    });
+
+    (wrapper.vm as unknown as {
+      setSelectedEnergyTower: (id?: string) => void;
+    }).setSelectedEnergyTower("445202001");
+    expect(engineMocks.setSelectedEnergyTower).toHaveBeenCalledWith("445202001");
+    wrapper.unmount();
   });
 });

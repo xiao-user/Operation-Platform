@@ -146,6 +146,7 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
   private readonly towerGroups: THREE.Group[] = [];
   private readonly glowMaterials: THREE.MeshBasicMaterial[] = [];
   private hoveredId?: string;
+  private selectedId?: string;
   private activeLabelIndex = 0;
   private labelCycleElapsed = 0;
   private reveal = 0;
@@ -340,10 +341,19 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
   }
 
   private syncPinnedLabel() {
-    const activeId = this.hoveredId ?? this.labelIds[this.activeLabelIndex];
+    const activeId = this.hoveredId ?? this.selectedId ?? this.labelIds[this.activeLabelIndex];
     for (const [id, element] of this.labels) {
       element.classList.toggle("is-pinned", id === activeId);
+      element.classList.toggle("is-selected", id === this.selectedId);
     }
+  }
+
+  private syncEmphasis() {
+    const emphasizedId = this.hoveredId ?? this.selectedId;
+    for (const [id, material] of this.materials) {
+      material.uniforms.uHover!.value = id === emphasizedId ? 1 : 0;
+    }
+    this.syncPinnedLabel();
   }
 
   private applyReveal() {
@@ -373,7 +383,7 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
     this.reveal = Math.abs(next - this.targetReveal) < 0.002 ? this.targetReveal : next;
     if (this.reveal !== previousReveal) this.applyReveal();
     let labelChanged = false;
-    if (!this.hoveredId && this.labelIds.length > 1 && this.targetReveal > 0) {
+    if (!this.hoveredId && !this.selectedId && this.labelIds.length > 1 && this.targetReveal > 0) {
       const cycleDuration = Math.max(0.1, this.tuning.energyTowerLabelCycleSeconds);
       this.labelCycleElapsed += THREE.MathUtils.clamp(delta, 0, cycleDuration);
       if (this.labelCycleElapsed >= cycleDuration) {
@@ -425,20 +435,28 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
   setHovered(id?: string) {
     if (this.hoveredId === id) return;
     if (this.hoveredId) {
-      const previousMaterial = this.materials.get(this.hoveredId);
-      if (previousMaterial) previousMaterial.uniforms.uHover!.value = 0;
       this.labels.get(this.hoveredId)?.classList.remove("is-hovered");
     }
     this.hoveredId = id;
     if (id) {
       const hoveredIndex = this.labelIds.indexOf(id);
       if (hoveredIndex >= 0) this.activeLabelIndex = hoveredIndex;
-      const material = this.materials.get(id);
-      if (material) material.uniforms.uHover!.value = 1;
       this.labels.get(id)?.classList.add("is-hovered");
     }
     this.labelCycleElapsed = 0;
-    this.syncPinnedLabel();
+    this.syncEmphasis();
+  }
+
+  setSelected(id?: string) {
+    const nextId = id && this.materials.has(id) ? id : undefined;
+    if (this.selectedId === nextId) return;
+    this.selectedId = nextId;
+    if (nextId) {
+      const selectedIndex = this.labelIds.indexOf(nextId);
+      if (selectedIndex >= 0) this.activeLabelIndex = selectedIndex;
+    }
+    this.labelCycleElapsed = 0;
+    this.syncEmphasis();
   }
 
   private resolveColors(

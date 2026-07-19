@@ -50,15 +50,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type {
-  WorkbenchLayoutItem,
   WorkbenchQuickLinkData,
   WorkbenchWidgetDefinition,
+  WorkbenchWidgetItem,
   WorkbenchWidgetSettings,
 } from "@/features/workbench/types";
 import { cloneWorkbenchSettings } from "@/features/workbench/workbench-layout";
 
 const props = defineProps<{
-  item: WorkbenchLayoutItem | null;
+  item: WorkbenchWidgetItem | null;
   definition: WorkbenchWidgetDefinition | null;
   quickLinks: WorkbenchQuickLinkData[];
 }>();

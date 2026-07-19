@@ -16,9 +16,17 @@ describe("MapMaterialTuningPanel", () => {
     await wrapper.get(".material-tuning__trigger").trigger("click");
     expect(wrapper.get('[aria-label="地图材质调试"]').element).toBeInstanceOf(HTMLElement);
 
+    const autoRotation = wrapper.get<HTMLInputElement>('[aria-label="自动平面旋转"]');
+    expect(autoRotation.element.checked).toBe(true);
+    await autoRotation.setValue(false);
+    let tuningEvents = wrapper.emitted("update:tuning") ?? [];
+    expect(tuningEvents[tuningEvents.length - 1]?.[0]).toMatchObject({
+      autoRotationEnabled: false,
+    });
+
     const surfaceOpacity = wrapper.findAll<HTMLInputElement>('input[type="range"]')[0]!;
     await surfaceOpacity.setValue("0.42");
-    let tuningEvents = wrapper.emitted("update:tuning") ?? [];
+    tuningEvents = wrapper.emitted("update:tuning") ?? [];
     expect(tuningEvents[tuningEvents.length - 1]?.[0]).toMatchObject({
       regionTerrainOpacity: 0.42,
     });
@@ -104,10 +112,28 @@ describe("MapMaterialTuningPanel", () => {
     const schoolCycleRow = wrapper.findAll(".material-tuning__row")
       .find((row) => row.text().includes("学校轮播间隔"));
     expect(schoolCycleRow).toBeDefined();
-    await schoolCycleRow!.get('input[type="range"]').setValue("6.5");
+    await schoolCycleRow!.get('input[type="range"]').setValue("7");
     tuningEvents = wrapper.emitted("update:tuning") ?? [];
     expect(tuningEvents[tuningEvents.length - 1]?.[0]).toMatchObject({
-      institutionSelectionCycleSeconds: 6.5,
+      institutionSelectionCycleSeconds: 7,
+    });
+
+    const districtDwellRow = wrapper.findAll(".material-tuning__row")
+      .find((row) => row.text().includes("区级停留时间"));
+    expect(districtDwellRow).toBeDefined();
+    await districtDwellRow!.get('input[type="range"]').setValue("180");
+    tuningEvents = wrapper.emitted("update:tuning") ?? [];
+    expect(tuningEvents[tuningEvents.length - 1]?.[0]).toMatchObject({
+      autoFocusDistrictDwellSeconds: 180,
+    });
+
+    const autoFocusCycleRow = wrapper.findAll(".material-tuning__row")
+      .find((row) => row.text().includes("子集停留时间"));
+    expect(autoFocusCycleRow).toBeDefined();
+    await autoFocusCycleRow!.get('input[type="range"]').setValue("50");
+    tuningEvents = wrapper.emitted("update:tuning") ?? [];
+    expect(tuningEvents[tuningEvents.length - 1]?.[0]).toMatchObject({
+      autoFocusTownshipDwellSeconds: 50,
     });
 
     const connectionOffsetRow = wrapper.findAll(".material-tuning__row")
@@ -153,6 +179,9 @@ describe("MapMaterialTuningPanel", () => {
       energyTowerGlowOpacity: 0.23,
       institutionDefaultOpacity: 0.56,
       institutionSelectionCycleSeconds: 5,
+      autoFocusDistrictDwellSeconds: 300,
+      autoFocusTownshipDwellSeconds: 30,
+      autoRotationEnabled: true,
       connectionSurfaceOffset: 2.2,
     });
     themeEvents = wrapper.emitted("update:theme") ?? [];

@@ -191,6 +191,137 @@ test("真实拖拽与缩放只修改草稿，取消后恢复保存前布局", as
   await expect(restored).toHaveAttribute("gs-w", "8");
 });
 
+test("新版工作台按顺序流拖拽并独立保存组件宽度", async ({ page }) => {
+  await page.goto("/workbench");
+  await page.getByRole("button", { name: "切换为新版" }).click();
+
+  await expect(page.getByText("新版工作台", { exact: true })).toBeVisible();
+  await expect(page.locator(".simple-grid-item")).toHaveCount(9);
+  await expect(page.locator(".grid-stack-item")).toHaveCount(0);
+  const pairedHeights = await page.locator(".simple-grid-item").evaluateAll((items) =>
+    items.slice(0, 2).map((item) => Math.round(item.getBoundingClientRect().height)),
+  );
+  expect(new Set(pairedHeights).size).toBe(1);
+
+  await page.getByRole("button", { name: "调整工作台" }).click();
+  const first = page.locator(".simple-grid-item").first();
+  const second = page.locator(".simple-grid-item").nth(1);
+  const firstKey = await first.getAttribute("data-widget-key");
+  const secondKey = await second.getAttribute("data-widget-key");
+  if (!firstKey || !secondKey) throw new Error("新版工作台组件标识缺失");
+
+  const secondBox = await second.boundingBox();
+  if (!secondBox) throw new Error("顺序流拖拽目标不可见");
+  await first.locator(".widget-drag-handle").dragTo(second, {
+    targetPosition: { x: secondBox.width / 2, y: secondBox.height * 0.75 },
+  });
+  await expect(page.locator(".simple-grid-item").nth(1)).toHaveAttribute("data-widget-key", firstKey);
+
+  const moved = page.locator(`[data-widget-key="${firstKey}"]`);
+  await moved.getByRole("button", { name: "组件操作" }).click();
+  await page.getByRole("menuitem", { name: "整行 · 单列" }).click();
+  await expect(moved).toHaveAttribute("data-widget-span", "6");
+
+  const cardHeight = await moved.locator(".workbench-widget").evaluate((element) => ({
+    card: Math.round(element.getBoundingClientRect().height),
+    content: Math.round(element.scrollHeight),
+  }));
+  expect(cardHeight.card).toBeGreaterThanOrEqual(cardHeight.content);
+
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await page.reload();
+  await expect(page.getByText("新版工作台", { exact: true })).toBeVisible();
+  await expect(page.locator(`[data-widget-key="${firstKey}"]`)).toHaveAttribute("data-widget-span", "6");
+  await expect(page.locator(".simple-grid-item").nth(1)).toHaveAttribute("data-widget-key", firstKey);
+
+  await page.getByRole("button", { name: "回到经典版" }).click();
+  await expect(page.locator(".grid-stack-item")).toHaveCount(9);
+  await expect(page.locator(`[data-widget-key="${firstKey}"]`)).toHaveAttribute("gs-w", "3");
+});
+
+test("新版双列瀑布独立排布并支持跨列拖拽", async ({ page }) => {
+  await page.goto("/workbench");
+  await page.getByRole("button", { name: "切换为新版" }).click();
+  await page.getByRole("button", { name: "调整工作台" }).click();
+  await page.getByText("分两列", { exact: true }).click();
+  await page.getByText("6 : 2", { exact: true }).click();
+  await expect(page.locator('input[type="radio"][value="columns"]')).toBeChecked();
+  await expect(page.locator('input[type="radio"][value="6:2"]')).toBeChecked();
+
+  const primary = page.getByRole("region", { name: "主列" });
+  const secondary = page.getByRole("region", { name: "辅列" });
+  const columnBottoms = await page.locator(".simple-column").evaluateAll((columns) =>
+    columns.map((column) => Math.round(column.getBoundingClientRect().bottom)),
+  );
+  expect(Math.abs(columnBottoms[0]! - columnBottoms[1]!)).toBeLessThanOrEqual(1);
+
+  const secondaryTail = secondary.locator(".column-tail-drop");
+  await secondaryTail.scrollIntoViewIfNeeded();
+  expect(await page.locator(".app-content").evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  const appendSource = primary.locator(".column-item").last();
+  const appendSourceKey = await appendSource.getAttribute("data-widget-key");
+  if (!appendSourceKey) throw new Error("末尾拖拽组件标识缺失");
+  await appendSource.locator(".widget-drag-handle").dragTo(secondaryTail);
+  await expect(secondary.locator(".column-item").last()).toHaveAttribute(
+    "data-widget-key",
+    appendSourceKey,
+  );
+  await page.locator(".app-content").evaluate((element) => { element.scrollTop = 0; });
+
+  const source = primary.locator(".column-item").first();
+  const target = secondary.locator(".column-item").first();
+  const sourceKey = await source.getAttribute("data-widget-key");
+  if (!sourceKey) throw new Error("主列组件标识缺失");
+
+  const sourceHeight = Math.round((await source.boundingBox())?.height ?? 0);
+  const targetBox = await target.boundingBox();
+  if (!targetBox) throw new Error("跨列拖拽目标不可见");
+  const dataTransfer = await page.evaluateHandle("new DataTransfer()");
+  const sourceHandle = source.locator(".widget-drag-handle");
+  await sourceHandle.dispatchEvent("dragstart", { dataTransfer });
+  await target.dispatchEvent("dragover", {
+    dataTransfer,
+    clientX: targetBox.x + targetBox.width / 2,
+    clientY: targetBox.y + targetBox.height * 0.75,
+  });
+  const placeholder = secondary.locator(".drag-placeholder");
+  await expect(placeholder).toBeVisible();
+  expect(Math.round((await placeholder.boundingBox())?.height ?? 0)).toBe(sourceHeight);
+  await placeholder.dispatchEvent("drop", { dataTransfer });
+  await sourceHandle.dispatchEvent("dragend", { dataTransfer });
+  await expect(secondary.locator(`[data-widget-key="${sourceKey}"]`)).toHaveAttribute(
+    "data-widget-column",
+    "secondary",
+  );
+
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await page.reload();
+  await expect(page.getByText("双列瀑布 · 6:2", { exact: true })).toBeVisible();
+
+  const columnWidths = await page.locator(".simple-column").evaluateAll((columns) =>
+    columns.map((column) => column.getBoundingClientRect().width),
+  );
+  expect(columnWidths[0]! / columnWidths[1]!).toBeGreaterThan(2.8);
+  expect(columnWidths[0]! / columnWidths[1]!).toBeLessThan(3.2);
+  await expect(secondary.locator(`[data-widget-key="${sourceKey}"]`)).toBeVisible();
+});
+
+test("完整流式拖拽会自动适配目标位置的整行或半行宽度", async ({ page }) => {
+  await page.goto("/workbench");
+  await page.getByRole("button", { name: "切换为新版" }).click();
+  await page.getByRole("button", { name: "调整工作台" }).click();
+
+  const full = page.locator('.flow-item[data-widget-span="6"]').first();
+  const half = page.locator('.flow-item[data-widget-span="3"]').first();
+  const fullKey = await full.getAttribute("data-widget-key");
+  if (!fullKey) throw new Error("整行组件标识缺失");
+  await full.locator(".widget-drag-handle").dragTo(half.locator(".widget-drag-handle"));
+  await expect(page.locator(`[data-widget-key="${fullKey}"]`)).toHaveAttribute(
+    "data-widget-span",
+    "3",
+  );
+});
+
 test("手机端按单列只读展示", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/workbench");

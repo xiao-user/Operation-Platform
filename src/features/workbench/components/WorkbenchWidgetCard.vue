@@ -1,10 +1,21 @@
 <template>
   <article
     class="workbench-widget"
-    :class="[`tone-${definition?.tone ?? 'neutral'}`, { 'is-editing': editable }]"
+    :class="[
+      `tone-${definition?.tone ?? 'neutral'}`,
+      {
+        'is-editing': editable,
+        'is-simple': layoutMode === 'simple',
+        'is-simple-flow': simpleLayoutType === 'flow',
+      },
+    ]"
   >
     <header class="widget-header">
-      <div class="widget-title-block" :class="{ 'widget-drag-handle': editable }">
+      <div
+        class="widget-title-block"
+        :class="{ 'widget-drag-handle': editable }"
+        :draggable="editable && layoutMode === 'simple'"
+      >
         <span v-if="editable" class="drag-indicator" aria-hidden="true">
           <el-icon><Rank /></el-icon>
         </span>
@@ -29,7 +40,21 @@
             <el-icon><MoreFilled /></el-icon>
           </el-button>
           <template #dropdown>
-            <el-dropdown-menu>
+            <el-dropdown-menu v-if="layoutMode === 'simple' && simpleLayoutType === 'columns'">
+              <el-dropdown-item command="move-backward">向前移动</el-dropdown-item>
+              <el-dropdown-item command="move-forward">向后移动</el-dropdown-item>
+              <el-dropdown-item divided command="move-primary">移到主列</el-dropdown-item>
+              <el-dropdown-item command="move-secondary">移到辅列</el-dropdown-item>
+              <el-dropdown-item divided command="hide">隐藏组件</el-dropdown-item>
+            </el-dropdown-menu>
+            <el-dropdown-menu v-else-if="layoutMode === 'simple'">
+              <el-dropdown-item command="move-backward">向前移动</el-dropdown-item>
+              <el-dropdown-item command="move-forward">向后移动</el-dropdown-item>
+              <el-dropdown-item divided command="span-3">半行 · 双列</el-dropdown-item>
+              <el-dropdown-item command="span-6">整行 · 单列</el-dropdown-item>
+              <el-dropdown-item divided command="hide">隐藏组件</el-dropdown-item>
+            </el-dropdown-menu>
+            <el-dropdown-menu v-else>
               <el-dropdown-item command="move-left">向左移动</el-dropdown-item>
               <el-dropdown-item command="move-right">向右移动</el-dropdown-item>
               <el-dropdown-item command="move-up">向上移动</el-dropdown-item>
@@ -63,13 +88,20 @@
 import { computed, ref, watch } from "vue";
 import { MoreFilled, Rank, Setting } from "@element-plus/icons-vue";
 import WorkbenchWidgetContent from "@/features/workbench/components/WorkbenchWidgetContent.vue";
-import type { WorkbenchWidgetAction } from "@/features/workbench/components/WorkbenchGrid.vue";
-import type { WorkbenchLayoutItem, WorkbenchWidgetData } from "@/features/workbench/types";
+import type {
+  SimpleWorkbenchLayoutType,
+  WorkbenchLayoutMode,
+  WorkbenchWidgetAction,
+  WorkbenchWidgetData,
+  WorkbenchWidgetItem,
+} from "@/features/workbench/types";
 import { useWorkbenchStore } from "@/stores/workbench";
 
 const props = defineProps<{
-  item: WorkbenchLayoutItem;
+  item: WorkbenchWidgetItem;
   editable: boolean;
+  layoutMode?: WorkbenchLayoutMode;
+  simpleLayoutType?: SimpleWorkbenchLayoutType;
 }>();
 
 const emit = defineEmits<{
@@ -142,6 +174,18 @@ watch(
 .workbench-widget.is-editing {
   background: color-mix(in srgb, var(--color-primary-light) 18%, var(--color-white));
   border-color: var(--color-primary-line-light);
+}
+
+.workbench-widget.is-simple {
+  height: auto;
+}
+
+.workbench-widget.is-simple-flow {
+  height: 100%;
+}
+
+.workbench-widget.is-simple .widget-body {
+  overflow: visible;
 }
 
 .widget-header {
