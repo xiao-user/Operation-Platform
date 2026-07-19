@@ -3,7 +3,7 @@ import { defineStore } from "pinia";
 import { pageRegistryByKey } from "@/config/page-registry";
 import { resolveFirstTarget } from "@/features/menu-config/menu-tree";
 import type { MenuTreeNode } from "@/features/menu-config/types";
-import { workbenchDataSource } from "@/features/workbench/mock-workbench-data-source";
+import { workbenchDataSource } from "@/features/workbench/runtime-workbench-data-source";
 import { operationPlatformPersistence } from "@/features/persistence/runtime-operation-platform-persistence";
 import {
   cloneWorkbenchLayout,

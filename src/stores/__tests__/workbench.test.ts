@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { ADMIN_ROLE_ID, STAFF_ROLE_ID } from "@/features/access-control/types";
 import { workbenchLayoutStorageKey } from "@/features/workbench/local-storage-workbench-layout-repository";
 import type { MenuTreeNode } from "@/features/menu-config/types";
-import { workbenchDataSource } from "@/features/workbench/mock-workbench-data-source";
+import { workbenchDataSource } from "@/features/workbench/runtime-workbench-data-source";
 import { useWorkbenchStore } from "@/stores/workbench";
 import type { TenantInfo } from "@/types/user";
 

@@ -191,7 +191,8 @@ export interface WorkbenchActivityRankData {
 }
 
 export type WorkbenchCalendarEventType = "meeting" | "review" | "task";
-export type WorkbenchCalendarEventStatus = "pending" | "completed";
+export type WorkbenchCalendarEventStatus = "pending" | "completed" | "cancelled";
+export type WorkbenchCalendarEventDisplayStatus = WorkbenchCalendarEventStatus | "overdue";
 
 export interface WorkbenchCalendarEventData {
   id: string;
@@ -203,6 +204,11 @@ export interface WorkbenchCalendarEventData {
   status: WorkbenchCalendarEventStatus;
   location?: string;
   audience?: string;
+  viewedAt?: string;
+  completedAt?: string;
+  cancelledAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface WorkbenchCalendarData {

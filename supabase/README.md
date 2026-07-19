@@ -8,6 +8,7 @@ This directory contains the production persistence schema for the multi-tenant o
 - `tenants` and `tenant_members` define tenant access.
 - `tenant_configurations` preserves the current atomic menu, shell, and role aggregate as JSONB.
 - `workbench_layouts` and `user_tenant_preferences` remain tenant/user scoped; the latter stores the active role and visualization theme.
+- `calendar_events` stores personal tenant calendars, including start/end time, viewed time and completion/cancellation state; overdue is derived from `ends_at` instead of persisted.
 - `org_review_applications`, `gate_device_groups`, and `gate_devices` store tenant-scoped business data behind RLS.
 - `ai_conversations` and `ai_messages` store AI assistant history by tenant and authenticated user. The browser can read its own history and manage conversation titles, while message writes are owned by the authenticated Edge Function.
 - Every browser-exposed table has RLS enabled. Raw localStorage migration snapshots live in the private schema.

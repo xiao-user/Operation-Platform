@@ -34,7 +34,11 @@
 
   <WorkbenchRankingList v-else-if="data.kind === 'ranking'" :data="data" />
 
-  <WorkbenchCalendarAgenda v-else-if="data.kind === 'calendar'" :data="data" />
+  <WorkbenchCalendarAgenda
+    v-else-if="data.kind === 'calendar'"
+    :data="data"
+    :context="calendarContext"
+  />
 
   <WorkbenchTaskCenter v-else-if="data.kind === 'task-center'" :data="data" />
 
@@ -62,9 +66,12 @@ import WorkbenchRankingList from "@/features/workbench/components/WorkbenchRanki
 import WorkbenchSubscriptions from "@/features/workbench/components/WorkbenchSubscriptions.vue";
 import WorkbenchTaskCenter from "@/features/workbench/components/WorkbenchTaskCenter.vue";
 import WorkbenchTrendChart from "@/features/workbench/components/WorkbenchTrendChart.vue";
-import type { WorkbenchWidgetData } from "@/features/workbench/types";
+import type { WorkbenchDataContext, WorkbenchWidgetData } from "@/features/workbench/types";
 
-defineProps<{ data: WorkbenchWidgetData }>();
+defineProps<{
+  data: WorkbenchWidgetData;
+  calendarContext?: WorkbenchDataContext;
+}>();
 </script>
 
 <style scoped>

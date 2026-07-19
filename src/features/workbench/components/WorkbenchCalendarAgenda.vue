@@ -61,13 +61,21 @@
             v-for="event in displayedEvents"
             :key="event.id"
             class="agenda-event-card"
-            :class="{ 'is-completed': event.status === 'completed' }"
+            :class="`is-${displayStatus(event)}`"
           >
             <div class="agenda-card-header">
-              <span :class="`event-tag type-${event.type}`">{{ eventMeta(event.type).label }}</span>
+              <div class="event-tags">
+                <span :class="`event-tag type-${event.type}`">{{ eventMeta(event.type).label }}</span>
+                <span :class="`event-state state-${displayStatus(event)}`">
+                  {{ statusLabel(event) }}
+                </span>
+                <span class="event-view-state" :class="{ 'is-unread': !event.viewedAt }">
+                  {{ event.viewedAt ? "已查看" : "未查看" }}
+                </span>
+              </div>
               <time><el-icon><Clock /></el-icon>{{ eventTimeLabel(event) }}</time>
             </div>
-            <button type="button" class="agenda-copy" @click="openEditDialog(event)">
+            <button type="button" class="agenda-copy" @click="viewEvent(event)">
               <strong>{{ event.title }}</strong>
               <span v-if="event.location"><el-icon><Location /></el-icon>{{ event.location }}</span>
               <span v-if="event.audience"><el-icon><User /></el-icon>{{ event.audience }}</span>
@@ -75,11 +83,28 @@
             <div class="agenda-actions">
               <el-checkbox
                 :model-value="event.status === 'completed'"
+                :disabled="event.status === 'cancelled'"
                 :aria-label="`${event.title}标记为完成`"
                 @change="toggleEvent(event.id)"
               >
                 {{ event.status === "completed" ? "已完成" : "标记完成" }}
               </el-checkbox>
+              <el-button
+                v-if="event.status === 'pending'"
+                text
+                :aria-label="`取消${event.title}`"
+                @click="cancelEvent(event.id)"
+              >
+                取消
+              </el-button>
+              <el-button
+                v-else
+                text
+                :aria-label="`恢复${event.title}`"
+                @click="restoreEvent(event.id)"
+              >
+                恢复
+              </el-button>
               <el-button
                 text
                 :icon="Delete"
@@ -124,6 +149,9 @@
           <el-form-item label="时间" required>
             <el-time-select v-model="form.time" start="08:00" step="00:30" end="20:00" placeholder="选择时间" />
           </el-form-item>
+          <el-form-item label="结束时间" required>
+            <el-time-select v-model="form.endTime" start="08:30" step="00:30" end="22:00" placeholder="选择结束时间" />
+          </el-form-item>
         </div>
         <el-form-item label="类型" required>
           <el-select v-model="form.type" placeholder="选择类型">
@@ -132,17 +160,23 @@
             <el-option label="任务" value="task" />
           </el-select>
         </el-form-item>
+        <el-form-item label="地点">
+          <el-input v-model="form.location" maxlength="80" placeholder="请输入地点" />
+        </el-form-item>
+        <el-form-item label="参与人员">
+          <el-input v-model="form.audience" maxlength="120" placeholder="请输入参与人员或范围" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveEvent">保存</el-button>
+        <el-button type="primary" :loading="saving" @click="saveEvent">保存</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import {
   ArrowLeft,
   ArrowRight,
@@ -156,8 +190,11 @@ import { ElMessage, ElMessageBox, type CalendarDateType, type CalendarInstance }
 import type {
   WorkbenchCalendarEventData,
   WorkbenchCalendarData,
+  WorkbenchCalendarEventDisplayStatus,
   WorkbenchCalendarEventType,
+  WorkbenchDataContext,
 } from "@/features/workbench/types";
+import { useCalendarEventsStore } from "@/stores/calendar-events";
 
 interface EventTypeMeta {
   label: string;
@@ -169,24 +206,38 @@ const EVENT_TYPE_META: Record<WorkbenchCalendarEventType, EventTypeMeta> = {
   task: { label: "工作任务" },
 };
 
-const props = defineProps<{ data: WorkbenchCalendarData }>();
+const props = defineProps<{
+  data: WorkbenchCalendarData;
+  context?: WorkbenchDataContext;
+}>();
 
 const calendarRef = ref<CalendarInstance>();
 const selectedDate = ref(new Date());
 const events = ref(props.data.events.map((event) => ({ ...event })));
+const calendarEventsStore = props.context ? useCalendarEventsStore() : null;
 const dialogVisible = ref(false);
 const editingEventId = ref<string | null>(null);
 const showAllEvents = ref(false);
+const saving = ref(false);
+const clock = ref(Date.now());
+const loadedMonths = new Set<string>([monthKey(selectedDate.value)]);
+let clockTimer: ReturnType<typeof setInterval> | undefined;
 const form = reactive<{
   title: string;
   date: string;
   time: string;
+  endTime: string;
   type: WorkbenchCalendarEventType;
+  location: string;
+  audience: string;
 }>({
   title: "",
   date: localIsoDate(selectedDate.value),
   time: "09:00",
+  endTime: "10:00",
   type: "meeting",
+  location: "",
+  audience: "",
 });
 
 const todayIsoDate = localIsoDate(new Date());
@@ -225,6 +276,28 @@ watch(selectedIsoDate, () => {
   showAllEvents.value = false;
 });
 
+watch(
+  () => props.data.events,
+  (nextEvents) => {
+    events.value = nextEvents.map((event) => ({ ...event }));
+  },
+);
+
+watch(
+  () => monthKey(selectedDate.value),
+  (key) => void loadMonth(key),
+);
+
+onMounted(() => {
+  clockTimer = setInterval(() => {
+    clock.value = Date.now();
+  }, 60_000);
+});
+
+onBeforeUnmount(() => {
+  if (clockTimer) clearInterval(clockTimer);
+});
+
 function chineseMonth(date: Date) {
   return ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"][date.getMonth()];
 }
@@ -234,6 +307,36 @@ function localIsoDate(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function monthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthRange(key: string) {
+  const [year, month] = key.split("-").map(Number);
+  const start = new Date(year!, month! - 1, 1);
+  const end = new Date(year!, month!, 1);
+  return { start: localIsoDate(start), end: localIsoDate(end) };
+}
+
+const repositoryContext = computed(() => props.context ? {
+  tenantId: props.context.tenant.id,
+  userId: props.context.userId,
+} : null);
+
+async function loadMonth(key: string) {
+  const context = repositoryContext.value;
+  if (!calendarEventsStore || !context || loadedMonths.has(key)) return;
+  try {
+    const range = monthRange(key);
+    const loaded = await calendarEventsStore.list(context, range);
+    const retained = events.value.filter((event) => !event.date.startsWith(key));
+    events.value = [...retained, ...loaded];
+    loadedMonths.add(key);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "日程读取失败");
+  }
 }
 
 function isToday(date: string) {
@@ -256,11 +359,29 @@ function eventTimeLabel(event: WorkbenchCalendarEventData) {
   return event.endTime ? `${event.time}～${event.endTime}` : event.time;
 }
 
+function displayStatus(event: WorkbenchCalendarEventData): WorkbenchCalendarEventDisplayStatus {
+  if (event.status !== "pending") return event.status;
+  const endsAt = new Date(`${event.date}T${event.endTime ?? event.time}:00`);
+  return endsAt.getTime() < clock.value ? "overdue" : "pending";
+}
+
+function statusLabel(event: WorkbenchCalendarEventData) {
+  return {
+    pending: "待处理",
+    completed: "已完成",
+    cancelled: "已取消",
+    overdue: "已过期",
+  }[displayStatus(event)];
+}
+
 function resetForm(event?: WorkbenchCalendarEventData) {
   form.title = event?.title ?? "";
   form.date = event?.date ?? selectedIsoDate.value;
   form.time = event?.time ?? "09:00";
+  form.endTime = event?.endTime ?? "10:00";
   form.type = event?.type ?? "meeting";
+  form.location = event?.location ?? "";
+  form.audience = event?.audience ?? "";
 }
 
 function openCreateDialog() {
@@ -275,35 +396,92 @@ function openEditDialog(event: WorkbenchCalendarEventData) {
   dialogVisible.value = true;
 }
 
-function saveEvent() {
-  if (!form.title.trim() || !form.date || !form.time) {
+function replaceEvent(saved: WorkbenchCalendarEventData) {
+  const index = events.value.findIndex((event) => event.id === saved.id);
+  if (index >= 0) events.value[index] = { ...saved };
+  else events.value.push({ ...saved });
+}
+
+function viewEvent(event: WorkbenchCalendarEventData) {
+  const context = repositoryContext.value;
+  openEditDialog(event);
+  if (event.viewedAt) return;
+  if (!calendarEventsStore || !context) {
+    event.viewedAt = new Date().toISOString();
+    return;
+  }
+  void calendarEventsStore.markViewed(context, event.id)
+    .then(replaceEvent)
+    .catch((error: unknown) => {
+      ElMessage.error(error instanceof Error ? error.message : "日程查看状态更新失败");
+    });
+}
+
+async function saveEvent() {
+  if (!form.title.trim() || !form.date || !form.time || !form.endTime) {
     ElMessage.warning("请完整填写日程信息");
     return;
   }
-  if (editingEventId.value) {
-    const index = events.value.findIndex((event) => event.id === editingEventId.value);
-    if (index >= 0) {
-      events.value[index] = { ...events.value[index]!, ...form, title: form.title.trim() };
+  const context = repositoryContext.value;
+  saving.value = true;
+  try {
+    if (calendarEventsStore && context) {
+      const saved = editingEventId.value
+        ? await calendarEventsStore.update(context, editingEventId.value, form)
+        : await calendarEventsStore.create(context, form);
+      replaceEvent(saved);
+    } else if (editingEventId.value) {
+      const index = events.value.findIndex((event) => event.id === editingEventId.value);
+      if (index >= 0) {
+        events.value[index] = { ...events.value[index]!, ...form, title: form.title.trim() };
+      }
+    } else {
+      events.value.push({
+        id: `agenda-${Date.now()}`,
+        ...form,
+        title: form.title.trim(),
+        status: "pending",
+      });
     }
-    ElMessage.success("日程已更新");
-  } else {
-    events.value.push({
-      id: `agenda-${Date.now()}`,
-      ...form,
-      title: form.title.trim(),
-      status: "pending",
-    });
-    ElMessage.success("日程已新增");
+    ElMessage.success(editingEventId.value ? "日程已更新" : "日程已新增");
+    selectedDate.value = new Date(`${form.date}T12:00:00`);
+    loadedMonths.add(monthKey(selectedDate.value));
+    dialogVisible.value = false;
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "日程保存失败");
+  } finally {
+    saving.value = false;
   }
-  selectedDate.value = new Date(`${form.date}T12:00:00`);
-  dialogVisible.value = false;
+}
+
+async function setEventStatus(id: string, status: "pending" | "completed" | "cancelled") {
+  const event = events.value.find((item) => item.id === id);
+  if (!event) return;
+  const context = repositoryContext.value;
+  try {
+    if (calendarEventsStore && context) {
+      replaceEvent(await calendarEventsStore.setStatus(context, id, status));
+    } else {
+      event.status = status;
+    }
+    ElMessage.success(status === "completed" ? "已标记为完成" : status === "cancelled" ? "日程已取消" : "已恢复为待处理");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "日程状态更新失败");
+  }
 }
 
 function toggleEvent(id: string) {
   const event = events.value.find((item) => item.id === id);
   if (!event) return;
-  event.status = event.status === "completed" ? "pending" : "completed";
-  ElMessage.success(event.status === "completed" ? "已标记为完成" : "已恢复为待处理");
+  return setEventStatus(id, event.status === "completed" ? "pending" : "completed");
+}
+
+function cancelEvent(id: string) {
+  return setEventStatus(id, "cancelled");
+}
+
+function restoreEvent(id: string) {
+  return setEventStatus(id, "pending");
 }
 
 async function removeEvent(event: WorkbenchCalendarEventData) {
@@ -313,10 +491,16 @@ async function removeEvent(event: WorkbenchCalendarEventData) {
       cancelButtonText: "取消",
       type: "warning",
     });
+    const context = repositoryContext.value;
+    if (calendarEventsStore && context) {
+      await calendarEventsStore.delete(context, event.id);
+    }
     events.value = events.value.filter((item) => item.id !== event.id);
     ElMessage.success("日程已删除");
-  } catch {
-    // Cancellation leaves the schedule unchanged.
+  } catch (error) {
+    if (error !== "cancel" && error !== "close") {
+      ElMessage.error(error instanceof Error ? error.message : "日程删除失败");
+    }
   }
 }
 </script>
@@ -574,6 +758,13 @@ async function removeEvent(event: WorkbenchCalendarEventData) {
   gap: var(--spacing-12);
 }
 
+.event-tags {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--spacing-6);
+}
+
 .event-tag {
   padding: 0 var(--spacing-6);
   color: var(--color-error);
@@ -591,6 +782,45 @@ async function removeEvent(event: WorkbenchCalendarEventData) {
 .event-tag.type-task {
   color: var(--color-primary);
   background: var(--color-primary-light);
+}
+
+.event-state,
+.event-view-state {
+  flex-shrink: 0;
+  color: var(--color-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-xs);
+}
+
+.event-state.state-completed {
+  color: var(--color-success-dark-text);
+}
+
+.event-state.state-overdue,
+.event-state.state-cancelled {
+  color: var(--color-error-dark-text);
+}
+
+.event-view-state {
+  color: var(--color-secondary);
+}
+
+.event-view-state.is-unread {
+  position: relative;
+  padding-left: var(--spacing-8);
+  color: var(--color-primary);
+}
+
+.event-view-state.is-unread::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  background: var(--color-primary);
+  border-radius: var(--radius-full);
+  content: "";
+  transform: translateY(-50%);
 }
 
 .agenda-card-header time {
@@ -648,9 +878,19 @@ async function removeEvent(event: WorkbenchCalendarEventData) {
   background: var(--color-bg-subtle);
 }
 
-.agenda-event-card.is-completed .agenda-copy strong {
+.agenda-event-card.is-completed .agenda-copy strong,
+.agenda-event-card.is-cancelled .agenda-copy strong {
   color: var(--color-secondary);
   text-decoration: line-through;
+}
+
+.agenda-event-card.is-overdue {
+  border-color: color-mix(in srgb, var(--color-error) 32%, var(--color-border-strong));
+}
+
+.agenda-event-card.is-cancelled {
+  background: var(--color-bg-subtle);
+  opacity: 0.78;
 }
 
 .agenda-actions {
@@ -726,7 +966,7 @@ async function removeEvent(event: WorkbenchCalendarEventData) {
 
 .form-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--spacing-12);
 }
 

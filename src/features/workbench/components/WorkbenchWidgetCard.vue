@@ -50,7 +50,11 @@
         <span>{{ errorMessage }}</span>
         <el-button link type="primary" @click="retryLoadData">重新加载</el-button>
       </div>
-      <WorkbenchWidgetContent v-else-if="data" :data="data" />
+      <WorkbenchWidgetContent
+        v-else-if="data"
+        :data="data"
+        :calendar-context="calendarContext"
+      />
     </div>
   </article>
 </template>
@@ -78,6 +82,11 @@ const loading = ref(true);
 const errorMessage = ref("");
 const data = ref<WorkbenchWidgetData | null>(null);
 const definition = computed(() => workbenchStore.definitionFor(props.item.widgetKey));
+const calendarContext = computed(() => workbenchStore.context ? {
+  tenant: { ...workbenchStore.context.tenant },
+  userId: workbenchStore.context.userId,
+  profile: workbenchStore.context.profile,
+} : undefined);
 const hasSettings = computed(() => props.item.settings.kind !== "none");
 let loadRequestId = 0;
 

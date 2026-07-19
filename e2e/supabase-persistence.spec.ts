@@ -66,6 +66,26 @@ async function browserWithSession(newContext: () => Promise<BrowserContext>, ses
   return context;
 }
 
+async function switchToBureau(page: import("@playwright/test").Page) {
+  const bureauButton = page.getByRole("button", { name: "教育局 体验区教育局" });
+  if (await bureauButton.isVisible()) return;
+  await page.locator(".tenant-switch").click();
+  await page.getByRole("menuitem", { name: "体验区教育局", exact: true }).click();
+  await expect(bureauButton).toBeVisible();
+}
+
+async function revealCalendarEvent(
+  calendar: import("@playwright/test").Locator,
+  title: string,
+) {
+  const event = calendar.getByText(title, { exact: true });
+  if (!await event.isVisible()) {
+    const more = calendar.getByRole("button", { name: "查看更多事项", exact: true });
+    if (await more.isVisible()) await more.click();
+  }
+  await expect(event).toBeVisible();
+}
+
 test.describe("Supabase persistence", () => {
   test.describe.configure({ mode: "serial" });
 
@@ -209,6 +229,87 @@ test.describe("Supabase persistence", () => {
         .eq("auth_user_id", userId);
       await Promise.all([firstContext.close(), secondContext.close()]);
       cleanupError = error;
+    }
+    if (cleanupError) throw cleanupError;
+  });
+
+  test("calendar events survive reloads with viewed and completed state", async ({ browser }) => {
+    test.setTimeout(120_000);
+    const { client, session } = await authenticatedSession();
+    const firstContext = await browserWithSession(() => browser.newContext(), session);
+    const firstPage = await firstContext.newPage();
+    const title = `Supabase 日程-${Date.now()}`;
+    let eventId = "";
+    let cleanupError: Error | null = null;
+
+    try {
+      const { error: staleCleanupError } = await client
+        .from("calendar_events")
+        .delete()
+        .eq("tenant_id", "bureau-001")
+        .eq("auth_user_id", session.user.id)
+        .like("title", "Supabase 日程-%");
+      if (staleCleanupError) throw staleCleanupError;
+
+      await firstPage.goto("/workbench");
+      await switchToBureau(firstPage);
+      const firstCalendar = firstPage.locator('[data-widget-key$=".calendar-tasks"]');
+      await firstCalendar.getByRole("button", { name: "新增日程", exact: true }).click();
+      await firstPage.getByPlaceholder("请输入日程名称").fill(title);
+      await firstPage.getByRole("button", { name: "保存", exact: true }).click();
+
+      await expect.poll(async () => {
+        const { data, error } = await client
+          .from("calendar_events")
+          .select("id")
+          .eq("tenant_id", "bureau-001")
+          .eq("auth_user_id", session.user.id)
+          .eq("title", title)
+          .maybeSingle();
+        if (error) throw error;
+        eventId = data?.id ?? "";
+        return eventId;
+      }).not.toBe("");
+      await revealCalendarEvent(firstCalendar, title);
+
+      await firstPage.reload();
+      await switchToBureau(firstPage);
+      const reloadedCalendar = firstPage.locator('[data-widget-key$=".calendar-tasks"]');
+      await revealCalendarEvent(reloadedCalendar, title);
+      await expect(reloadedCalendar.getByText("已过期", { exact: true }).last()).toBeVisible();
+
+      await reloadedCalendar.getByText(title, { exact: true }).click();
+      await expect(firstPage.getByRole("dialog", { name: "编辑日程" })).toBeVisible();
+      await expect.poll(async () => {
+        const { data, error } = await client
+          .from("calendar_events")
+          .select("viewed_at")
+          .eq("id", eventId)
+          .single();
+        if (error) throw error;
+        return data.viewed_at;
+      }).not.toBeNull();
+      await firstPage.getByRole("button", { name: "关闭此对话框" }).click();
+
+      const eventCard = reloadedCalendar.locator(".agenda-event-card", { hasText: title });
+      await eventCard.hover();
+      await eventCard.locator(".el-checkbox").click();
+      await expect(eventCard.locator(".event-state")).toHaveText("已完成");
+      await expect.poll(async () => {
+        const { data, error } = await client
+          .from("calendar_events")
+          .select("status,completed_at")
+          .eq("id", eventId)
+          .single();
+        if (error) throw error;
+        return data;
+      }).toMatchObject({ status: "completed", completed_at: expect.any(String) });
+    } finally {
+      if (eventId) {
+        const { error } = await client.from("calendar_events").delete().eq("id", eventId);
+        cleanupError = error;
+      }
+      await firstContext.close();
     }
     if (cleanupError) throw cleanupError;
   });
