@@ -205,11 +205,11 @@ function calendarData() {
   return {
     kind: "calendar" as const,
     events: [
-      { id: "agenda-1", date: dateAfter(0), time: "09:30", title: "重点项目周调度会", type: "meeting" as const, status: "pending" as const },
-      { id: "agenda-2", date: dateAfter(0), time: "14:00", title: "学校数据质量复核", type: "review" as const, status: "pending" as const },
-      { id: "agenda-3", date: dateAfter(1), time: "10:00", title: "秋季招生数据会审", type: "review" as const, status: "pending" as const },
-      { id: "agenda-4", date: dateAfter(3), time: "15:30", title: "校园安全整改反馈", type: "task" as const, status: "pending" as const },
-      { id: "agenda-5", date: dateAfter(-2), time: "11:00", title: "教研项目立项沟通", type: "meeting" as const, status: "completed" as const },
+      { id: "agenda-1", date: dateAfter(0), time: "09:30", endTime: "11:00", title: "重点项目周调度会", type: "meeting" as const, status: "pending" as const, location: "教育局第一会议室", audience: "项目负责人、业务科室代表" },
+      { id: "agenda-2", date: dateAfter(0), time: "14:00", endTime: "16:00", title: "学校数据质量复核", type: "review" as const, status: "pending" as const, location: "数据中心", audience: "基教科、信息中心、辖区学校" },
+      { id: "agenda-3", date: dateAfter(1), time: "10:00", endTime: "11:30", title: "秋季招生数据会审", type: "review" as const, status: "pending" as const, location: "招生考试中心", audience: "招生工作组" },
+      { id: "agenda-4", date: dateAfter(3), time: "15:30", endTime: "17:00", title: "校园安全整改反馈", type: "task" as const, status: "pending" as const, location: "线上会议", audience: "安全科、相关学校负责人" },
+      { id: "agenda-5", date: dateAfter(-2), time: "11:00", endTime: "12:00", title: "教研项目立项沟通", type: "meeting" as const, status: "completed" as const, location: "教研室", audience: "项目组成员" },
     ],
   };
 }

@@ -72,7 +72,7 @@ test("教育局日程、待办和门户信息支持真实操作", async ({ page 
   const currentMonth = await calendar.locator(".calendar-period strong").textContent();
   await calendar.getByRole("button", { name: "下个月", exact: true }).click();
   await expect(calendar.locator(".calendar-period strong")).not.toHaveText(currentMonth ?? "");
-  await calendar.getByRole("button", { name: "今天", exact: true }).click();
+  await calendar.getByRole("button", { name: "今日", exact: true }).click();
 
   const tasks = page.locator('[data-widget-key="bureau.business.message-todo-center"]');
   await tasks.locator(".el-checkbox").first().click();

@@ -197,9 +197,12 @@ export interface WorkbenchCalendarEventData {
   id: string;
   date: string;
   time: string;
+  endTime?: string;
   title: string;
   type: WorkbenchCalendarEventType;
   status: WorkbenchCalendarEventStatus;
+  location?: string;
+  audience?: string;
 }
 
 export interface WorkbenchCalendarData {
