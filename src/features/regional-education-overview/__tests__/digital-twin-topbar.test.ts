@@ -18,6 +18,7 @@ describe("DigitalTwinTopbar user menu", () => {
         formattedTime: "18:50:00",
         themes: digitalTwinMapThemes,
         activeThemeId: "cyan",
+        activeSection: "regional-overview",
       },
     });
 
@@ -43,5 +44,42 @@ describe("DigitalTwinTopbar user menu", () => {
     expect(wrapper.emitted("exit")).toHaveLength(1);
 
     wrapper.unmount();
+  });
+
+  it("uses the shared dashboard sections and switches enabled pages", async () => {
+    const wrapper = mount(DigitalTwinTopbar, {
+      props: {
+        tenantName: "榕城区教育局",
+        userName: "罗吴航",
+        activeRoleId: "admin",
+        roles: [{ id: "admin", name: "管理员" }],
+        formattedDate: "2026-07-16",
+        formattedTime: "18:50:00",
+        themes: digitalTwinMapThemes,
+        activeThemeId: "cyan",
+        activeSection: "regional-overview",
+      },
+    });
+
+    const navigation = wrapper.get('[role="tablist"][aria-label="驾驶舱主导航"]');
+    const tabs = navigation.findAll<HTMLButtonElement>('[role="tab"]');
+    expect(tabs).toHaveLength(8);
+    expect(tabs.map((tab) => tab.attributes("aria-label"))).toEqual([
+      "区域教育总览",
+      "学业质量监测",
+      "教师发展分析",
+      "学生情况分析",
+      "办学条件及安全",
+      "教育投入与效能",
+      "数字教育实施",
+      "学前/职教/特教情况",
+    ]);
+    expect(tabs[0]?.attributes("aria-selected")).toBe("true");
+    expect(tabs[0]?.element.disabled).toBe(false);
+    expect(tabs[1]?.element.disabled).toBe(false);
+    expect(tabs.slice(2).every((tab) => tab.element.disabled)).toBe(true);
+
+    await tabs[1]?.trigger("click");
+    expect(wrapper.emitted("sectionSelect")?.[0]).toEqual(["academic-quality"]);
   });
 });

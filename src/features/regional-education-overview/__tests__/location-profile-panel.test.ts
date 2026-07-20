@@ -40,6 +40,13 @@ describe("LocationProfilePanel school locator", () => {
     expect(wrapper.get(".school-list-item.is-active").attributes("data-school-id"))
       .toBe(lastLocation.id);
     expect(wrapper.get(".profile-content h2").text()).toBe(lastLocation.name);
+    expect(wrapper.find(".entity-metric").exists()).toBe(false);
+    const visualizationEntry = wrapper.get(".school-visualization-entry");
+    expect(visualizationEntry.text()).toBe("查看");
+    expect(visualizationEntry.attributes("aria-label"))
+      .toBe(`查看${lastLocation.name}单校数据可视化`);
+    await visualizationEntry.trigger("click");
+    expect(wrapper.emitted("schoolVisualizationOpen")?.[0]?.[0]).toEqual(lastLocation);
     expect(wrapper.get(".entity-emblem img").attributes("src"))
       .toContain("data:image/svg+xml");
 

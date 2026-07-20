@@ -90,7 +90,8 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   await overviewPage.keyboard.press("Escape");
   await expect(overviewPage.getByRole("menu", { name: "用户与角色" })).toHaveCount(0);
   await expect(
-    overviewPage.getByRole("button", { name: "区域教育总览" }),
+    overviewPage.getByRole("tablist", { name: "数据驾驶舱导航" })
+      .getByRole("tab", { name: "区域教育总览" }),
   ).toBeVisible({ timeout: 20_000 });
   await expect(overviewPage.getByLabel("选择教育机构")).toHaveCount(0);
   await expect(overviewPage.getByLabel("选择镇街下钻")).toHaveCount(0);
@@ -141,6 +142,77 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
     .toHaveCount(2);
   await expect(overviewPage.getByRole("button", { name: "能量锥峰", exact: true }))
     .toHaveAttribute("aria-pressed", "true");
+  const primaryDashboardNavigation = overviewPage.getByRole("tablist", {
+    name: "驾驶舱主导航",
+  });
+  const bottomDashboardNavigation = overviewPage.getByRole("tablist", {
+    name: "数据驾驶舱导航",
+  });
+  await expect(primaryDashboardNavigation.getByRole("tab")).toHaveCount(8);
+  await expect(bottomDashboardNavigation.getByRole("tab")).toHaveCount(8);
+  const overviewDashboardTab = bottomDashboardNavigation.getByRole("tab", {
+    name: "区域教育总览",
+  });
+  const academicQualityTab = primaryDashboardNavigation.getByRole("tab", {
+    name: "学业质量监测",
+  });
+  await academicQualityTab.click();
+  await expect(academicQualityTab).toHaveAttribute("aria-selected", "true");
+  await expect(bottomDashboardNavigation.getByRole("tab", {
+    name: "学业质量监测",
+  })).toHaveAttribute("aria-selected", "true");
+  await expect(overviewPage.getByRole("tabpanel", { name: "学业质量监测" }))
+    .toBeVisible();
+  const academicFilters = overviewPage.getByRole("region", { name: "学业质量筛选条件" });
+  await expect(academicFilters).toContainText("2026-2027学年下学期");
+  await expect(academicFilters).toContainText("初三");
+  await expect(academicFilters).toContainText("全部考试");
+  await expect(academicFilters.getByRole("combobox")).toHaveCount(3);
+  await expect(overviewPage.getByRole("button", { name: "报告中心" })).toBeVisible();
+  await expect(overviewPage.getByRole("heading", { name: "学业趋势对比" })).toBeVisible();
+  await expect(overviewPage.getByRole("img", {
+    name: "学业趋势对比：历次考试平均分、优秀率和合格率",
+  })).toBeVisible();
+  const trendHelp = overviewPage.getByRole("button", { name: "查看学业趋势对比说明" });
+  await expect(trendHelp).toBeVisible();
+  await trendHelp.hover();
+  await expect(overviewPage.locator(".dashboard-panel-help-popper"))
+    .toContainText("可点击图例隐藏或恢复指标");
+  await expect(overviewPage.getByText("区域学业全景总览", { exact: true }))
+    .toBeVisible();
+  await expect(overviewPage.locator(".quality-panel")).toHaveCount(8);
+  await expect(overviewPage.getByRole("tablist", {
+    name: "区域学业全景查看范围",
+  })).toBeVisible();
+  const deepSeaChartVariables = await overviewPage.locator(".regional-digital-twin").evaluate(
+    (element) => {
+      const style = element.ownerDocument.defaultView!.getComputedStyle(element);
+      return [
+        style.getPropertyValue("--charts--1-100").replace(/\s/g, ""),
+        style.getPropertyValue("--charts--2-100").replace(/\s/g, ""),
+        style.getPropertyValue("--charts--3-100").replace(/\s/g, ""),
+      ];
+    },
+  );
+  expect(deepSeaChartVariables).toEqual([
+    "rgba(218,244,255,1)",
+    "rgba(95,227,255,1)",
+    "rgba(198,255,170,1)",
+  ]);
+  await expect.poll(() => page.locator("body").evaluate(
+    (element) => element.ownerDocument.defaultView!
+      .getComputedStyle(element)
+      .getPropertyValue("--charts--2-100"),
+  )).toBe("");
+  await expect(overviewPage.locator(".regional-map-canvas")).toHaveCount(0);
+  await overviewDashboardTab.click();
+  await expect(overviewDashboardTab).toHaveAttribute("aria-selected", "true");
+  await expect(primaryDashboardNavigation.getByRole("tab", {
+    name: "区域教育总览",
+  })).toHaveAttribute("aria-selected", "true");
+  await expect(overviewPage.locator(".regional-map-canvas")).toBeVisible();
+  await expect(overviewPage.locator(".dashboard-viewport"))
+    .toHaveAttribute("aria-busy", "false");
   const resetViewButton = overviewPage.getByRole("button", { name: "重置视角" });
   const materialButton = overviewPage.getByRole("button", { name: "地图材质" });
   const sharedControlStyle = async (button: typeof resetViewButton) => button.evaluate(
@@ -158,6 +230,12 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   await overviewPage.getByRole("button", { name: "切换至多维光谱" }).click();
   await expect(overviewPage.getByRole("button", { name: "切换至多维光谱" }))
     .toHaveClass(/is-active/);
+  await expect.poll(() => overviewPage.locator(".regional-digital-twin").evaluate(
+    (element) => element.ownerDocument.defaultView!
+      .getComputedStyle(element)
+      .getPropertyValue("--charts--2-100")
+      .replace(/\s/g, ""),
+  )).toBe("rgba(0,255,213,1)");
   await expect(overviewPage.locator(".map-location-name.is-bureau"))
     .toHaveCSS("color", "rgb(43, 103, 209)");
   await overviewPage.getByRole("button", { name: "地图材质" }).click();

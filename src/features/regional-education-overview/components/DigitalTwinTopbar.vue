@@ -6,6 +6,8 @@ import thermostatIcon from "@/assets/figma/regional-education-overview/thermosta
 import userOutlineIcon from "@/assets/figma/regional-education-overview/user-outline.svg";
 import weatherCloudIcon from "@/assets/figma/regional-education-overview/weather-cloud.svg";
 import type { DigitalTwinMapTheme } from "../map-themes";
+import type { RegionalDashboardSectionId } from "../dashboard-sections";
+import DashboardSectionTabs from "./dashboard/DashboardSectionTabs.vue";
 import MapThemeSwitcher from "./MapThemeSwitcher.vue";
 
 interface UserRoleOption {
@@ -22,6 +24,7 @@ const props = defineProps<{
   formattedTime: string;
   themes: readonly DigitalTwinMapTheme[];
   activeThemeId: DigitalTwinMapTheme["id"];
+  activeSection: RegionalDashboardSectionId;
 }>();
 
 const emit = defineEmits<{
@@ -30,6 +33,7 @@ const emit = defineEmits<{
   changePassword: [];
   signOut: [];
   exit: [];
+  sectionSelect: [sectionId: RegionalDashboardSectionId];
 }>();
 
 const userMenuRoot = ref<HTMLElement>();
@@ -39,15 +43,6 @@ const productName = computed(() => {
   const districtName = props.tenantName.replace(/教育局$/, "");
   return `${districtName}智慧教育生态服务平台`;
 });
-
-const primaryNavigation = [
-  "区域态势",
-  "学业质量",
-  "教师发展",
-  "学生画像",
-  "办学条件",
-  "教育效能",
-] as const;
 
 function toggleUserMenu() {
   userMenuOpen.value = !userMenuOpen.value;
@@ -95,18 +90,13 @@ onBeforeUnmount(() => {
       <strong>{{ productName }}</strong>
     </div>
 
-    <nav class="primary-navigation" aria-label="驾驶舱主导航">
-      <button
-        v-for="(item, index) in primaryNavigation"
-        :key="item"
-        type="button"
-        :class="{ 'is-active': index === 0 }"
-        :aria-current="index === 0 ? 'page' : undefined"
-        :disabled="index !== 0"
-      >
-        {{ item }}
-      </button>
-    </nav>
+    <DashboardSectionTabs
+      class="primary-navigation"
+      variant="primary"
+      label="驾驶舱主导航"
+      :active-section="activeSection"
+      @select="emit('sectionSelect', $event)"
+    />
 
     <div class="system-context">
       <MapThemeSwitcher
@@ -210,42 +200,6 @@ onBeforeUnmount(() => {
   font-weight: var(--dt-font-weight-regular);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.primary-navigation {
-  display: grid;
-  height: 100%;
-  grid-template-columns: repeat(6, 112px);
-  transform: translateX(-56px);
-}
-
-.primary-navigation button {
-  position: relative;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--dt-color-text-muted);
-  font-size: var(--dt-font-size-sm);
-  line-height: var(--dt-line-height-sm);
-  font-weight: var(--dt-font-weight-light);
-}
-
-.primary-navigation button:disabled {
-  cursor: default;
-}
-
-.primary-navigation button.is-active {
-  color: var(--dt-color-text);
-}
-
-.primary-navigation button.is-active::after {
-  position: absolute;
-  right: 44px;
-  bottom: -1px;
-  left: 44px;
-  height: 2px;
-  background: var(--dt-color-accent);
-  content: "";
 }
 
 .system-context {
@@ -385,8 +339,6 @@ button.environment-item {
 
 @media (max-width: 1540px) {
   .page-topbar { grid-template-columns: minmax(300px, 1fr) auto minmax(390px, 1fr); }
-  .primary-navigation { grid-template-columns: repeat(6, 88px); }
-  .primary-navigation button.is-active::after { right: 32px; left: 32px; }
   .system-context { gap: var(--dt-space-3); }
 }
 
@@ -395,8 +347,6 @@ button.environment-item {
 }
 
 @media (max-width: 1260px) {
-  .page-topbar { grid-template-columns: 310px 1fr auto; }
-  .primary-navigation { grid-template-columns: repeat(3, 96px); transform: none; }
-  .primary-navigation button:nth-child(n + 4) { display: none; }
+  .page-topbar { grid-template-columns: 310px minmax(0, 1fr) auto; }
 }
 </style>

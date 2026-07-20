@@ -82,33 +82,81 @@
   --dt-tuning-color-width: 30px;
   --dt-tuning-color-height: 22px;
   --dt-tuning-color-action-width: 62px;
-  --dt-ai-entry-width: 161px;
   --dt-ai-entry-height: 56px;
   --dt-ai-entry-bottom: 148px;
   --dt-ai-entry-blur: 10px;
 
-  /* Figma color primitives */
-  --dt-color-canvas: #20232d;
-  --dt-color-text-strong: #fff;
-  --dt-color-text: rgb(255 255 255 / 90%);
-  --dt-color-text-secondary: rgb(255 255 255 / 60%);
-  --dt-color-text-muted: rgb(255 255 255 / 40%);
-  --dt-color-line: rgb(255 255 255 / 20%);
-  --dt-color-line-soft: rgb(255 255 255 / 10%);
+  /* Visualization-scoped Figma color primitives */
+  --charts--1-100: rgb(218 244 255);
+  --charts--1-50: rgb(212 222 236 / 50%);
+  --charts--1-10: rgb(212 222 236 / 10%);
+  --charts--2-100: rgb(95 227 255);
+  --charts--2-50: rgb(95 227 255 / 50%);
+  --charts--2-10: rgb(95 227 255 / 10%);
+  --charts--3-100: rgb(198 255 170);
+  --charts--3-50: rgb(198 255 170 / 50%);
+  --charts--3-10: rgb(198 255 170 / 10%);
+  --background---ray-charts: rgb(28 30 35);
+  --background---e-charts: rgb(15 13 40);
+  --normal--white--100: rgb(255 255 255);
+  --normal--white--90: rgb(255 255 255 / 90%);
+  --normal--white--80: rgb(255 255 255 / 80%);
+  --normal--white--70: rgb(255 255 255 / 70%);
+  --normal--white--60: rgb(255 255 255 / 60%);
+  --normal--white--50: rgb(255 255 255 / 50%);
+  --normal--white--40: rgb(255 255 255 / 40%);
+  --normal--white--30: rgb(255 255 255 / 30%);
+  --normal--white--20: rgb(255 255 255 / 20%);
+  --normal--white--10: rgb(255 255 255 / 10%);
+  --normal--white--5: rgb(255 255 255 / 5%);
+  --normal--white--0: rgb(255 255 255 / 0%);
+  --normal--black--100: rgb(0 0 0);
+  --normal--black--80: rgb(0 0 0 / 80%);
+  --normal--black--60: rgb(0 0 0 / 60%);
+  --normal--black--40: rgb(0 0 0 / 40%);
+  --normal--black--20: rgb(0 0 0 / 20%);
+  --normal--black--10: rgb(0 0 0 / 10%);
+
+  /* Semantic visualization colors */
+  --dt-chart-series-primary: var(--charts--1-100);
+  --dt-chart-series-secondary: var(--charts--2-100);
+  --dt-chart-series-tertiary: var(--charts--3-100);
+  --dt-chart-area-primary: var(--charts--1-10);
+  --dt-chart-area-secondary: var(--charts--2-10);
+  --dt-chart-area-tertiary: var(--charts--3-10);
+  --dt-chart-axis-text: var(--normal--white--60);
+  --dt-chart-grid-line: var(--normal--white--10);
+  --dt-chart-tooltip-text: var(--normal--white--90);
+  --dt-chart-tooltip-background: var(--normal--black--80);
+  --dt-chart-surface: var(--background---e-charts);
+  --dt-panel-title: var(--normal--white--90);
+  --dt-panel-description: var(--normal--white--40);
+  --dt-panel-border: var(--normal--white--10);
+  --dt-panel-surface: color-mix(in srgb, var(--background---ray-charts) 84%, transparent);
+  --dt-panel-surface-primary: color-mix(in srgb, var(--background---e-charts) 88%, transparent);
+
+  /* Existing semantic aliases */
+  --dt-color-canvas: var(--background---ray-charts);
+  --dt-color-text-strong: var(--normal--white--100);
+  --dt-color-text: var(--normal--white--90);
+  --dt-color-text-secondary: var(--normal--white--60);
+  --dt-color-text-muted: var(--normal--white--40);
+  --dt-color-line: var(--normal--white--20);
+  --dt-color-line-soft: var(--normal--white--10);
   --dt-color-accent: var(--hud-primary, #2b67d1);
   --dt-color-accent-soft: color-mix(in srgb, var(--dt-color-accent) 18%, transparent);
   --dt-color-panel: color-mix(in srgb, var(--dt-color-canvas) 94%, transparent);
-  --dt-color-panel-soft: rgb(255 255 255 / 4%);
-  --dt-color-panel-raised: rgb(255 255 255 / 8%);
+  --dt-color-panel-soft: var(--normal--white--5);
+  --dt-color-panel-raised: var(--normal--white--10);
   --dt-color-danger: #d3313b;
-  --dt-detail-card-background: linear-gradient(173deg, rgb(255 255 255 / 10%) 0%, rgb(255 255 255 / 0%) 94.56%);
+  --dt-detail-card-background: linear-gradient(173deg, var(--normal--white--10) 0%, var(--normal--white--0) 94.56%);
   --dt-color-border-subtle: var(--dt-color-line-soft);
   --dt-color-border-muted: var(--dt-color-line);
   --dt-color-text-soft: var(--dt-color-text-secondary);
 
   /* Shared effects */
   --dt-shadow-active-nav: 0 0 18px color-mix(in srgb, var(--dt-color-accent) 40%, transparent);
-  --dt-panel-shadow: 0 18px 44px rgb(0 0 0 / 24%);
+  --dt-panel-shadow: 0 18px 44px color-mix(in srgb, var(--normal--black--100) 24%, transparent);
   --dt-focus-ring: 0 0 0 2px color-mix(in srgb, var(--dt-color-accent) 70%, transparent);
   --dt-transition-fast: 160ms ease;
   --dt-transition-theme: 240ms ease;

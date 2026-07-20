@@ -17,6 +17,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   locationSelect: [location: EducationLocation];
   schoolNavigate: [location: EducationLocation];
+  schoolVisualizationOpen: [location: EducationLocation];
 }>();
 
 const selectedTypeMeta = computed(() => props.location
@@ -28,8 +29,6 @@ const sourceLabel = computed(() => props.location?.source === "OpenStreetMap"
 const entityCode = computed(() => props.location?.sourceId
   ? `OSM-${props.location.sourceId.padStart(4, "0")}`
   : props.location?.id ?? "--");
-const entityKindLabel = computed(() => props.location?.type === "bureau" ? "管理机构" : "学校");
-const entityUnit = computed(() => props.location?.type === "bureau" ? "个" : "所");
 const notificationTarget = computed(() => props.location?.type === "bureau"
   ? `${props.scopeName}全部学校`
   : props.location?.name ?? props.scopeName);
@@ -278,7 +277,17 @@ onBeforeUnmount(() => {
     <aside class="right-panel" aria-label="当前教育机构详情">
       <template v-if="location && selectedTypeMeta">
         <div class="profile-content">
-          <h2>{{ location.name }}</h2>
+          <header class="profile-heading">
+            <h2>{{ location.name }}</h2>
+            <button
+              v-if="location.type !== 'bureau'"
+              type="button"
+              class="school-visualization-entry"
+              :aria-label="`查看${location.name}单校数据可视化`"
+              title="查看单校数据可视化"
+              @click="emit('schoolVisualizationOpen', location)"
+            >查看</button>
+          </header>
 
           <div class="profile-meta">
             <dl>
@@ -289,10 +298,6 @@ onBeforeUnmount(() => {
               <img :src="entityEmblemDecoration" alt="">
               <span>{{ selectedTypeMeta.shortLabel }}</span>
             </div>
-          </div>
-
-          <div class="entity-metric">
-            <strong><AnimatedNumber :value="1" /></strong><span>{{ entityUnit }}</span><p>已接入{{ entityKindLabel }}</p>
           </div>
 
           <div class="profile-tabs" role="tablist" aria-label="机构详情分类">
@@ -426,6 +431,42 @@ onBeforeUnmount(() => {
   font-weight: var(--dt-font-weight-bold);
 }
 
+.profile-heading {
+  display: flex;
+  min-width: 0;
+  min-height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dt-space-3);
+}
+
+.profile-heading h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.school-visualization-entry {
+  height: 26px;
+  flex: none;
+  border: var(--dt-border-width) solid var(--normal--white--40);
+  border-radius: var(--dt-control-height);
+  padding: 0 var(--dt-space-3);
+  background: var(--dt-color-accent-soft);
+  color: var(--dt-color-text);
+  font-size: var(--dt-font-size-xs);
+  line-height: 24px;
+  cursor: pointer;
+  transition: color var(--dt-transition-fast), border-color var(--dt-transition-fast), background var(--dt-transition-fast);
+}
+
+.school-visualization-entry:hover,
+.school-visualization-entry:focus-visible {
+  border-color: var(--dt-chart-series-secondary);
+  background: var(--charts--2-10);
+  color: var(--dt-color-text-strong);
+}
+
 .profile-content {
   display: flex;
   min-height: 0;
@@ -510,33 +551,6 @@ onBeforeUnmount(() => {
   font-size: var(--dt-font-size-lg);
   line-height: var(--dt-line-height-lg);
   font-weight: var(--dt-font-weight-bold);
-}
-
-.entity-metric {
-  display: flex;
-  margin-top: 13px;
-  align-items: baseline;
-}
-
-.entity-metric strong {
-  color: var(--dt-color-text-strong);
-  font-size: var(--dt-font-size-metric);
-  line-height: var(--dt-line-height-metric);
-  font-weight: var(--dt-font-weight-medium);
-  font-variant-numeric: tabular-nums;
-}
-
-.entity-metric > span {
-  margin-left: var(--dt-space-1);
-  color: var(--dt-color-text-strong);
-  font-size: var(--dt-font-size-sm);
-}
-
-.entity-metric p {
-  margin: 0 0 0 var(--dt-space-8);
-  color: var(--dt-color-text-strong);
-  font-size: var(--dt-font-size-sm);
-  line-height: var(--dt-line-height-sm);
 }
 
 .profile-tabs {
@@ -849,7 +863,6 @@ onBeforeUnmount(() => {
 
 @media (max-height: 900px) {
   .profile-meta { margin-top: var(--dt-space-4); }
-  .entity-metric { margin-top: var(--dt-space-2); }
   .profile-tabs { margin-top: var(--dt-space-2); }
   .detail-card { margin-top: var(--dt-space-3); padding: var(--dt-space-4); }
   .secondary-grid { margin-top: var(--dt-space-4); padding-top: var(--dt-space-4); }

@@ -1,5 +1,19 @@
 export type DigitalTwinMapThemeId = "lime" | "cyan" | "amber" | "royal" | "spectrum";
 
+export interface DigitalTwinChartSeriesColor {
+  strong: string;
+  medium: string;
+  subtle: string;
+}
+
+export interface DigitalTwinChartPalette {
+  series1: DigitalTwinChartSeriesColor;
+  series2: DigitalTwinChartSeriesColor;
+  series3: DigitalTwinChartSeriesColor;
+  rayBackground: string;
+  echartsBackground: string;
+}
+
 export interface DigitalTwinMapTheme {
   id: DigitalTwinMapThemeId;
   name: string;
@@ -28,6 +42,7 @@ export interface DigitalTwinMapTheme {
   pageText: string;
   pageMuted: string;
   pageLine: string;
+  chartPalette: DigitalTwinChartPalette;
   swatches?: readonly [string, string, string, string];
   energyTowerPalette?: {
     base: string;
@@ -74,6 +89,25 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     pageText: "#E8EEE4",
     pageMuted: "rgba(205,218,199,0.56)",
     pageLine: "rgba(4,232,108,0.24)",
+    chartPalette: {
+      series1: {
+        strong: "rgba(233,241,210,1)",
+        medium: "rgba(205,218,199,0.5)",
+        subtle: "rgba(205,218,199,0.1)",
+      },
+      series2: {
+        strong: "rgba(4,232,108,1)",
+        medium: "rgba(4,232,108,0.5)",
+        subtle: "rgba(4,232,108,0.1)",
+      },
+      series3: {
+        strong: "rgba(225,255,0,1)",
+        medium: "rgba(225,255,0,0.5)",
+        subtle: "rgba(225,255,0,0.1)",
+      },
+      rayBackground: "rgba(17,23,15,1)",
+      echartsBackground: "rgba(11,16,13,1)",
+    },
   },
   {
     id: "cyan",
@@ -100,6 +134,25 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     pageText: "#E8EDF5",
     pageMuted: "rgba(200,210,225,0.56)",
     pageLine: "rgba(47,254,254,0.24)",
+    chartPalette: {
+      series1: {
+        strong: "rgba(218,244,255,1)",
+        medium: "rgba(212,222,236,0.5)",
+        subtle: "rgba(212,222,236,0.1)",
+      },
+      series2: {
+        strong: "rgba(95,227,255,1)",
+        medium: "rgba(95,227,255,0.5)",
+        subtle: "rgba(95,227,255,0.1)",
+      },
+      series3: {
+        strong: "rgba(198,255,170,1)",
+        medium: "rgba(198,255,170,0.5)",
+        subtle: "rgba(198,255,170,0.1)",
+      },
+      rayBackground: "rgba(28,30,35,1)",
+      echartsBackground: "rgba(15,13,40,1)",
+    },
   },
   {
     id: "amber",
@@ -126,6 +179,25 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     pageText: "#F0EBE4",
     pageMuted: "rgba(221,207,187,0.56)",
     pageLine: "rgba(255,208,59,0.24)",
+    chartPalette: {
+      series1: {
+        strong: "rgba(243,233,218,1)",
+        medium: "rgba(221,207,187,0.5)",
+        subtle: "rgba(221,207,187,0.1)",
+      },
+      series2: {
+        strong: "rgba(255,208,59,1)",
+        medium: "rgba(255,208,59,0.5)",
+        subtle: "rgba(255,208,59,0.1)",
+      },
+      series3: {
+        strong: "rgba(250,158,0,1)",
+        medium: "rgba(250,158,0,0.5)",
+        subtle: "rgba(250,158,0,0.1)",
+      },
+      rayBackground: "rgba(25,20,14,1)",
+      echartsBackground: "rgba(17,14,10,1)",
+    },
   },
   {
     id: "royal",
@@ -152,6 +224,25 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     pageText: "#E8EFFF",
     pageMuted: "rgba(199,213,239,0.58)",
     pageLine: "rgba(43,103,209,0.3)",
+    chartPalette: {
+      series1: {
+        strong: "rgba(231,239,255,1)",
+        medium: "rgba(199,213,239,0.5)",
+        subtle: "rgba(199,213,239,0.1)",
+      },
+      series2: {
+        strong: "rgba(43,103,209,1)",
+        medium: "rgba(43,103,209,0.5)",
+        subtle: "rgba(43,103,209,0.1)",
+      },
+      series3: {
+        strong: "rgba(117,184,255,1)",
+        medium: "rgba(117,184,255,0.5)",
+        subtle: "rgba(117,184,255,0.1)",
+      },
+      rayBackground: "rgba(11,19,36,1)",
+      echartsBackground: "rgba(8,15,29,1)",
+    },
   },
   {
     id: "spectrum",
@@ -178,6 +269,25 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
     pageText: "#E8EFFF",
     pageMuted: "rgba(199,213,239,0.58)",
     pageLine: "rgba(43,103,209,0.3)",
+    chartPalette: {
+      series1: {
+        strong: "rgba(231,239,255,1)",
+        medium: "rgba(199,213,239,0.5)",
+        subtle: "rgba(199,213,239,0.1)",
+      },
+      series2: {
+        strong: "rgba(0,255,213,1)",
+        medium: "rgba(0,255,213,0.5)",
+        subtle: "rgba(0,255,213,0.1)",
+      },
+      series3: {
+        strong: "rgba(255,200,0,1)",
+        medium: "rgba(255,200,0,0.5)",
+        subtle: "rgba(255,200,0,0.1)",
+      },
+      rayBackground: "rgba(10,11,15,1)",
+      echartsBackground: "rgba(8,15,29,1)",
+    },
     swatches: ["#0D2AC2", "#00FFD5", "#FFC800", "#FFA97A"],
     energyTowerPalette: {
       base: "#0D2AC2",
@@ -199,6 +309,12 @@ export function getDigitalTwinMapTheme(themeId: DigitalTwinMapTheme["id"]) {
 export function cloneDigitalTwinMapTheme(theme: DigitalTwinMapTheme): DigitalTwinMapTheme {
   return {
     ...theme,
+    chartPalette: {
+      ...theme.chartPalette,
+      series1: { ...theme.chartPalette.series1 },
+      series2: { ...theme.chartPalette.series2 },
+      series3: { ...theme.chartPalette.series3 },
+    },
     swatches: theme.swatches ? [...theme.swatches] as [string, string, string, string] : undefined,
     energyTowerPalette: theme.energyTowerPalette
       ? { ...theme.energyTowerPalette }

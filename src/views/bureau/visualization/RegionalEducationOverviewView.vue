@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { gsap } from "gsap";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import DigitalTwinStatusBar from "@/features/regional-education-overview/components/DigitalTwinStatusBar.vue";
 import DigitalTwinTopbar from "@/features/regional-education-overview/components/DigitalTwinTopbar.vue";
@@ -9,6 +9,7 @@ import LocationProfilePanel from "@/features/regional-education-overview/compone
 import RegionalMapStage from "@/features/regional-education-overview/components/RegionalMapStage.vue";
 import RegionalOverviewPanel from "@/features/regional-education-overview/components/RegionalOverviewPanel.vue";
 import { AutoFocusTour } from "@/features/regional-education-overview/auto-focus-tour";
+import { createDigitalTwinThemeCssVariables } from "@/features/regional-education-overview/digital-twin-theme-css";
 import { rongchengEducationLocations } from "@/features/regional-education-overview/education-locations";
 import {
   initialMapState,
@@ -31,6 +32,12 @@ import type {
 } from "@/features/regional-education-overview/types";
 import { digitalTwinMotion } from "@/features/regional-education-overview/motion";
 import {
+  isRegionalDashboardSectionEnabled,
+} from "@/features/regional-education-overview/dashboard-sections";
+import type {
+  RegionalDashboardSectionId,
+} from "@/features/regional-education-overview/dashboard-sections";
+import {
   cloneMapVisualTuning,
   defaultMapVisualTuning,
 } from "@/features/regional-education-overview/rendering/map-visual-tuning";
@@ -41,13 +48,20 @@ import ChangePasswordDialog from "@/components/ChangePasswordDialog.vue";
 import { ElMessage } from "element-plus";
 import "@/styles/digital-twin-design-system.css";
 
+const AcademicQualityDashboard = defineAsyncComponent(() => (
+  import("@/features/regional-education-overview/components/AcademicQualityDashboard.vue")
+));
+
 const router = useRouter();
 const navigationStore = useNavigationStore();
 const authStore = useAuthStore();
 const userStore = useUserStore();
 const passwordDialogVisible = ref(false);
 const pageRoot = ref<HTMLElement>();
+const dashboardViewport = ref<HTMLElement>();
 const mapStage = ref<InstanceType<typeof RegionalMapStage>>();
+const activeDashboardSection = ref<RegionalDashboardSectionId>("regional-overview");
+const dashboardTransitioning = ref(false);
 const selectedLocation = ref<EducationLocation | undefined>(rongchengEducationLocations[0]);
 const activeLocations = ref<EducationLocation[]>([...rongchengEducationLocations]);
 const activeMapState = ref<MapState>(initialMapState);
@@ -79,14 +93,7 @@ const activeTheme = computed(() => themeDrafts.value[activeThemeId.value]
   ?? getDigitalTwinMapTheme(activeThemeId.value));
 const availableThemes = computed(() => digitalTwinMapThemes.map((theme) =>
   themeDrafts.value[theme.id] ?? theme));
-const pageThemeStyle = computed(() => ({
-  "--hud-primary": activeTheme.value.primary,
-  "--hud-accent-strong": activeTheme.value.outline,
-  "--hud-line": activeTheme.value.pageLine,
-  "--hud-text": activeTheme.value.pageText,
-  "--hud-muted": activeTheme.value.pageMuted,
-  "--page-background": activeTheme.value.pageBackground,
-}));
+const pageThemeStyle = computed(() => createDigitalTwinThemeCssVariables(activeTheme.value));
 const formattedDate = computed(() => dateFormatter.format(now.value).replace(/\//g, "-"));
 const formattedTime = computed(() => timeFormatter.format(now.value));
 const coverageLabel = computed(() => {
@@ -102,6 +109,7 @@ let clockTimer: number | undefined;
 let schoolSelectionTimer: number | undefined;
 let pageMounted = false;
 let entranceMedia: ReturnType<typeof gsap.matchMedia> | undefined;
+let dashboardTransition: gsap.core.Timeline | undefined;
 
 function selectLocation(location: EducationLocation) {
   selectedLocation.value = location;
@@ -114,7 +122,11 @@ function stopSchoolSelectionCycle() {
 }
 
 function cycleSelectedSchool() {
-  if (document.hidden || dataLayerMode.value !== "institutions") return;
+  if (
+    document.hidden
+    || activeDashboardSection.value !== "regional-overview"
+    || dataLayerMode.value !== "institutions"
+  ) return;
   const schools = activeLocations.value.filter((location) => location.type !== "bureau");
   if (schools.length < 2) return;
   const currentIndex = schools.findIndex(
@@ -125,7 +137,11 @@ function cycleSelectedSchool() {
 
 function restartSchoolSelectionCycle() {
   stopSchoolSelectionCycle();
-  if (!pageMounted || dataLayerMode.value !== "institutions") return;
+  if (
+    !pageMounted
+    || activeDashboardSection.value !== "regional-overview"
+    || dataLayerMode.value !== "institutions"
+  ) return;
   const duration = Math.max(1, mapVisualTuning.value.institutionSelectionCycleSeconds);
   schoolSelectionTimer = window.setInterval(cycleSelectedSchool, duration * 1000);
 }
@@ -143,7 +159,9 @@ function autoFocusTownshipCodes() {
 }
 
 const autoFocusTour = new AutoFocusTour({
-  isVisible: () => !document.hidden,
+  isVisible: () => (
+    !document.hidden && activeDashboardSection.value === "regional-overview"
+  ),
   isTownshipScope: () => activeMapState.value.scope === "township",
   currentTownshipCode: () => activeMapState.value.scope === "township"
     ? activeMapState.value.code
@@ -165,6 +183,87 @@ function handleUserActivity() {
 
 function handlePageVisibilityChange() {
   autoFocusTour.handleVisibilityChange();
+}
+
+function currentDashboardSectionElement() {
+  return dashboardViewport.value?.querySelector<HTMLElement>(".dashboard-section");
+}
+
+function finishDashboardTransition() {
+  dashboardTransition = undefined;
+  dashboardTransitioning.value = false;
+}
+
+async function mountDashboardSection(sectionId: RegionalDashboardSectionId) {
+  if (!pageMounted) return finishDashboardTransition();
+  activeDashboardSection.value = sectionId;
+  await nextTick();
+  const incoming = currentDashboardSectionElement();
+  if (!incoming || !pageMounted) return finishDashboardTransition();
+  const panelTargets = incoming.querySelectorAll<HTMLElement>("[data-dashboard-panel]");
+  dashboardTransition = gsap.timeline({
+    defaults: { overwrite: "auto" },
+    onComplete: finishDashboardTransition,
+    onInterrupt: finishDashboardTransition,
+  });
+  dashboardTransition
+    .set(incoming, { willChange: "transform,opacity" })
+    .fromTo(
+      incoming,
+      { autoAlpha: 0, y: 14 },
+      {
+        autoAlpha: 1,
+        y: 0,
+        duration: 0.34,
+        ease: "power2.out",
+        clearProps: "transform,opacity,visibility,willChange",
+      },
+    );
+  if (panelTargets.length > 0) {
+    dashboardTransition.fromTo(
+      panelTargets,
+      { autoAlpha: 0, y: 8 },
+      {
+        autoAlpha: 1,
+        y: 0,
+        duration: 0.26,
+        stagger: 0.035,
+        ease: "power2.out",
+        clearProps: "transform,opacity,visibility",
+      },
+      "<0.05",
+    );
+  }
+}
+
+function selectDashboardSection(sectionId: RegionalDashboardSectionId) {
+  if (
+    sectionId === activeDashboardSection.value
+    || !isRegionalDashboardSectionEnabled(sectionId)
+  ) return;
+  const outgoing = currentDashboardSectionElement();
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  dashboardTransition?.kill();
+  dashboardTransition = undefined;
+  dashboardTransitioning.value = true;
+  if (!outgoing || reduceMotion) {
+    activeDashboardSection.value = sectionId;
+    void nextTick(finishDashboardTransition);
+    return;
+  }
+  dashboardTransition = gsap.timeline({
+    defaults: { overwrite: "auto" },
+    onComplete: () => void mountDashboardSection(sectionId),
+    onInterrupt: finishDashboardTransition,
+  });
+  dashboardTransition
+    .set(outgoing, { willChange: "transform,opacity" })
+    .to(outgoing, {
+      autoAlpha: 0,
+      y: -10,
+      duration: 0.2,
+      ease: "power2.in",
+    });
 }
 
 function updateActiveTheme(theme: DigitalTwinMapTheme) {
@@ -227,11 +326,16 @@ watch(
   [
     activeLocations,
     dataLayerMode,
+    activeDashboardSection,
     () => mapVisualTuning.value.institutionSelectionCycleSeconds,
   ],
   restartSchoolSelectionCycle,
   { flush: "post" },
 );
+
+watch(activeDashboardSection, () => {
+  autoFocusTour.handleVisibilityChange();
+});
 
 onMounted(() => {
   pageMounted = true;
@@ -296,76 +400,101 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleUserActivity, true);
   document.removeEventListener("visibilitychange", handlePageVisibilityChange);
   if (clockTimer !== undefined) window.clearInterval(clockTimer);
+  dashboardTransition?.kill();
+  dashboardTransition = undefined;
   entranceMedia?.revert();
 });
 </script>
 
 <template>
   <main ref="pageRoot" class="regional-digital-twin" :style="pageThemeStyle">
-    <RegionalMapStage
-      ref="mapStage"
-      class="map-layer"
-      :locations="rongchengEducationLocations"
-      :selected-location-id="selectedLocation?.id"
-      :theme="activeTheme"
-      :data-layer-mode="dataLayerMode"
-      :visual-tuning="mapVisualTuning"
-      @select="selectLocation"
-      @scope-change="handleScopeChange"
-      @update:data-layer-mode="dataLayerMode = $event"
-      @update:visual-tuning="mapVisualTuning = $event"
-      @update:theme="updateActiveTheme"
-    />
-
-    <div class="hud-layer">
-      <DigitalTwinTopbar
-        :tenant-name="userStore.currentTenant.name"
-        :user-name="userStore.userInfo.name"
-        :active-role-id="navigationStore.activeRoleRecord?.id"
-        :roles="navigationStore.availableRoleRecords"
-        :formatted-date="formattedDate"
-        :formatted-time="formattedTime"
-        :themes="availableThemes"
-        :active-theme-id="activeThemeId"
-        @theme-select="activeThemeId = $event"
-        @role-select="switchActiveRole"
-        @change-password="passwordDialogVisible = true"
-        @sign-out="signOut"
-        @exit="exitStandalonePage"
-      />
-
-      <ChangePasswordDialog v-model="passwordDialogVisible" />
-
-      <div class="hud-content">
-        <RegionalOverviewPanel
-          :locations="activeLocations"
-          :selected-type="selectedLocation?.type"
-          :scope-name="activeMapState.regionName"
-          :is-township="activeMapState.scope === 'township'"
-          :coverage-label="coverageLabel"
-          @scope-back="returnToParentScope"
-          @type-select="selectFirstLocationOfTypes"
+    <div
+      ref="dashboardViewport"
+      class="dashboard-viewport"
+      :aria-busy="dashboardTransitioning"
+    >
+      <section
+        v-if="activeDashboardSection === 'regional-overview'"
+        id="dashboard-panel-regional-overview"
+        class="dashboard-section dashboard-section--overview"
+        role="tabpanel"
+        aria-label="区域教育总览"
+      >
+        <RegionalMapStage
+          ref="mapStage"
+          class="map-layer"
+          :locations="rongchengEducationLocations"
+          :selected-location-id="selectedLocation?.id"
+          :theme="activeTheme"
+          :data-layer-mode="dataLayerMode"
+          :visual-tuning="mapVisualTuning"
+          @select="selectLocation"
+          @scope-change="handleScopeChange"
+          @update:data-layer-mode="dataLayerMode = $event"
+          @update:visual-tuning="mapVisualTuning = $event"
+          @update:theme="updateActiveTheme"
         />
 
-        <LocationProfilePanel
-          :location="selectedLocation"
-          :scope-name="activeMapState.regionName"
-          :formatted-date="formattedDate"
-          :locations="activeLocations"
-          @location-select="selectLocation"
-          @school-navigate="navigateToSchool"
-        />
-      </div>
+        <div class="hud-layer">
+          <div class="hud-content">
+            <RegionalOverviewPanel
+              :locations="activeLocations"
+              :selected-type="selectedLocation?.type"
+              :scope-name="activeMapState.regionName"
+              :is-township="activeMapState.scope === 'township'"
+              :coverage-label="coverageLabel"
+              @scope-back="returnToParentScope"
+              @type-select="selectFirstLocationOfTypes"
+            />
 
-      <AiDataAssistantEntry />
+            <LocationProfilePanel
+              :location="selectedLocation"
+              :scope-name="activeMapState.regionName"
+              :formatted-date="formattedDate"
+              :locations="activeLocations"
+              @location-select="selectLocation"
+              @school-navigate="navigateToSchool"
+            />
+          </div>
+        </div>
+      </section>
 
-      <DigitalTwinStatusBar
-        :code="activeMapState.code"
-        :scope-name="activeMapState.regionName"
-        :entity-count="activeLocations.length"
-        :coverage-label="coverageLabel"
+      <AcademicQualityDashboard
+        v-else
+        :chart-palette="activeTheme.chartPalette"
       />
     </div>
+
+    <DigitalTwinTopbar
+      :tenant-name="userStore.currentTenant.name"
+      :user-name="userStore.userInfo.name"
+      :active-role-id="navigationStore.activeRoleRecord?.id"
+      :roles="navigationStore.availableRoleRecords"
+      :formatted-date="formattedDate"
+      :formatted-time="formattedTime"
+      :themes="availableThemes"
+      :active-theme-id="activeThemeId"
+      :active-section="activeDashboardSection"
+      @theme-select="activeThemeId = $event"
+      @section-select="selectDashboardSection"
+      @role-select="switchActiveRole"
+      @change-password="passwordDialogVisible = true"
+      @sign-out="signOut"
+      @exit="exitStandalonePage"
+    />
+
+    <ChangePasswordDialog v-model="passwordDialogVisible" />
+
+    <AiDataAssistantEntry />
+
+    <DigitalTwinStatusBar
+      :code="activeMapState.code"
+      :scope-name="activeMapState.regionName"
+      :entity-count="activeLocations.length"
+      :coverage-label="coverageLabel"
+      :active-section="activeDashboardSection"
+      @select="selectDashboardSection"
+    />
   </main>
 </template>
 
@@ -388,6 +517,22 @@ onBeforeUnmount(() => {
   z-index: var(--dt-z-map);
 }
 
+.dashboard-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.dashboard-section {
+  position: absolute;
+  overflow: hidden;
+}
+
+.dashboard-section--overview {
+  inset: 0;
+  z-index: var(--dt-z-map);
+}
+
 .hud-layer {
   position: absolute;
   inset: 0;
@@ -400,9 +545,7 @@ onBeforeUnmount(() => {
   inset: var(--dt-topbar-height) 0 0;
 }
 
-.hud-content > *,
-.hud-layer > :first-child,
-.hud-layer > :last-child {
+.hud-content > * {
   pointer-events: auto;
 }
 </style>
