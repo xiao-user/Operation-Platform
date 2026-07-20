@@ -81,7 +81,8 @@
         :key="gridRenderKey"
         :items="classicVisibleItems"
         :editable="isEditing && canEdit"
-        @positions-change="handlePositionsChange"
+        @move="handleClassicMove"
+        @width-change="handleClassicWidthChange"
         @widget-action="handleWidgetAction"
         @open-settings="openSettings"
       />
@@ -185,7 +186,7 @@ const editorDescription = computed(() => layoutMode.value === "simple"
   ? simpleLayoutType.value === "flow"
     ? "每行展示一个或两个组件；双列时自动等高填满，拖动标题调整先后顺序。"
     : "主列和辅列各自从上到下排列，组件可在两列之间拖动，彼此高度互不影响。"
-  : "拖动标题调整位置，拖动右下角调整大小。",
+  : "拖动标题调整位置，左右拖动组件边缘调整宽度；高度由内容自动生成，跨行通过组件菜单设置。",
 );
 const simpleLayoutType = computed(() =>
   workbenchStore.activeLayout?.simpleLayoutType ?? "flow",
@@ -194,7 +195,7 @@ const simpleColumnRatio = computed(() =>
   workbenchStore.activeLayout?.simpleColumnRatio ?? "4:2",
 );
 const versionDescription = computed(() => {
-  if (layoutMode.value === "classic") return "自由网格布局";
+  if (layoutMode.value === "classic") return "内容自适应网格";
   return simpleLayoutType.value === "flow"
     ? "完整流式 · 单/双列等高"
     : `双列瀑布 · ${simpleColumnRatio.value}`;
@@ -312,7 +313,7 @@ async function restoreDefault() {
     await ElMessageBox.confirm(
       layoutMode.value === "simple"
         ? "将恢复新版工作台的默认布局方式、组件显隐、顺序、分列及宽度，保存后生效。"
-        : "将恢复经典工作台的默认组件显隐、位置、尺寸及设置，保存后生效。",
+        : "将恢复经典工作台的默认组件显隐、位置、宽度、跨行及设置，保存后生效。",
       "恢复默认工作台",
       {
         type: "warning",
@@ -328,10 +329,12 @@ async function restoreDefault() {
   ElMessage.success("已恢复默认草稿，请保存后生效");
 }
 
-function handlePositionsChange(
-  changes: Array<Pick<WorkbenchLayoutItem, "widgetKey" | "x" | "y" | "w" | "h">>,
-) {
-  workbenchStore.updatePositions(changes);
+function handleClassicMove(widgetKey: string, x: number, y: number) {
+  workbenchStore.placeClassicWidget(widgetKey, x, y);
+}
+
+function handleClassicWidthChange(widgetKey: string, width: number) {
+  workbenchStore.resizeClassicWidgetWidth(widgetKey, width);
 }
 
 function handleVisibilityChange(widgetKey: string, visible: boolean) {
@@ -373,6 +376,12 @@ function handleWidgetAction(widgetKey: string, action: WorkbenchWidgetAction) {
     case "span-3":
     case "span-6":
       workbenchStore.resizeSimpleWidget(widgetKey, Number(action.slice(5)) as FlowWorkbenchSpan);
+      return;
+    case "row-span-1":
+    case "row-span-2":
+    case "row-span-3":
+    case "row-span-4":
+      workbenchStore.setClassicRowSpan(widgetKey, Number(action.slice(-1)));
       return;
     case "move-left":
     case "move-right":

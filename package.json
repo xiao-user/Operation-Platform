@@ -35,7 +35,6 @@
     "@supabase/supabase-js": "^2.110.7",
     "echarts": "^6.1.0",
     "element-plus": "^2.13.5",
-    "gridstack": "^12.6.0",
     "gsap": "^3.15.0",
     "katex": "^0.18.0",
     "markdown-it": "^14.3.0",

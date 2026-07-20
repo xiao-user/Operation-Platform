@@ -81,33 +81,37 @@ describe("workbench layout repository", () => {
     expect(validateWorkbenchLayout(result.layout, activeContext, template)).toBe(true);
   });
 
-  it("migrates a version 1 grid layout without changing its classic positions", () => {
+  it("migrates a version 1 grid layout into content-sized logical rows", () => {
     const repository = new LocalStorageWorkbenchLayoutRepository(localStorage);
     const activeContext = context();
     const current = createDefaultWorkbenchLayout(activeContext, template);
-    current.items[0]!.visible = false;
+    const legacyItems = template.widgets.map((item, index) => ({
+      ...item,
+      visible: index === 0 ? false : item.visible,
+    }));
     const legacy = {
       version: 1,
       templateRevision: current.templateRevision,
       tenantId: current.tenantId,
       userId: current.userId,
       profile: current.profile,
-      items: current.items,
+      items: legacyItems,
     };
     localStorage.setItem(workbenchLayoutStorageKey(activeContext), JSON.stringify(legacy));
 
     const result = repository.list(activeContext, template);
 
     expect(result.hasOverride).toBe(true);
-    expect(result.layout.version).toBe(4);
+    expect(result.layout.version).toBe(5);
     expect(result.layout.mode).toBe("classic");
     expect(result.layout.simpleLayoutType).toBe("flow");
     expect(result.layout.simpleColumnRatio).toBe("4:2");
     expect(result.layout.items[0]).toMatchObject({
-      widgetKey: current.items[0]!.widgetKey,
+      widgetKey: legacyItems[0]!.widgetKey,
       visible: false,
-      x: current.items[0]!.x,
-      y: current.items[0]!.y,
+      x: legacyItems[0]!.x,
+      y: 0,
+      h: 1,
     });
     expect(result.layout.simpleItems).toHaveLength(template.widgets.length);
     expect(validateWorkbenchLayout(result.layout, activeContext, template)).toBe(true);
@@ -124,7 +128,7 @@ describe("workbench layout repository", () => {
       userId: current.userId,
       profile: current.profile,
       mode: "simple",
-      items: current.items,
+      items: template.widgets,
       simpleItems: current.simpleItems.map(({ column: _column, ...item }, index) => ({
         ...item,
         span: index === 0 ? 2 : item.span,
@@ -134,7 +138,7 @@ describe("workbench layout repository", () => {
 
     const result = repository.list(activeContext, template);
 
-    expect(result.layout.version).toBe(4);
+    expect(result.layout.version).toBe(5);
     expect(result.layout.mode).toBe("simple");
     expect(result.layout.simpleLayoutType).toBe("flow");
     expect(result.layout.simpleItems[0]!.span).toBe(3);
@@ -151,6 +155,7 @@ describe("workbench layout repository", () => {
     const versionThree = {
       ...current,
       version: 3,
+      items: template.widgets,
       mode: "simple",
       simpleLayoutType: "columns",
       simpleColumnRatio: "6:2",
@@ -160,11 +165,36 @@ describe("workbench layout repository", () => {
 
     const result = repository.list(activeContext, template);
 
-    expect(result.layout.version).toBe(4);
+    expect(result.layout.version).toBe(5);
     expect(result.layout.mode).toBe("simple");
     expect(result.layout.simpleLayoutType).toBe("columns");
     expect(result.layout.simpleColumnRatio).toBe("6:2");
     expect(result.layout.simpleItems.every((item) => Number.isInteger(item.columnOrder))).toBe(true);
+    expect(validateWorkbenchLayout(result.layout, activeContext, template)).toBe(true);
+  });
+
+  it("migrates version 4 classic pixel-grid units into logical rows", () => {
+    const repository = new LocalStorageWorkbenchLayoutRepository(localStorage);
+    const activeContext = context();
+    const current = createDefaultWorkbenchLayout(activeContext, template);
+    const versionFour = {
+      ...current,
+      version: 4,
+      mode: "classic",
+      items: template.widgets.map((item, index) => ({
+        ...item,
+        visible: index !== 0,
+      })),
+    };
+    localStorage.setItem(workbenchLayoutStorageKey(activeContext), JSON.stringify(versionFour));
+
+    const result = repository.list(activeContext, template);
+
+    expect(result.layout.version).toBe(5);
+    expect(result.layout.mode).toBe("classic");
+    expect(result.layout.items[0]).toMatchObject({ visible: false, y: 0, h: 1 });
+    expect(result.layout.items.find((item) => item.widgetKey.endsWith(".attendance-trend")))
+      .toMatchObject({ y: 1, h: 1 });
     expect(validateWorkbenchLayout(result.layout, activeContext, template)).toBe(true);
   });
 

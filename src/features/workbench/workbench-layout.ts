@@ -1,5 +1,6 @@
 import { ADMIN_ROLE_ID } from "@/features/access-control/types";
 import {
+  CLASSIC_WORKBENCH_MAX_ROW_SPAN,
   WORKBENCH_GRID_COLUMNS,
   WORKBENCH_LAYOUT_VERSION,
   FLOW_WORKBENCH_SPANS,
@@ -57,6 +58,18 @@ export function simpleSpanFromClassicWidth(width: number): FlowWorkbenchSpan {
   return 6;
 }
 
+export function createClassicItems(
+  items: readonly WorkbenchLayoutItem[],
+): WorkbenchLayoutItem[] {
+  const logicalRows = [...new Set(items.map((item) => item.y))].sort((a, b) => a - b);
+  const rowByLegacyY = new Map(logicalRows.map((legacyY, row) => [legacyY, row]));
+  return items.map((item) => ({
+    ...cloneWorkbenchItem(item),
+    y: rowByLegacyY.get(item.y) ?? 0,
+    h: 1,
+  }));
+}
+
 function simpleColumnFromClassicItem(item: WorkbenchLayoutItem) {
   return item.x >= 8 ? "secondary" as const : "primary" as const;
 }
@@ -79,6 +92,7 @@ export function createDefaultWorkbenchLayout(
   context: WorkbenchLayoutContext,
   template: WorkbenchTemplate,
 ): UserWorkbenchLayout {
+  const classicItems = createClassicItems(template.widgets);
   return {
     version: WORKBENCH_LAYOUT_VERSION,
     templateRevision: template.revision,
@@ -88,8 +102,8 @@ export function createDefaultWorkbenchLayout(
     mode: "classic",
     simpleLayoutType: "flow",
     simpleColumnRatio: "4:2",
-    items: template.widgets.map(cloneWorkbenchItem),
-    simpleItems: createSimpleItems(template.widgets),
+    items: classicItems,
+    simpleItems: createSimpleItems(classicItems),
   };
 }
 
@@ -138,12 +152,21 @@ function isPositionInsideGrid(item: WorkbenchWidgetPosition) {
   );
 }
 
-function isSizeAllowed(item: WorkbenchLayoutItem, definition: WorkbenchWidgetDefinition) {
+function isTemplateSizeAllowed(item: WorkbenchLayoutItem, definition: WorkbenchWidgetDefinition) {
   return (
     item.w >= definition.minSize.w &&
     item.h >= definition.minSize.h &&
     item.w <= definition.maxSize.w &&
     item.h <= definition.maxSize.h
+  );
+}
+
+function isClassicSizeAllowed(item: WorkbenchLayoutItem, definition: WorkbenchWidgetDefinition) {
+  return (
+    item.w >= definition.minSize.w &&
+    item.w <= definition.maxSize.w &&
+    item.h >= 1 &&
+    item.h <= CLASSIC_WORKBENCH_MAX_ROW_SPAN
   );
 }
 
@@ -190,7 +213,7 @@ export function validateWorkbenchTemplate(template: WorkbenchTemplate) {
       definition &&
       item.visible &&
       isPositionInsideGrid(item) &&
-      isSizeAllowed(item, definition) &&
+      isTemplateSizeAllowed(item, definition) &&
       isValidWorkbenchSettings(item.settings, definition),
     );
   });
@@ -233,7 +256,7 @@ export function validateWorkbenchLayout(
       definition &&
       typeof item.visible === "boolean" &&
       isPositionInsideGrid(item) &&
-      isSizeAllowed(item, definition) &&
+      isClassicSizeAllowed(item, definition) &&
       isValidWorkbenchSettings(item.settings, definition),
     );
   });
@@ -303,6 +326,7 @@ function isStoredLayoutEnvelope(
     (layout.version === 1 ||
       layout.version === 2 ||
       layout.version === 3 ||
+      layout.version === 4 ||
       layout.version === WORKBENCH_LAYOUT_VERSION) &&
     isInteger(layout.templateRevision) &&
     layout.tenantId === context.tenant.id &&
@@ -403,7 +427,8 @@ export function reconcileStoredWorkbenchLayout(
   if (!isStoredLayoutEnvelope(value, context)) return null;
   const templateByKey = new Map(template.widgets.map((item) => [item.widgetKey, item]));
   const seen = new Set<string>();
-  const retained: WorkbenchLayoutItem[] = [];
+  const retainedLegacy: WorkbenchLayoutItem[] = [];
+  const isCurrentVersion = value.version === WORKBENCH_LAYOUT_VERSION;
 
   for (const item of value.items) {
     if (seen.has(item.widgetKey)) return null;
@@ -413,20 +438,25 @@ export function reconcileStoredWorkbenchLayout(
     if (
       !definition ||
       !isPositionInsideGrid(item) ||
-      !isSizeAllowed(item, definition) ||
+      !(isCurrentVersion
+        ? isClassicSizeAllowed(item, definition)
+        : isTemplateSizeAllowed(item, definition)) ||
       !isValidWorkbenchSettings(item.settings, definition)
     ) {
       return null;
     }
-    retained.push(cloneWorkbenchItem(item));
+    retainedLegacy.push(cloneWorkbenchItem(item));
   }
 
-  if (hasVisibleOverlap(retained)) return null;
+  if (hasVisibleOverlap(retainedLegacy)) return null;
+  const retained = isCurrentVersion
+    ? retainedLegacy
+    : createClassicItems(retainedLegacy);
   const missing = template.widgets.filter((item) => !seen.has(item.widgetKey));
-  const classicItems = appendNewTemplateItems(retained, missing);
+  const classicItems = appendNewTemplateItems(retained, createClassicItems(missing));
   const classicByKey = new Map(classicItems.map((item) => [item.widgetKey, item]));
   let storedSimpleItems: SimpleWorkbenchLayoutItem[];
-  if (value.version === WORKBENCH_LAYOUT_VERSION) {
+  if (value.version === WORKBENCH_LAYOUT_VERSION || value.version === 4) {
     if (value.mode !== "classic" && value.mode !== "simple") return null;
     if (value.simpleLayoutType !== "flow" && value.simpleLayoutType !== "columns") return null;
     if (value.simpleColumnRatio !== "4:2" && value.simpleColumnRatio !== "6:2") return null;
@@ -501,14 +531,14 @@ export function reconcileStoredWorkbenchLayout(
     tenantId: context.tenant.id,
     userId: context.userId,
     profile: context.profile,
-    mode: (value.version === WORKBENCH_LAYOUT_VERSION || value.version === 3 || value.version === 2) &&
+    mode: (value.version === WORKBENCH_LAYOUT_VERSION || value.version === 4 || value.version === 3 || value.version === 2) &&
       value.mode === "simple"
       ? "simple"
       : "classic",
-    simpleLayoutType: value.version === WORKBENCH_LAYOUT_VERSION || value.version === 3
+    simpleLayoutType: value.version === WORKBENCH_LAYOUT_VERSION || value.version === 4 || value.version === 3
       ? value.simpleLayoutType as "flow" | "columns"
       : "flow",
-    simpleColumnRatio: value.version === WORKBENCH_LAYOUT_VERSION || value.version === 3
+    simpleColumnRatio: value.version === WORKBENCH_LAYOUT_VERSION || value.version === 4 || value.version === 3
       ? value.simpleColumnRatio as "4:2" | "6:2"
       : "4:2",
     items: classicItems,

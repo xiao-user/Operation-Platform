@@ -32,7 +32,10 @@ import type {
   WorkbenchWidgetSizePreset,
   WorkbenchWidgetItem,
 } from "@/features/workbench/types";
-import { WORKBENCH_GRID_COLUMNS } from "@/features/workbench/types";
+import {
+  CLASSIC_WORKBENCH_MAX_ROW_SPAN,
+  WORKBENCH_GRID_COLUMNS,
+} from "@/features/workbench/types";
 import {
   getWorkbenchTemplate,
   workbenchWidgetRegistry,
@@ -86,6 +89,46 @@ function collectQuickLinks(
     if (module.type === "module") visit(module.children, module);
   }
   return result;
+}
+
+function pushClassicCollisions(items: WorkbenchLayoutItem[], lockedWidgetKey: string) {
+  const queue = [lockedWidgetKey];
+  let attempts = 0;
+  while (queue.length && attempts < items.length * items.length) {
+    attempts += 1;
+    const activeKey = queue.shift()!;
+    const active = items.find((item) => item.widgetKey === activeKey);
+    if (!active?.visible) continue;
+    const collisions = items
+      .filter((item) =>
+        item.visible &&
+        item.widgetKey !== active.widgetKey &&
+        workbenchItemsOverlap(active, item)
+      )
+      .sort((first, second) => first.y - second.y || first.x - second.x);
+    for (const collision of collisions) {
+      collision.y = active.y + active.h;
+      queue.push(collision.widgetKey);
+    }
+  }
+}
+
+function compactClassicItems(items: WorkbenchLayoutItem[], lockedWidgetKey: string) {
+  const visible = items
+    .filter((item) => item.visible && item.widgetKey !== lockedWidgetKey)
+    .sort((first, second) => first.y - second.y || first.x - second.x);
+  for (const item of visible) {
+    while (item.y > 0) {
+      const candidate = { ...item, y: item.y - 1 };
+      const collision = items.some((other) =>
+        other.visible &&
+        other.widgetKey !== item.widgetKey &&
+        workbenchItemsOverlap(candidate, other)
+      );
+      if (collision) break;
+      item.y -= 1;
+    }
+  }
 }
 
 export const useWorkbenchStore = defineStore("workbench", () => {
@@ -248,20 +291,53 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     item.visible = visible;
   }
 
-  function updatePositions(
-    changes: Array<Pick<WorkbenchLayoutItem, "widgetKey" | "x" | "y" | "w" | "h">>,
-  ) {
+  function placeClassicWidget(widgetKey: string, x: number, y: number) {
     const layout = requireDraft();
-    if (layout.mode !== "classic") return;
-    const byKey = new Map(layout.items.map((item) => [item.widgetKey, item]));
-    for (const change of changes) {
-      const item = byKey.get(change.widgetKey);
-      if (!item?.visible) continue;
-      item.x = change.x;
-      item.y = change.y;
-      item.w = change.w;
-      item.h = change.h;
-    }
+    if (layout.mode !== "classic") return false;
+    const item = layout.items.find((entry) => entry.widgetKey === widgetKey);
+    if (!item?.visible) return false;
+    const nextX = Math.max(0, Math.min(WORKBENCH_GRID_COLUMNS - item.w, Math.round(x)));
+    const nextY = Math.max(0, Math.round(y));
+    if (nextX === item.x && nextY === item.y) return false;
+    item.x = nextX;
+    item.y = nextY;
+    pushClassicCollisions(layout.items, widgetKey);
+    compactClassicItems(layout.items, widgetKey);
+    return true;
+  }
+
+  function resizeClassicWidgetWidth(widgetKey: string, width: number) {
+    const layout = requireDraft();
+    if (layout.mode !== "classic") return false;
+    const item = layout.items.find((entry) => entry.widgetKey === widgetKey);
+    const definition = workbenchWidgetRegistry.get(widgetKey);
+    if (!item?.visible || !definition) return false;
+    const nextWidth = Math.max(
+      definition.minSize.w,
+      Math.min(definition.maxSize.w, Math.round(width)),
+    );
+    if (nextWidth === item.w) return false;
+    item.w = nextWidth;
+    item.x = Math.min(item.x, WORKBENCH_GRID_COLUMNS - item.w);
+    pushClassicCollisions(layout.items, widgetKey);
+    compactClassicItems(layout.items, widgetKey);
+    return true;
+  }
+
+  function setClassicRowSpan(widgetKey: string, rowSpan: number) {
+    const layout = requireDraft();
+    if (layout.mode !== "classic") return false;
+    const item = layout.items.find((entry) => entry.widgetKey === widgetKey);
+    if (!item?.visible) return false;
+    const nextSpan = Math.max(
+      1,
+      Math.min(CLASSIC_WORKBENCH_MAX_ROW_SPAN, Math.round(rowSpan)),
+    );
+    if (nextSpan === item.h) return false;
+    item.h = nextSpan;
+    pushClassicCollisions(layout.items, widgetKey);
+    compactClassicItems(layout.items, widgetKey);
+    return true;
   }
 
   function updateSettings(widgetKey: string, settings: WorkbenchWidgetSettings) {
@@ -276,21 +352,7 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     if (layout.mode !== "classic") return false;
     const item = layout.items.find((entry) => entry.widgetKey === widgetKey);
     if (!item?.visible) return false;
-    const next = {
-      x: Math.max(0, Math.min(WORKBENCH_GRID_COLUMNS - item.w, item.x + deltaX)),
-      y: Math.max(0, item.y + deltaY),
-      w: item.w,
-      h: item.h,
-    };
-    const collision = layout.items.some(
-      (other) =>
-        other.visible &&
-        other.widgetKey !== widgetKey &&
-        workbenchItemsOverlap(next, other),
-    );
-    if (collision || (next.x === item.x && next.y === item.y)) return false;
-    Object.assign(item, next);
-    return true;
+    return placeClassicWidget(widgetKey, item.x + deltaX, item.y + deltaY);
   }
 
   function resizeWidget(widgetKey: string, preset: WorkbenchWidgetSizePreset) {
@@ -299,22 +361,7 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     const item = layout.items.find((entry) => entry.widgetKey === widgetKey);
     const definition = workbenchWidgetRegistry.get(widgetKey);
     if (!item?.visible || !definition) return false;
-    const size = definition.sizePresets[preset];
-    const preferred = {
-      x: Math.min(item.x, WORKBENCH_GRID_COLUMNS - size.w),
-      y: item.y,
-      w: size.w,
-      h: size.h,
-    };
-    const occupied = layout.items.filter(
-      (other) => other.visible && other.widgetKey !== widgetKey,
-    );
-    const collision = occupied.some((other) => workbenchItemsOverlap(preferred, other));
-    Object.assign(
-      item,
-      collision ? findAvailableWorkbenchPosition(preferred, occupied) : preferred,
-    );
-    return true;
+    return resizeClassicWidgetWidth(widgetKey, definition.sizePresets[preset].w);
   }
 
   function reorderSimpleWidget(
@@ -513,7 +560,9 @@ export const useWorkbenchStore = defineStore("workbench", () => {
     saveEditing,
     restoreDefaultDraft,
     setVisible,
-    updatePositions,
+    placeClassicWidget,
+    resizeClassicWidgetWidth,
+    setClassicRowSpan,
     updateSettings,
     moveWidget,
     resizeWidget,

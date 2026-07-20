@@ -3,6 +3,7 @@ import type {
   WorkbenchProfile,
   WorkbenchTemplate,
   WorkbenchWidgetDefinition,
+  WorkbenchWidgetHeightPolicy,
   WorkbenchWidgetKind,
   WorkbenchWidgetSettings,
   WorkbenchWidgetSize,
@@ -535,6 +536,30 @@ function defaultSizes(spec: WidgetSpec) {
   };
 }
 
+function defaultHeightPolicy(kind: WorkbenchWidgetKind): WorkbenchWidgetHeightPolicy {
+  switch (kind) {
+    case "metric":
+      return { mode: "intrinsic", minHeight: 132, preferredHeight: 148, maxContentHeight: 180 };
+    case "user-overview":
+      return { mode: "intrinsic", minHeight: 123, preferredHeight: 144, maxContentHeight: 220 };
+    case "list":
+    case "schedule":
+    case "distribution":
+      return { mode: "intrinsic", minHeight: 248, preferredHeight: 320, maxContentHeight: 420 };
+    case "quick-links":
+      return { mode: "viewport", minHeight: 320, preferredHeight: 410, maxContentHeight: 460 };
+    case "calendar":
+      return { mode: "fixed", minHeight: 480, preferredHeight: 520, maxContentHeight: 620 };
+    case "trend":
+    case "education-chart":
+      return { mode: "fixed", minHeight: 320, preferredHeight: 360, maxContentHeight: 420 };
+    case "ranking":
+    case "growth":
+    case "activity-rank":
+      return { mode: "viewport", minHeight: 300, preferredHeight: 360, maxContentHeight: 440 };
+  }
+}
+
 const registryEntries: WorkbenchWidgetDefinition[] = [];
 
 export const workbenchTemplates: WorkbenchTemplate[] = templateSpecs.map((template) => {
@@ -550,6 +575,7 @@ export const workbenchTemplates: WorkbenchTemplate[] = templateSpecs.map((templa
       tenantType: template.tenantType,
       profile: template.profile,
       tone: widget.tone,
+      heightPolicy: defaultHeightPolicy(widget.kind),
       ...sizes,
     });
     return {

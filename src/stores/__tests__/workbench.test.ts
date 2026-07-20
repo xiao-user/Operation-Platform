@@ -112,15 +112,37 @@ describe("workbench store", () => {
       ...original,
     });
 
-    store.updatePositions([
-      { widgetKey: second.widgetKey, x: original.x, y: original.y, w: second.w, h: second.h },
-    ]);
+    store.placeClassicWidget(second.widgetKey, original.x, original.y);
     store.setVisible(first.widgetKey, true);
     const restored = store.items.find((item) => item.widgetKey === first.widgetKey)!;
 
     expect(restored.visible).toBe(true);
     expect({ x: restored.x, y: restored.y }).not.toEqual(original);
     expect(store.totalCount).toBe(9);
+  });
+
+  it("expands a classic widget by logical rows and only pushes horizontally intersecting widgets", () => {
+    const store = useWorkbenchStore();
+    store.load(school, "user-a", ADMIN_ROLE_ID, emptyTree);
+    store.beginEditing();
+    const alert = store.draftLayout!.items.find((item) =>
+      item.widgetKey.endsWith(".operational-alerts")
+    )!;
+    const notices = store.draftLayout!.items.find((item) => item.widgetKey.endsWith(".notices"))!;
+    const quickLinks = store.draftLayout!.items.find((item) =>
+      item.widgetKey.endsWith(".quick-links")
+    )!;
+
+    expect({ alert: alert.y, notices: notices.y, quickLinks: quickLinks.y }).toEqual({
+      alert: 1,
+      notices: 2,
+      quickLinks: 2,
+    });
+    expect(store.setClassicRowSpan(alert.widgetKey, 2)).toBe(true);
+
+    expect(alert.h).toBe(2);
+    expect(notices.y).toBe(2);
+    expect(quickLinks.y).toBe(3);
   });
 
   it("cancels a draft without persistence and saves one override atomically", async () => {

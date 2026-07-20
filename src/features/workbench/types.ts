@@ -1,8 +1,9 @@
 import type { TenantInfo, TenantType } from "@/types/user";
 import type { MenuIconKey } from "@/types/navigation";
 
-export const WORKBENCH_LAYOUT_VERSION = 4;
+export const WORKBENCH_LAYOUT_VERSION = 5;
 export const WORKBENCH_GRID_COLUMNS = 12;
+export const CLASSIC_WORKBENCH_MAX_ROW_SPAN = 4;
 export const SIMPLE_WORKBENCH_COLUMNS = 6;
 export const SIMPLE_WORKBENCH_SPANS = [2, 3, 6] as const;
 export const FLOW_WORKBENCH_SPANS = [3, 6] as const;
@@ -23,6 +24,7 @@ export type WorkbenchWidgetKind =
   | "user-overview";
 export type WorkbenchWidgetTone = "primary" | "success" | "warning" | "danger" | "neutral";
 export type WorkbenchWidgetSizePreset = "small" | "medium" | "large";
+export type WorkbenchWidgetHeightMode = "intrinsic" | "viewport" | "fixed";
 export type WorkbenchLayoutMode = "classic" | "simple";
 export type SimpleWorkbenchSpan = (typeof SIMPLE_WORKBENCH_SPANS)[number];
 export type FlowWorkbenchSpan = (typeof FLOW_WORKBENCH_SPANS)[number];
@@ -43,6 +45,10 @@ export type WorkbenchWidgetAction =
   | "size-small"
   | "size-medium"
   | "size-large"
+  | "row-span-1"
+  | "row-span-2"
+  | "row-span-3"
+  | "row-span-4"
   | "span-3"
   | "span-6";
 
@@ -76,6 +82,14 @@ export interface WorkbenchWidgetDefinition {
   minSize: WorkbenchWidgetSize;
   maxSize: WorkbenchWidgetSize;
   sizePresets: Record<WorkbenchWidgetSizePreset, WorkbenchWidgetSize>;
+  heightPolicy: WorkbenchWidgetHeightPolicy;
+}
+
+export interface WorkbenchWidgetHeightPolicy {
+  mode: WorkbenchWidgetHeightMode;
+  minHeight: number;
+  preferredHeight: number;
+  maxContentHeight: number;
 }
 
 export interface WorkbenchWidgetItem {

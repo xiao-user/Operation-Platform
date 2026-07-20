@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ADMIN_ROLE_ID, STAFF_ROLE_ID } from "@/features/access-control/types";
 import {
+  createDefaultWorkbenchLayout,
   resolveWorkbenchProfile,
   validateWorkbenchTemplate,
 } from "@/features/workbench/workbench-layout";
@@ -30,6 +31,29 @@ describe("workbench templates", () => {
       expect(new Set(keys).size).toBe(keys.length);
       expect(validateWorkbenchTemplate(template)).toBe(true);
       expect(keys.every((key) => workbenchWidgetRegistry.has(key))).toBe(true);
+    }
+  });
+
+  it("derives classic logical rows and valid height contracts from every template", () => {
+    for (const template of workbenchTemplates) {
+      const tenant: TenantInfo = {
+        id: `tenant-${template.tenantType}-${template.profile}`,
+        name: "高度策略测试租户",
+        shortName: "测试租户",
+        type: template.tenantType,
+        enabled: true,
+      };
+      const layout = createDefaultWorkbenchLayout(
+        { tenant, userId: "user-height", profile: template.profile },
+        template,
+      );
+      expect(layout.items.every((item) => item.h === 1)).toBe(true);
+      expect(new Set(layout.items.map((item) => item.y)).size).toBeGreaterThan(1);
+      for (const item of layout.items) {
+        const policy = workbenchWidgetRegistry.get(item.widgetKey)!.heightPolicy;
+        expect(policy.minHeight).toBeLessThanOrEqual(policy.preferredHeight);
+        expect(policy.preferredHeight).toBeLessThanOrEqual(policy.maxContentHeight);
+      }
     }
   });
 
