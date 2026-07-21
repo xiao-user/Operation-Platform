@@ -211,6 +211,16 @@ export const pageRegistry: PageRegistryItem[] = [
       openMode: "new-tab",
     },
   ),
+  page(
+    "bureau-student-growth-portrait",
+    "学生成长画像",
+    "/bureau/education-governance/student-growth-portrait",
+    bureau,
+    () => import("@/views/bureau/education-governance/StudentGrowthPortraitView.vue"),
+    {
+      description: "面向教育局的区域学生成长画像，覆盖五育、学业、荣誉、健康、行为与实践等发展专题。",
+    },
+  ),
 
   // 教育局 · 组织与运营商
   page("bureau-org-structure", "组织架构", "/bureau/org/structure", bureau),

@@ -59,6 +59,17 @@ describe("page registry", () => {
     });
   });
 
+  it("registers the bureau student growth portrait as an available shell page", () => {
+    expect(pageRegistryByKey.get("bureau-student-growth-portrait")).toMatchObject({
+      title: "学生成长画像",
+      path: "/bureau/education-governance/student-growth-portrait",
+      tenantTypes: ["bureau"],
+      status: "available",
+      surface: "shell",
+      openMode: "current",
+    });
+  });
+
   it("registers a reusable menu-scoped developing placeholder page", () => {
     const page = pageRegistryByKey.get(DEVELOPING_PAGE_KEY);
 

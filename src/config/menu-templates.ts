@@ -70,6 +70,7 @@ const bureauModuleIcons: Record<string, MenuIconKey> = {
 };
 
 const bureauPageKeysByOutlinePath: Readonly<Record<string, string>> = {
+  "AI教育治理/学生发展评价/学生成长画像": "bureau-student-growth-portrait",
   "智慧大脑/数据驾驶舱/区域教育总览": "bureau-regional-education-overview",
 };
 

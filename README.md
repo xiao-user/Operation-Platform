@@ -11,6 +11,7 @@
 - 全局 AI 运营助手，支持页面上下文、Markdown/KaTeX 和流式回复。
 - 教育局“区域教育总览”独立页：Three.js 榕城区地图、镇街下钻、学校网络、能量锥峰、五套主题、自动巡航和地图调试。
 - 可视化页内已接入“学业质量监测”驾驶舱基础结构、通用图表面板和 ECharts 学业趋势图。
+- 教育局“学生成长画像”SaaS 页面：区域总览、学校差异、趋势跟进及五育、学业、运动、荣誉等专题；当前使用结构化模拟数据，心理健康仅展示安全接入规划。
 
 项目默认使用 Supabase Auth、Postgres 和 RLS。`localStorage` 只用于显式本地演示、E2E 与旧数据迁移，不是生产数据源。
 
@@ -57,6 +58,7 @@ VITE_AUTH_PROVIDER=local
 /system/organization
 /system/roles
 /system/menu-config
+/bureau/education-governance/student-growth-portrait
 /bureau/visualization/regional-education-overview?tenantId=bureau-001
 ```
 
@@ -72,6 +74,7 @@ VITE_AUTH_PROVIDER=local
 | `src/features/persistence/` | 应用持久化契约及 Supabase/localStorage Adapter |
 | `src/features/tenant-config/` | 菜单、工作台入口和角色的租户聚合配置 |
 | `src/features/workbench/workbench-templates.ts` | 固定工作台组件清单与默认布局 |
+| `src/features/student-growth-portrait/` | 区域学生成长画像的数据契约、模拟数据、图表和专题组件 |
 | `src/features/regional-education-overview/` | 数字孪生、图表面板、主题和 Three.js 渲染边界 |
 | `src/styles/` | SaaS 与独立可视化页面的设计变量 |
 
@@ -93,6 +96,8 @@ Supabase 主要表：
 | 门禁设备 | `gate_device_groups`、`gate_devices` |
 
 所有浏览器可访问表必须启用 RLS。当前未启用 Realtime，另一个已打开页面需要刷新后读取普通业务数据变更。
+
+学生成长画像目前通过 `student-growth-portrait/mock-data.ts` 提供可替换的结构化模拟数据。后续接入外部后端时应保持页面只依赖领域类型与聚合结果；心理健康数据需单独授权、脱敏和审计，不参与综合评分或公开排名。
 
 ## 新增页面
 
