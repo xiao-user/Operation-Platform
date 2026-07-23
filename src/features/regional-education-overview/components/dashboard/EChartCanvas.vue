@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
-import { BarChart, LineChart } from "echarts/charts";
+import { BarChart, GaugeChart, LineChart } from "echarts/charts";
 import {
   DataZoomComponent,
+  GraphicComponent,
   GridComponent,
   LegendComponent,
   TooltipComponent,
@@ -12,8 +13,10 @@ import { CanvasRenderer } from "echarts/renderers";
 
 use([
   BarChart,
+  GaugeChart,
   LineChart,
   DataZoomComponent,
+  GraphicComponent,
   GridComponent,
   LegendComponent,
   TooltipComponent,

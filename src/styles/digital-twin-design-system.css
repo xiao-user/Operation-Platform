@@ -58,6 +58,7 @@
   --dt-trail-gap: 32px;
   --dt-control-height: 32px;
   --dt-control-select-width: 150px;
+  --dt-map-control-bottom: calc(var(--dt-statusbar-height) + var(--dt-space-4));
   --dt-radius-sm: 4px;
   --dt-radius-xs: 2px;
   --dt-border-width: 1px;
@@ -84,6 +85,7 @@
   --dt-tuning-color-action-width: 62px;
   --dt-ai-entry-height: 56px;
   --dt-ai-entry-bottom: 148px;
+  --dt-ai-entry-right: var(--dt-screen-gutter);
   --dt-ai-entry-blur: 10px;
 
   /* Visualization-scoped Figma color primitives */
@@ -174,6 +176,8 @@
   --dt-width-map-label: 118px;
   --dt-height-map-label: 34px;
   --dt-map-label-offset: -14px;
+  --dt-map-peer-label-opacity: 0.22;
+  --dt-map-external-label-opacity: 0.12;
 }
 
 .regional-digital-twin *,

@@ -15,7 +15,7 @@ interface UserRoleOption {
   name: string;
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   tenantName: string;
   userName: string;
   activeRoleId?: string;
@@ -25,7 +25,14 @@ const props = defineProps<{
   themes: readonly DigitalTwinMapTheme[];
   activeThemeId: DigitalTwinMapTheme["id"];
   activeSection: RegionalDashboardSectionId;
-}>();
+  showSectionNavigation?: boolean;
+  variant?: "regional-education" | "smart-sports";
+  productTitle?: string;
+}>(), {
+  showSectionNavigation: true,
+  variant: "regional-education",
+  productTitle: "",
+});
 
 const emit = defineEmits<{
   themeSelect: [themeId: DigitalTwinMapTheme["id"]];
@@ -40,6 +47,7 @@ const userMenuRoot = ref<HTMLElement>();
 const userMenuOpen = ref(false);
 
 const productName = computed(() => {
+  if (props.variant === "smart-sports" && props.productTitle) return props.productTitle;
   const districtName = props.tenantName.replace(/教育局$/, "");
   return `${districtName}智慧教育生态服务平台`;
 });
@@ -84,13 +92,20 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <header class="page-topbar">
+  <header
+    class="page-topbar"
+    :class="{
+      'page-topbar--without-sections': !showSectionNavigation,
+      'page-topbar--smart-sports': variant === 'smart-sports',
+    }"
+  >
     <div class="brand-lockup">
       <img :src="brandMark" alt="" aria-hidden="true">
       <strong>{{ productName }}</strong>
     </div>
 
     <DashboardSectionTabs
+      v-if="showSectionNavigation"
       class="primary-navigation"
       variant="primary"
       label="驾驶舱主导航"
@@ -177,6 +192,15 @@ onBeforeUnmount(() => {
   background: var(--dt-color-panel);
   backdrop-filter: blur(var(--dt-panel-blur));
   align-items: center;
+}
+
+.page-topbar--smart-sports {
+  grid-template-columns: minmax(360px, 1fr) auto;
+}
+
+.page-topbar--smart-sports .brand-lockup strong {
+  color: var(--dt-color-text-secondary);
+  font-weight: var(--dt-font-weight-light);
 }
 
 .brand-lockup {
@@ -348,5 +372,9 @@ button.environment-item {
 
 @media (max-width: 1260px) {
   .page-topbar { grid-template-columns: 310px minmax(0, 1fr) auto; }
+}
+
+.page-topbar.page-topbar--without-sections {
+  grid-template-columns: minmax(360px, 1fr) auto;
 }
 </style>

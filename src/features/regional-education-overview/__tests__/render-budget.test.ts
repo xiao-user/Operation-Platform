@@ -3,13 +3,14 @@ import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { rongchengEducationLocations } from "../education-locations";
+import { buildEnergyTowerData } from "../energy-tower-data";
 import {
   boundaryFeatureForMapState,
   filterLocationsForMapState,
   initialMapState,
   loadMapLevel,
   regionalContextGeoData,
-} from "../map-data-adapter";
+} from "./rongcheng-map-fixture";
 import { digitalTwinMapThemes, getDigitalTwinMapTheme } from "../map-themes";
 import { AmbientEffectsLayer } from "../rendering/ambient-effects-layer";
 import { ConnectionLayer } from "../rendering/connection-layer";
@@ -17,6 +18,7 @@ import {
   energyTowerDimensions,
   energyTowerHeight,
   energyTowerRenderOrder,
+  energyTowerScopeScale,
   energyTowerValueBand,
   EnergyTowerLayer,
 } from "../rendering/energy-tower-layer";
@@ -35,11 +37,14 @@ import {
 } from "../rendering/institution-layer";
 import {
   createMapProjection,
-  featureCenter,
+  featureVisualCenter,
   largestOuterRingOfFeature,
 } from "../rendering/map-projection";
 import { RegionLayer, regionTopZ } from "../rendering/region-layer";
-import { RegionalContextLayer } from "../rendering/regional-context-layer";
+import {
+  RegionalContextLayer,
+  regionalContextSurfaceZ,
+} from "../rendering/regional-context-layer";
 import { defaultMapVisualTuning } from "../rendering/map-visual-tuning";
 import {
   anchorDynamicOverlay,
@@ -49,8 +54,11 @@ import {
   shouldRunMapAutoRotation,
   townshipFocusPositionZ,
   townshipFocusTargetZ,
+  transitionsExternalPresentationToPeer,
+  transitionsPeerPresentationToExternal,
 } from "../rendering/regional-map-engine";
 import { ResourceOwner } from "../rendering/resource-owner";
+import type { GeoFeature } from "../geo";
 import type { EducationLocation } from "../types";
 
 const theme = getDigitalTwinMapTheme("lime");
@@ -74,6 +82,73 @@ function createLargeLocationSet(count: number): EducationLocation[] {
 }
 
 describe("regional map render budget", () => {
+  it("uses the interior geometry centroid for overlays and the orbit pivot", () => {
+    const feature: GeoFeature = {
+      type: "Feature",
+      properties: {
+        code: "visual-center",
+        name: "视觉中心测试区",
+        center: [1, 1],
+        centroid: [5, 5],
+      },
+      geometry: {
+        type: "Polygon",
+        coordinates: [[
+          [0, 0],
+          [10, 0],
+          [10, 10],
+          [0, 10],
+          [0, 0],
+        ]],
+      },
+    };
+    const visualCenter = featureVisualCenter(feature);
+    expect(visualCenter).toEqual([5, 5]);
+    expect(visualCenter).not.toEqual(feature.properties.center);
+
+    const geoData = { type: "FeatureCollection" as const, features: [feature] };
+    const centerProjection = createMapProjection(geoData, 100, 100, 0);
+    const mapRoot = new THREE.Group();
+    const pivot = resolveMapOrbitPivot(
+      {
+        ...initialMapState,
+        geoData,
+        boundaryFeature: feature,
+      },
+      centerProjection,
+      mapRoot,
+      22,
+    );
+    expect(pivot?.distanceTo(centerProjection.projectPoint([5, 5], 22))).toBeCloseTo(0);
+  });
+
+  it("recognizes the same city geometry moving between peer and external bands", () => {
+    const cities = regionalContextGeoData;
+    const districts = initialMapState.geoData;
+    const cityState = {
+      ...initialMapState,
+      scope: "city" as const,
+      code: "445200",
+      geoData: districts,
+      contextGeoData: cities,
+      contextPresentation: "peers" as const,
+      terminal: false,
+    };
+    const districtState = {
+      ...initialMapState,
+      scope: "district" as const,
+      externalGeoData: cities,
+      terminal: true,
+    };
+
+    expect(transitionsPeerPresentationToExternal(cityState, districtState)).toBe(true);
+    expect(transitionsExternalPresentationToPeer(districtState, cityState)).toBe(true);
+    expect(transitionsPeerPresentationToExternal(cityState, {
+      ...districtState,
+      externalGeoData: { type: "FeatureCollection", features: [] },
+    })).toBe(false);
+  });
+
   it("maps larger grid school counts to taller township towers at a smaller near-view scale", () => {
     expect(energyTowerHeight(6, 6, "township")).toBeGreaterThan(
       energyTowerHeight(2, 6, "township"),
@@ -84,6 +159,118 @@ describe("regional map render budget", () => {
     expect(energyTowerDimensions("township").maximumHeight).toBeLessThan(
       energyTowerDimensions("district").maximumHeight,
     );
+  });
+
+  it("keeps coverage towers readable across district and province population scales", () => {
+    const dimensions = energyTowerDimensions("district");
+    const districtHeight = energyTowerHeight(
+      300_000,
+      2_000_000,
+      "district",
+      defaultMapVisualTuning,
+      10_000,
+    );
+    const largerDistrictHeight = energyTowerHeight(
+      600_000,
+      2_000_000,
+      "district",
+      defaultMapVisualTuning,
+      10_000,
+    );
+    const provinceMaximumHeight = energyTowerHeight(
+      2_000_000,
+      2_000_000,
+      "province",
+      defaultMapVisualTuning,
+      10_000,
+    );
+
+    expect(districtHeight).toBeGreaterThan(dimensions.minimumHeight);
+    expect(largerDistrictHeight).toBeGreaterThan(districtHeight);
+    expect(provinceMaximumHeight).toBe(dimensions.maximumHeight);
+  });
+
+  it("increases the visible height gap between coverage values without raising the maximum", () => {
+    const maximumHeight = energyTowerHeight(
+      1_300_000,
+      1_300_000,
+      "city",
+      defaultMapVisualTuning,
+      10_000,
+      defaultMapVisualTuning.energyTowerCoverageHeightContrast,
+    );
+    const contrastedHeight = energyTowerHeight(
+      600_000,
+      1_300_000,
+      "city",
+      defaultMapVisualTuning,
+      10_000,
+      defaultMapVisualTuning.energyTowerCoverageHeightContrast,
+    );
+    const previousHeight = energyTowerHeight(
+      600_000,
+      1_300_000,
+      "city",
+      defaultMapVisualTuning,
+      10_000,
+      defaultMapVisualTuning.energyTowerHeightExponent,
+    );
+
+    expect(maximumHeight).toBe(energyTowerDimensions("city").maximumHeight);
+    expect(maximumHeight - contrastedHeight).toBeGreaterThan(
+      (maximumHeight - previousHeight) * 1.8,
+    );
+  });
+
+  it("uses independently tunable coverage-tower dimensions for every administrative scope", () => {
+    expect(energyTowerScopeScale("province")).toEqual({ height: 0.9, radius: 0.9 });
+    expect(energyTowerScopeScale("city")).toEqual({ height: 0.8, radius: 0.34 });
+    expect(energyTowerScopeScale("district")).toEqual({ height: 0.63, radius: 0.52 });
+    expect(energyTowerScopeScale("township")).toEqual({ height: 0.82, radius: 0.86 });
+    expect(energyTowerScopeScale("city", {
+      ...defaultMapVisualTuning,
+      energyTowerCityHeightScale: 0.45,
+      energyTowerCityRadiusScale: 0.5,
+    })).toEqual({ height: 0.45, radius: 0.5 });
+  });
+
+  it("resizes existing coverage towers in place while tuning a scope", () => {
+    const energyTowerValues = Object.fromEntries(
+      initialMapState.geoData.features.flatMap((feature) => {
+        const code = feature.properties.code;
+        return typeof code === "string" ? [[code, 100_000]] : [];
+      }),
+    );
+    const layer = new EnergyTowerLayer(
+      {
+        ...initialMapState,
+        energyTowerMetric: "coverage-population",
+        energyTowerValues,
+      },
+      [],
+      projection,
+      theme,
+      defaultMapVisualTuning,
+    );
+    const firstTower = layer.root.children[0] as THREE.Group;
+    const towerId = firstTower.uuid;
+
+    layer.settle(true);
+    expect(firstTower.scale.toArray()).toEqual([0.52, 0.52, 0.63]);
+
+    layer.applyTuning(theme, {
+      ...defaultMapVisualTuning,
+      energyTowerDistrictHeightScale: 0.49,
+      energyTowerDistrictRadiusScale: 0.51,
+      energyTowerCoverageHeightContrast: 3,
+    });
+
+    expect(firstTower.uuid).toBe(towerId);
+    expect(firstTower.scale.x).toBe(0.51);
+    expect(firstTower.scale.y).toBe(0.51);
+    expect(firstTower.scale.z).toBeGreaterThan(0);
+    expect(firstTower.scale.z).toBeLessThanOrEqual(0.49);
+    layer.dispose();
   });
 
   it("classifies tower counts into relative low, medium, and high bands", () => {
@@ -109,7 +296,7 @@ describe("regional map render budget", () => {
     mapRoot.scale.setScalar(0.8);
     const districtBoundary = boundaryFeatureForMapState(initialMapState);
     expect(districtBoundary).toBeDefined();
-    const center = featureCenter(districtBoundary!)!;
+    const center = featureVisualCenter(districtBoundary!)!;
     const expected = mapRoot.localToWorld(
       projection.projectPoint(center, regionTopZ),
     );
@@ -249,6 +436,87 @@ describe("regional map render budget", () => {
     expect(lineMaterials.length).toBeGreaterThan(0);
     expect(lineMaterials.every((material) => material.depthTest)).toBe(true);
     expect(lineMaterials.every((material) => !material.depthWrite)).toBe(true);
+    context.dispose();
+  });
+
+  it("keeps external context regions available for raycast sibling navigation", () => {
+    const feature = regionalContextGeoData.features[0]!;
+    const center = featureVisualCenter(feature)!;
+    const context = new RegionalContextLayer(
+      regionalContextGeoData,
+      projection,
+      theme,
+      defaultMapVisualTuning,
+    );
+    const raycaster = new THREE.Raycaster(
+      projection.projectPoint(center, 100),
+      new THREE.Vector3(0, 0, -1),
+    );
+    context.root.updateMatrixWorld(true);
+
+    expect(context.hit(raycaster)?.feature).toBe(feature);
+    const labelObject = context.root.children.find(
+      (object): object is CSS2DObject => (
+        object instanceof CSS2DObject
+        && object.element.textContent === feature.properties.name
+      ),
+    )!;
+    const labelWorldPosition = labelObject.getWorldPosition(new THREE.Vector3());
+    const labelCamera = new THREE.PerspectiveCamera(30, 1.5, 1, 2400);
+    labelCamera.up.set(0, 0, 1);
+    labelCamera.position.copy(labelWorldPosition).add(new THREE.Vector3(0, -180, 140));
+    labelCamera.lookAt(labelWorldPosition);
+    labelCamera.updateMatrixWorld(true);
+    labelCamera.updateProjectionMatrix();
+    const labelPointer = labelWorldPosition.clone().project(labelCamera);
+    expect(labelObject.element.classList.contains("is-visible")).toBe(false);
+    expect(context.hitLabel(
+      new THREE.Vector2(labelPointer.x, labelPointer.y),
+      labelCamera,
+      { width: 1200, height: 800 },
+    )?.feature).toBe(feature);
+    context.setHovered(feature);
+    expect(labelObject.element.classList.contains("is-visible")).toBe(true);
+    const hoverMaterials: THREE.MeshBasicMaterial[] = [];
+    context.root.traverse((object) => {
+      if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshBasicMaterial) {
+        if (object.material.opacity > 0 && object.position.z > 12) hoverMaterials.push(object.material);
+      }
+    });
+    expect(hoverMaterials.length).toBeGreaterThan(0);
+    context.setHovered();
+    expect(labelObject.element.classList.contains("is-visible")).toBe(false);
+    context.dispose();
+  });
+
+  it("cross-fades external outlines without rebuilding their geometry", () => {
+    const context = new RegionalContextLayer(
+      regionalContextGeoData,
+      projection,
+      theme,
+      defaultMapVisualTuning,
+    );
+    const geometryIds: number[] = [];
+    context.root.traverse((object) => {
+      if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
+        geometryIds.push(object.geometry.id);
+      }
+    });
+
+    context.setPresentationOpacity(0);
+    for (let index = 0; index < 90; index += 1) context.animate(1 / 60);
+    expect(context.isPresentationHidden()).toBe(true);
+
+    context.setPresentationOpacity(1);
+    for (let index = 0; index < 90; index += 1) context.animate(1 / 60);
+    expect(context.isPresentationHidden()).toBe(false);
+    const geometryIdsAfterReveal: number[] = [];
+    context.root.traverse((object) => {
+      if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
+        geometryIdsAfterReveal.push(object.geometry.id);
+      }
+    });
+    expect(geometryIdsAfterReveal).toEqual(geometryIds);
     context.dispose();
   });
 
@@ -556,13 +824,20 @@ describe("regional map render budget", () => {
     } as unknown as CanvasRenderingContext2D;
     const contextSpy = vi.spyOn(HTMLCanvasElement.prototype, "getContext")
       .mockReturnValue(context);
-    const townshipState = loadMapLevel("445202013");
+    const townshipState = initialMapState.geoData.features
+      .map((feature) => loadMapLevel(String(feature.properties.code)))
+      .find((state) => {
+        const locations = filterLocationsForMapState(rongchengEducationLocations, state);
+        const towers = buildEnergyTowerData(state, locations);
+        return towers.length > 1 && towers.some((tower) => (tower.schoolNames?.length ?? 0) > 3);
+      });
+    expect(townshipState).toBeDefined();
     const townshipLocations = filterLocationsForMapState(
       rongchengEducationLocations,
-      townshipState,
+      townshipState!,
     );
     const layer = new EnergyTowerLayer(
-      townshipState,
+      townshipState!,
       townshipLocations,
       projection,
       theme,
@@ -877,6 +1152,41 @@ describe("regional map render budget", () => {
     regions.dispose();
   });
 
+  it("shares cap geometry and removes zero-opacity interaction overlays from rendering", () => {
+    const regions = new RegionLayer(
+      initialMapState,
+      projection,
+      theme,
+      defaultMapVisualTuning,
+    );
+    const group = regions.root.children.find(
+      (object): object is THREE.Group => object instanceof THREE.Group,
+    )!;
+    const capMeshes = group.children.filter(
+      (object): object is THREE.Mesh => (
+        object instanceof THREE.Mesh && object.geometry instanceof THREE.ShapeGeometry
+      ),
+    );
+    expect(capMeshes).toHaveLength(4);
+    expect(new Set(capMeshes.map((mesh) => mesh.geometry)).size).toBe(1);
+    const interactionMeshes = capMeshes.filter(
+      (mesh): mesh is THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> => (
+        mesh.material instanceof THREE.MeshBasicMaterial
+        && mesh.material.side === THREE.DoubleSide
+      ),
+    );
+    expect(interactionMeshes).toHaveLength(2);
+    expect(interactionMeshes.every((mesh) => !mesh.visible)).toBe(true);
+
+    regions.setHovered(group);
+    regions.settle();
+    expect(interactionMeshes.some((mesh) => mesh.visible && mesh.material.opacity > 0)).toBe(true);
+    regions.setHovered();
+    regions.settle();
+    expect(interactionMeshes.every((mesh) => !mesh.visible)).toBe(true);
+    regions.dispose();
+  });
+
   it("flattens non-focused townships while preserving the focused 3D region", () => {
     const regions = new RegionLayer(
       initialMapState,
@@ -922,6 +1232,186 @@ describe("regional map render budget", () => {
     );
     expect(inactive?.renderOrder).toBeGreaterThan(20);
 
+    regions.dispose();
+  });
+
+  it("uses the focused-region elevation for every child in an active branch", () => {
+    const regions = new RegionLayer(
+      initialMapState,
+      projection,
+      theme,
+      defaultMapVisualTuning,
+    );
+
+    regions.setFocus(undefined, defaultMapVisualTuning, true);
+    regions.settle();
+
+    const groups = regions.root.children.filter(
+      (object): object is THREE.Group => object instanceof THREE.Group,
+    );
+    expect(groups.length).toBeGreaterThan(1);
+    expect(groups.every((group) => (
+      Math.abs(
+        group.scale.z - defaultMapVisualTuning.townshipFocusThickness / 22,
+      ) < 0.001
+    ))).toBe(true);
+    expect(groups.every((group) => (
+      Math.abs(group.position.z - defaultMapVisualTuning.townshipFocusLift) < 0.01
+    ))).toBe(true);
+    regions.dispose();
+  });
+
+  it("keeps visible peers thin when the focused parent is replaced by its child layer", () => {
+    const regions = new RegionLayer(
+      initialMapState,
+      projection,
+      theme,
+      defaultMapVisualTuning,
+    );
+    const focusedCode = "445202001";
+
+    regions.setExcludedFeature(focusedCode);
+    regions.setFocus(focusedCode, defaultMapVisualTuning);
+    regions.settle();
+
+    const groups = regions.root.children.filter(
+      (object): object is THREE.Group => object instanceof THREE.Group,
+    );
+    const focused = groups.find(
+      (group) => group.userData.feature?.properties?.code === focusedCode,
+    );
+    const visiblePeers = groups.filter((group) => group !== focused);
+
+    expect(focused?.visible).toBe(false);
+    expect(focused?.scale.z).toBeCloseTo(
+      defaultMapVisualTuning.townshipSiblingThickness / 22,
+      3,
+    );
+    expect(visiblePeers.length).toBeGreaterThan(0);
+    expect(visiblePeers.every((group) => group.visible)).toBe(true);
+    expect(visiblePeers.every((group) => (
+      Math.abs(
+        group.scale.z - defaultMapVisualTuning.townshipSiblingThickness / 22,
+      ) < 0.001
+    ))).toBe(true);
+
+    const nextFocused = visiblePeers[0]!;
+    const nextFocusedCode = nextFocused.userData.feature.properties.code as string;
+    const previousSiblingScale = focused!.scale.z;
+    regions.setExcludedFeature(nextFocusedCode);
+    regions.setFocus(nextFocusedCode, defaultMapVisualTuning);
+    regions.animate();
+
+    expect(focused?.visible).toBe(true);
+    expect(focused?.scale.z).toBeCloseTo(previousSiblingScale, 6);
+    expect(nextFocused.visible).toBe(false);
+    expect(nextFocused.scale.z).toBeCloseTo(
+      defaultMapVisualTuning.townshipSiblingThickness / 22,
+      3,
+    );
+    regions.dispose();
+  });
+
+  it("shrinks outgoing active geometry without making the solid layer transparent", () => {
+    const regions = new RegionLayer(
+      initialMapState,
+      projection,
+      theme,
+      defaultMapVisualTuning,
+    );
+    regions.setFocus(undefined, defaultMapVisualTuning, true);
+    regions.settle();
+    const group = regions.root.children.find(
+      (object): object is THREE.Group => object instanceof THREE.Group,
+    )!;
+    const sideMaterial = group.children
+      .map((object) => object instanceof THREE.Mesh ? object.material : undefined)
+      .find((material): material is THREE.ShaderMaterial => (
+        material instanceof THREE.ShaderMaterial
+        && material.uniforms.topOpacity !== undefined
+      ));
+    const focusedScale = group.scale.z;
+    const focusedSideOpacity = sideMaterial!.uniforms.topOpacity!.value as number;
+
+    regions.setAllAsSiblings(defaultMapVisualTuning);
+    regions.animate(1 / 60);
+
+    expect(group.scale.z).toBeLessThan(focusedScale);
+    expect(group.scale.z).toBeGreaterThan(
+      defaultMapVisualTuning.townshipSiblingThickness / 22,
+    );
+    expect(sideMaterial!.uniforms.topOpacity!.value).toBe(focusedSideOpacity);
+
+    for (let index = 0; index < 100; index += 1) regions.animate(1 / 60);
+    expect(group.scale.z).toBeCloseTo(
+      defaultMapVisualTuning.townshipSiblingThickness / 22,
+      3,
+    );
+    expect(regions.isPresentationHidden()).toBe(false);
+    expect(regions.isTransitionSettled()).toBe(true);
+    regions.dispose();
+  });
+
+  it("cross-fades city peers directly to the real external-map presentation", () => {
+    const regions = new RegionLayer(
+      initialMapState,
+      projection,
+      theme,
+      defaultMapVisualTuning,
+    );
+    regions.setAllAsSiblings(defaultMapVisualTuning);
+    regions.settle();
+    const group = regions.root.children.find(
+      (object): object is THREE.Group => object instanceof THREE.Group,
+    )!;
+    const sideMaterial = group.children
+      .map((object) => object instanceof THREE.Mesh ? object.material : undefined)
+      .find((material): material is THREE.ShaderMaterial => (
+        material instanceof THREE.ShaderMaterial
+        && material.uniforms.topOpacity !== undefined
+      ))!;
+    const terrainMaterial = group.children
+      .map((object) => object instanceof THREE.Mesh ? object.material : undefined)
+      .find((material): material is THREE.MeshStandardMaterial => (
+        material instanceof THREE.MeshStandardMaterial
+      ))!;
+    const solidScale = group.scale.z;
+    const solidSideOpacity = sideMaterial.uniforms.topOpacity!.value as number;
+    const solidTerrainColor = terrainMaterial.color.clone();
+    const solidTerrainOpacity = terrainMaterial.opacity;
+
+    regions.setExternalPresentation(true);
+    regions.animate(1 / 60);
+
+    expect(group.scale.z).toBeLessThan(solidScale);
+    expect(group.position.z + regionTopZ * group.scale.z)
+      .toBeGreaterThan(regionalContextSurfaceZ);
+    expect(sideMaterial.uniforms.topOpacity!.value as number).toBeLessThan(solidSideOpacity);
+    expect(terrainMaterial.color.equals(solidTerrainColor)).toBe(true);
+    expect(terrainMaterial.opacity).toBe(solidTerrainOpacity);
+
+    for (let index = 0; index < 8; index += 1) regions.animate(1 / 60);
+    expect(terrainMaterial.opacity).toBeLessThan(solidTerrainOpacity);
+    expect(terrainMaterial.color.equals(solidTerrainColor)).toBe(true);
+
+    regions.settle();
+    expect(group.position.z + regionTopZ * group.scale.z)
+      .toBeCloseTo(regionalContextSurfaceZ, 3);
+    expect(sideMaterial.uniforms.topOpacity!.value).toBe(0);
+    expect(terrainMaterial.opacity).toBe(0);
+    expect(terrainMaterial.color.equals(solidTerrainColor)).toBe(true);
+    expect(regions.isTransitionSettled()).toBe(true);
+
+    regions.setExternalPresentation(false);
+    regions.animate(1 / 60);
+    expect(group.scale.z).toBeGreaterThan(0.05 / 22);
+    expect(sideMaterial.uniforms.topOpacity!.value as number).toBeGreaterThan(0);
+    regions.settle();
+    expect(group.scale.z).toBeCloseTo(
+      defaultMapVisualTuning.townshipSiblingThickness / 22,
+      3,
+    );
+    expect(regions.isTransitionSettled()).toBe(true);
     regions.dispose();
   });
 

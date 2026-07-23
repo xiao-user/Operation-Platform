@@ -40,6 +40,19 @@ describe("platform route guard", () => {
     expect(router.currentRoute.value.meta.pageSurface).toBe("standalone");
   });
 
+  it("restores the bureau context for the standalone smart sports cockpit", async () => {
+    const userStore = useUserStore();
+
+    await router.push({
+      path: "/bureau/ai-precision-teaching/smart-sports/cockpit",
+      query: { tenantId: "bureau-001" },
+    });
+
+    expect(userStore.currentTenant.id).toBe("bureau-001");
+    expect(router.currentRoute.value.name).toBe("bureau-smart-sports-cockpit");
+    expect(router.currentRoute.value.meta.pageSurface).toBe("standalone");
+  });
+
   it("rejects a standalone page without explicit tenant context", async () => {
     await router.push("/bureau/visualization/regional-education-overview");
 

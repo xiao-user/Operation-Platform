@@ -1,6 +1,10 @@
 import { MOCK_TENANTS } from "@/config/mock";
 import type { TenantRepository, TenantRepositoryLoadResult } from "@/features/tenant/tenant-repository";
 import type { TenantInfo, TenantType } from "@/types/user";
+import {
+  defaultAdministrativeRegionForTenant,
+  normalizeTenantAdministrativeRegion,
+} from "@/features/tenant/administrative-region";
 
 export const tenantStorageKey = "operation-platform:tenants:v1";
 
@@ -37,11 +41,14 @@ function isTenant(value: unknown): value is TenantInfo {
 }
 
 function normalizeTenant(tenant: TenantInfo): TenantInfo {
+  const administrativeRegion = normalizeTenantAdministrativeRegion(tenant.administrativeRegion)
+    ?? defaultAdministrativeRegionForTenant(tenant);
   return {
     ...tenant,
     name: tenant.name.trim(),
     shortName: tenant.shortName.trim(),
     enabled: tenant.type === "platform" ? true : tenant.enabled !== false,
+    administrativeRegion,
   };
 }
 

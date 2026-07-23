@@ -82,4 +82,45 @@ describe("DigitalTwinTopbar user menu", () => {
     await tabs[1]?.trigger("click");
     expect(wrapper.emitted("sectionSelect")?.[0]).toEqual(["academic-quality"]);
   });
+
+  it("can hide the education-only section navigation for the smart sports cockpit", () => {
+    const wrapper = mount(DigitalTwinTopbar, {
+      props: {
+        tenantName: "榕城区教育局",
+        userName: "罗吴航",
+        roles: [],
+        formattedDate: "2026-07-16",
+        formattedTime: "18:50:00",
+        themes: digitalTwinMapThemes,
+        activeThemeId: "cyan",
+        activeSection: "regional-overview",
+        showSectionNavigation: false,
+      },
+    });
+
+    expect(wrapper.find('[role="tablist"][aria-label="驾驶舱主导航"]').exists()).toBe(false);
+  });
+
+  it("uses the smart sports title while retaining the shared system controls", () => {
+    const wrapper = mount(DigitalTwinTopbar, {
+      props: {
+        tenantName: "体验区教育局",
+        userName: "罗吴航",
+        roles: [],
+        formattedDate: "2026-07-16",
+        formattedTime: "18:50:00",
+        themes: digitalTwinMapThemes,
+        activeThemeId: "cyan",
+        activeSection: "regional-overview",
+        showSectionNavigation: false,
+        variant: "smart-sports",
+        productTitle: "广东省智慧体育大脑",
+      },
+    });
+
+    expect(wrapper.get(".brand-lockup strong").text()).toBe("广东省智慧体育大脑");
+    expect(wrapper.find(".theme-switcher").exists()).toBe(true);
+    expect(wrapper.find(".user-menu-root").exists()).toBe(true);
+    expect(wrapper.find('[role="tablist"][aria-label="驾驶舱主导航"]').exists()).toBe(false);
+  });
 });

@@ -154,6 +154,24 @@ describe("MapMaterialTuningPanel", () => {
       energyTowerBaseOpacity: 0.58,
     });
 
+    const cityHeightScaleRow = wrapper.findAll(".material-tuning__row")
+      .find((row) => row.text().includes("市级高度倍率"));
+    expect(cityHeightScaleRow).toBeDefined();
+    await cityHeightScaleRow!.get('input[type="range"]').setValue("0.47");
+    tuningEvents = wrapper.emitted("update:tuning") ?? [];
+    expect(tuningEvents[tuningEvents.length - 1]?.[0]).toMatchObject({
+      energyTowerCityHeightScale: 0.47,
+    });
+
+    const coverageHeightContrastRow = wrapper.findAll(".material-tuning__row")
+      .find((row) => row.text().includes("人数高度对比"));
+    expect(coverageHeightContrastRow).toBeDefined();
+    await coverageHeightContrastRow!.get('input[type="range"]').setValue("2.8");
+    tuningEvents = wrapper.emitted("update:tuning") ?? [];
+    expect(tuningEvents[tuningEvents.length - 1]?.[0]).toMatchObject({
+      energyTowerCoverageHeightContrast: 2.8,
+    });
+
     await wrapper.get<HTMLInputElement>('[aria-label="多量顶色"]').setValue("#ffeedd");
     themeEvents = wrapper.emitted("update:theme") ?? [];
     expect(themeEvents[themeEvents.length - 1]?.[0]).toMatchObject({
@@ -177,6 +195,10 @@ describe("MapMaterialTuningPanel", () => {
       energyTowerGridOpacity: 0.07,
       energyTowerHoverOpacity: 0.2,
       energyTowerGlowOpacity: 0.23,
+      energyTowerProvinceHeightScale: 0.9,
+      energyTowerCityHeightScale: 0.8,
+      energyTowerDistrictHeightScale: 0.63,
+      energyTowerCoverageHeightContrast: 4,
       institutionDefaultOpacity: 0.56,
       institutionSelectionCycleSeconds: 5,
       autoFocusDistrictDwellSeconds: 300,

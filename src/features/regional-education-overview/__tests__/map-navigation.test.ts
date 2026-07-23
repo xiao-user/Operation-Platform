@@ -7,17 +7,22 @@ import {
   loadMapLevel,
   regionalContextGeoData,
   townshipMapStateForCoordinate,
-} from "../map-data-adapter";
+} from "./rongcheng-map-fixture";
 import { digitalTwinMapThemes, getDigitalTwinMapTheme } from "../map-themes";
+import {
+  entersNestedScopeInSameGeometryBand,
+  isContextBandFeature,
+} from "../map-state-transition";
 
 describe("regional education map navigation", () => {
-  it("exposes 13 unique public township boundaries under Rongcheng", () => {
+  it("exposes 16 current township boundaries under Rongcheng", () => {
     expect(initialMapState.scope).toBe("district");
     expect(initialMapState.terminal).toBe(false);
-    expect(initialMapState.geoData.features).toHaveLength(13);
+    expect(initialMapState.geoData.features).toHaveLength(16);
     const codes = initialMapState.geoData.features.map((feature) => feature.properties.code);
-    expect(new Set(codes).size).toBe(13);
+    expect(new Set(codes).size).toBe(16);
     expect(codes).toContain("445202017");
+    expect(codes).toEqual(expect.arrayContaining(["445202014", "445202015", "445202016"]));
   });
 
   it("provides five flat regional context boundaries around Rongcheng", () => {
@@ -48,6 +53,30 @@ describe("regional education map navigation", () => {
     expect(township.geoData).toBe(initialMapState.geoData);
     expect(locations.length).toBeGreaterThan(0);
     expect(locations.length).toBeLessThan(rongchengEducationLocations.length);
+  });
+
+  it("identifies township focus as a reusable dynamic-layer band", () => {
+    const township = loadMapLevel("445202001");
+
+    expect(entersNestedScopeInSameGeometryBand(initialMapState, township)).toBe(true);
+    expect(entersNestedScopeInSameGeometryBand(township, initialMapState)).toBe(false);
+  });
+
+  it("classifies interactive context features through the shared transition rule", () => {
+    const state = {
+      ...initialMapState,
+      contextInteractive: true,
+      contextGeoData: regionalContextGeoData,
+    };
+
+    expect(isContextBandFeature(
+      state,
+      regionalContextGeoData.features[0]!.properties.code!,
+    )).toBe(true);
+    expect(isContextBandFeature(
+      state,
+      initialMapState.geoData.features[0]!.properties.code!,
+    )).toBe(false);
   });
 
   it("resolves the township containing a selected school coordinate", () => {

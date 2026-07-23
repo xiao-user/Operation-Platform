@@ -11,9 +11,10 @@ const chartMocks = vi.hoisted(() => ({
   use: vi.fn(),
 }));
 
-vi.mock("echarts/charts", () => ({ BarChart: {}, LineChart: {} }));
+vi.mock("echarts/charts", () => ({ BarChart: {}, GaugeChart: {}, LineChart: {} }));
 vi.mock("echarts/components", () => ({
   DataZoomComponent: {},
+  GraphicComponent: {},
   GridComponent: {},
   LegendComponent: {},
   TooltipComponent: {},

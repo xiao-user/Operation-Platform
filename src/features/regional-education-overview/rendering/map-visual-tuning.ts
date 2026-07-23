@@ -82,6 +82,15 @@ export interface MapVisualTuning {
   energyTowerTownshipMaximumHeight: number;
   energyTowerTownshipRadius: number;
   energyTowerTownshipGridCellSizeDegrees: number;
+  energyTowerProvinceHeightScale: number;
+  energyTowerProvinceRadiusScale: number;
+  energyTowerCityHeightScale: number;
+  energyTowerCityRadiusScale: number;
+  energyTowerDistrictHeightScale: number;
+  energyTowerDistrictRadiusScale: number;
+  energyTowerTownshipHeightScale: number;
+  energyTowerTownshipRadiusScale: number;
+  energyTowerCoverageHeightContrast: number;
   energyTowerHeightExponent: number;
   energyTowerCurveFactor: number;
   energyTowerRevealRate: number;
@@ -196,6 +205,15 @@ export const defaultMapVisualTuning: Readonly<MapVisualTuning> = Object.freeze({
   energyTowerTownshipMaximumHeight: 120,
   energyTowerTownshipRadius: 20,
   energyTowerTownshipGridCellSizeDegrees: 0.025,
+  energyTowerProvinceHeightScale: 0.9,
+  energyTowerProvinceRadiusScale: 0.9,
+  energyTowerCityHeightScale: 0.8,
+  energyTowerCityRadiusScale: 0.34,
+  energyTowerDistrictHeightScale: 0.63,
+  energyTowerDistrictRadiusScale: 0.52,
+  energyTowerTownshipHeightScale: 0.82,
+  energyTowerTownshipRadiusScale: 0.86,
+  energyTowerCoverageHeightContrast: 4,
   energyTowerHeightExponent: 1.05,
   energyTowerCurveFactor: 6.5,
   energyTowerRevealRate: 2.4,

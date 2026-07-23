@@ -247,7 +247,7 @@ export const digitalTwinMapThemes: readonly DigitalTwinMapTheme[] = [
   {
     id: "spectrum",
     name: "多维光谱",
-    description: "学校数量分层态势",
+    description: "区域能量分层态势",
     primary: "#2B67D1",
     outline: "#78A8FF",
     internalLine: "rgba(120,168,255,0.42)",

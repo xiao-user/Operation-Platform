@@ -3,6 +3,7 @@ import type {
   EducationLocationType,
   EducationLocationTypeMeta,
 } from "./types";
+import { wgs84ToGcj02 } from "./coordinate-system";
 
 export const educationLocationTypeMeta: Record<
   EducationLocationType,
@@ -21,7 +22,9 @@ export const educationLocationTypeMeta: Record<
  * 学校类型按公开名称作演示性归类，教育局坐标按公开办公地址“空港大道西段”近似落点。
  * 正式上线前必须用教育局权威台账校准隶属关系、类型与坐标。
  */
-export const rongchengEducationLocations: readonly EducationLocation[] = [
+type LegacyWgs84EducationLocation = Omit<EducationLocation, "coordinateSystem">;
+
+const legacyWgs84EducationLocations: readonly LegacyWgs84EducationLocation[] = [
   {
     id: "rongcheng-education-bureau",
     name: "榕城区教育局",
@@ -74,6 +77,13 @@ export const rongchengEducationLocations: readonly EducationLocation[] = [
   { id: "osm-42", name: "竞智学校", type: "comprehensive", coordinate: [116.4736535, 23.5067477], source: "OpenStreetMap", sourceId: "42" },
   { id: "osm-43", name: "新华中学", type: "junior", coordinate: [116.4973452, 23.5242038], source: "OpenStreetMap", sourceId: "43" },
 ] as const;
+
+export const rongchengEducationLocations: readonly EducationLocation[] =
+  legacyWgs84EducationLocations.map((location) => ({
+    ...location,
+    coordinate: wgs84ToGcj02(location.coordinate),
+    coordinateSystem: "GCJ-02",
+  }));
 
 export const schoolLocations = rongchengEducationLocations.filter(
   (location) => location.type !== "bureau",

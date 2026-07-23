@@ -8,14 +8,12 @@ import AiDataAssistantEntry from "@/features/regional-education-overview/compone
 import LocationProfilePanel from "@/features/regional-education-overview/components/LocationProfilePanel.vue";
 import RegionalMapStage from "@/features/regional-education-overview/components/RegionalMapStage.vue";
 import RegionalOverviewPanel from "@/features/regional-education-overview/components/RegionalOverviewPanel.vue";
+import SmartSportsDashboardHud from "@/features/regional-education-overview/components/SmartSportsDashboardHud.vue";
 import { AutoFocusTour } from "@/features/regional-education-overview/auto-focus-tour";
 import { createDigitalTwinThemeCssVariables } from "@/features/regional-education-overview/digital-twin-theme-css";
 import { rongchengEducationLocations } from "@/features/regional-education-overview/education-locations";
-import {
-  initialMapState,
-  townshipMapStateForCoordinate,
-} from "@/features/regional-education-overview/map-data-adapter";
-import type { MapState } from "@/features/regional-education-overview/map-data-adapter";
+import type { MapState } from "@/features/regional-education-overview/map-state";
+import type { MapDataSource } from "@/features/regional-education-overview/map-data-source";
 import {
   cloneDigitalTwinMapTheme,
   digitalTwinMapThemes,
@@ -52,6 +50,17 @@ const AcademicQualityDashboard = defineAsyncComponent(() => (
   import("@/features/regional-education-overview/components/AcademicQualityDashboard.vue")
 ));
 
+const props = withDefaults(defineProps<{
+  mapDataSource: MapDataSource;
+  locations?: readonly EducationLocation[];
+  showDashboardSections?: boolean;
+  dashboardVariant?: "regional-education" | "smart-sports";
+}>(), {
+  locations: () => rongchengEducationLocations,
+  showDashboardSections: true,
+  dashboardVariant: "regional-education",
+});
+
 const router = useRouter();
 const navigationStore = useNavigationStore();
 const authStore = useAuthStore();
@@ -62,9 +71,14 @@ const dashboardViewport = ref<HTMLElement>();
 const mapStage = ref<InstanceType<typeof RegionalMapStage>>();
 const activeDashboardSection = ref<RegionalDashboardSectionId>("regional-overview");
 const dashboardTransitioning = ref(false);
-const selectedLocation = ref<EducationLocation | undefined>(rongchengEducationLocations[0]);
-const activeLocations = ref<EducationLocation[]>([...rongchengEducationLocations]);
-const activeMapState = ref<MapState>(initialMapState);
+const selectedLocation = ref<EducationLocation | undefined>(props.locations[0]);
+const activeLocations = ref<EducationLocation[]>([...props.locations]);
+const activeMapState = ref<MapState>(props.mapDataSource.initialState);
+const activeScopePath = computed(() => activeMapState.value.navigationPath ?? [{
+  code: activeMapState.value.code,
+  name: activeMapState.value.regionName,
+  scope: activeMapState.value.scope,
+}]);
 const dataLayerMode = ref<MapDataLayerMode>("energy-towers");
 const mapVisualTuning = ref(cloneMapVisualTuning(defaultMapVisualTuning));
 const now = ref(new Date());
@@ -96,12 +110,19 @@ const availableThemes = computed(() => digitalTwinMapThemes.map((theme) =>
 const pageThemeStyle = computed(() => createDigitalTwinThemeCssVariables(activeTheme.value));
 const formattedDate = computed(() => dateFormatter.format(now.value).replace(/\//g, "-"));
 const formattedTime = computed(() => timeFormatter.format(now.value));
+const sportsTitle = computed(() => `${props.mapDataSource.initialState.regionName}智慧体育大脑`);
 const coverageLabel = computed(() => {
-  if (activeMapState.value.scope === "district") {
-    return "13/16 公开镇街边界 · 溪南/凤美/京冈待权威数据";
+  if (activeMapState.value.boundaryDataNotice) {
+    return activeMapState.value.boundaryDataNotice;
   }
-  if (activeMapState.value.code === "445202013") {
-    return "渔湖边界为 2022 年拆分前公开范围";
+  if (activeMapState.value.scope === "province") {
+    return "省级行政区边界 · 下级数据按需加载";
+  }
+  if (activeMapState.value.scope === "city") {
+    return "地市同级与区县边界 · 支持同级切换";
+  }
+  if (activeMapState.value.scope === "district") {
+    return "区县同级边界 · 当前区县聚焦";
   }
   return "公开镇街边界 · 原型数据";
 });
@@ -146,13 +167,15 @@ function restartSchoolSelectionCycle() {
   schoolSelectionTimer = window.setInterval(cycleSelectedSchool, duration * 1000);
 }
 
-function autoFocusTownshipCodes() {
-  const codesWithSchools = new Set(rongchengEducationLocations.flatMap((location) => {
+function autoFocusChildCodes() {
+  if (props.locations.length === 0) return [];
+  const initialState = props.mapDataSource.initialState;
+  const codesWithSchools = new Set(props.locations.flatMap((location) => {
     if (location.type === "bureau") return [];
-    const township = townshipMapStateForCoordinate(location.coordinate);
-    return township ? [township.code] : [];
+    const childState = props.mapDataSource.stateForCoordinate(location.coordinate, initialState);
+    return childState ? [childState.code] : [];
   }));
-  return initialMapState.geoData.features.flatMap((feature) => {
+  return initialState.geoData.features.flatMap((feature) => {
     const code = feature.properties.code;
     return typeof code === "string" && codesWithSchools.has(code) ? [code] : [];
   });
@@ -162,17 +185,15 @@ const autoFocusTour = new AutoFocusTour({
   isVisible: () => (
     !document.hidden && activeDashboardSection.value === "regional-overview"
   ),
-  isTownshipScope: () => activeMapState.value.scope === "township",
-  currentTownshipCode: () => activeMapState.value.scope === "township"
-    ? activeMapState.value.code
-    : undefined,
-  townshipCodes: autoFocusTownshipCodes,
-  enterTownship: async (code) => await mapStage.value?.focusTownship(code) ?? false,
-  leaveTownship: async () => await mapStage.value?.goBack() ?? false,
-  districtDwellDurationMs: () => (
+  isChildScope: () => activeMapState.value.code !== props.mapDataSource.initialState.code,
+  currentChildCode: () => activeScopePath.value[1]?.code,
+  childCodes: autoFocusChildCodes,
+  enterChild: async (code) => await mapStage.value?.focusFeatureAutomatically(code) ?? false,
+  leaveChild: async () => await mapStage.value?.goBackAutomatically() ?? false,
+  parentDwellDurationMs: () => (
     Math.max(1, mapVisualTuning.value.autoFocusDistrictDwellSeconds) * 1000
   ),
-  townshipDwellDurationMs: () => (
+  childDwellDurationMs: () => (
     Math.max(1, mapVisualTuning.value.autoFocusTownshipDwellSeconds) * 1000
   ),
 });
@@ -237,6 +258,7 @@ async function mountDashboardSection(sectionId: RegionalDashboardSectionId) {
 }
 
 function selectDashboardSection(sectionId: RegionalDashboardSectionId) {
+  if (!props.showDashboardSections) return;
   if (
     sectionId === activeDashboardSection.value
     || !isRegionalDashboardSectionEnabled(sectionId)
@@ -290,8 +312,22 @@ function handleScopeChange(state: MapState, locations: EducationLocation[]) {
   }
 }
 
+function handleNetworkAvailabilityChange(available: boolean) {
+  if (!available && dataLayerMode.value === "institutions") {
+    dataLayerMode.value = "energy-towers";
+  }
+}
+
+function handleMapLoadError(message: string) {
+  ElMessage.error(message);
+}
+
 function returnToParentScope() {
   void mapStage.value?.goBack();
+}
+
+function navigateToScope(code: string) {
+  void mapStage.value?.goToScope(code);
 }
 
 async function switchActiveRole(roleId: string) {
@@ -360,24 +396,28 @@ onMounted(() => {
       const targets = Array.from(pageRoot.value.querySelectorAll<HTMLElement>([
         ".page-topbar",
         ".left-panel",
-        ".ai-data-assistant-entry",
         ".spatial-trail",
         ".right-panel",
+        ".sports-summary",
+        ".sports-ranking",
+        ".sports-goal-card",
+        ".sports-trend-card",
         ".map-camera-control",
         ".bottom-navigation",
       ].join(",")));
       const entranceTween = gsap.from(targets, {
         autoAlpha: 0,
         x: (_, target) => {
-          if (target.matches(".left-panel, .ai-data-assistant-entry, .map-camera-control")) {
+          if (target.matches(".left-panel, .map-camera-control")) {
             return -24;
           }
-          if (target.matches(".right-panel, .spatial-trail")) return 24;
+          if (target.matches(".right-panel, .spatial-trail, .sports-ranking")) return 24;
+          if (target.matches(".sports-summary")) return -24;
           return 0;
         },
         y: (_, target) => {
           if (target.matches(".page-topbar")) return -16;
-          if (target.matches(".bottom-navigation")) return 18;
+          if (target.matches(".bottom-navigation, .sports-goal-card, .sports-trend-card")) return 18;
           return 0;
         },
         duration: digitalTwinMotion.entranceDuration,
@@ -407,7 +447,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main ref="pageRoot" class="regional-digital-twin" :style="pageThemeStyle">
+  <main
+    ref="pageRoot"
+    class="regional-digital-twin"
+    :class="{ 'regional-digital-twin--smart-sports': dashboardVariant === 'smart-sports' }"
+    :style="pageThemeStyle"
+  >
     <div
       ref="dashboardViewport"
       class="dashboard-viewport"
@@ -418,18 +463,21 @@ onBeforeUnmount(() => {
         id="dashboard-panel-regional-overview"
         class="dashboard-section dashboard-section--overview"
         role="tabpanel"
-        aria-label="区域教育总览"
+        :aria-label="dashboardVariant === 'smart-sports' ? '智慧体育数据驾驶舱' : '区域教育总览'"
       >
         <RegionalMapStage
           ref="mapStage"
           class="map-layer"
-          :locations="rongchengEducationLocations"
+          :locations="props.locations"
           :selected-location-id="selectedLocation?.id"
           :theme="activeTheme"
           :data-layer-mode="dataLayerMode"
           :visual-tuning="mapVisualTuning"
+          :data-source="props.mapDataSource"
           @select="selectLocation"
           @scope-change="handleScopeChange"
+          @network-availability-change="handleNetworkAvailabilityChange"
+          @load-error="handleMapLoadError"
           @update:data-layer-mode="dataLayerMode = $event"
           @update:visual-tuning="mapVisualTuning = $event"
           @update:theme="updateActiveTheme"
@@ -437,17 +485,30 @@ onBeforeUnmount(() => {
 
         <div class="hud-layer">
           <div class="hud-content">
+            <SmartSportsDashboardHud
+              v-if="dashboardVariant === 'smart-sports'"
+              :scope-name="activeMapState.regionName"
+              :scope-path="activeScopePath"
+              :palette="activeTheme.chartPalette"
+              :coverage-label="coverageLabel"
+              @scope-back="returnToParentScope"
+              @scope-navigate="navigateToScope"
+            />
+
             <RegionalOverviewPanel
+              v-else
               :locations="activeLocations"
               :selected-type="selectedLocation?.type"
               :scope-name="activeMapState.regionName"
-              :is-township="activeMapState.scope === 'township'"
+              :scope-path="activeScopePath"
               :coverage-label="coverageLabel"
               @scope-back="returnToParentScope"
+              @scope-navigate="navigateToScope"
               @type-select="selectFirstLocationOfTypes"
             />
 
             <LocationProfilePanel
+              v-if="dashboardVariant === 'regional-education'"
               :location="selectedLocation"
               :scope-name="activeMapState.regionName"
               :formatted-date="formattedDate"
@@ -460,7 +521,7 @@ onBeforeUnmount(() => {
       </section>
 
       <AcademicQualityDashboard
-        v-else
+        v-else-if="showDashboardSections"
         :chart-palette="activeTheme.chartPalette"
       />
     </div>
@@ -475,6 +536,9 @@ onBeforeUnmount(() => {
       :themes="availableThemes"
       :active-theme-id="activeThemeId"
       :active-section="activeDashboardSection"
+      :show-section-navigation="showDashboardSections"
+      :variant="dashboardVariant"
+      :product-title="sportsTitle"
       @theme-select="activeThemeId = $event"
       @section-select="selectDashboardSection"
       @role-select="switchActiveRole"
@@ -488,6 +552,7 @@ onBeforeUnmount(() => {
     <AiDataAssistantEntry />
 
     <DigitalTwinStatusBar
+      v-if="showDashboardSections"
       :code="activeMapState.code"
       :scope-name="activeMapState.regionName"
       :entity-count="activeLocations.length"
@@ -511,6 +576,12 @@ onBeforeUnmount(() => {
   font-family: var(--dt-font-family);
   font-weight: var(--dt-font-weight-light);
   transition: color var(--dt-transition-theme), background var(--dt-transition-theme);
+}
+
+.regional-digital-twin--smart-sports {
+  --dt-map-control-bottom: calc(160px + var(--dt-space-8) + var(--dt-space-4));
+  --dt-ai-entry-bottom: calc(160px + var(--dt-space-8) + var(--dt-space-4));
+  --dt-ai-entry-right: calc(var(--dt-right-panel-width) + var(--dt-right-panel-right) + var(--dt-space-6));
 }
 
 .map-layer {

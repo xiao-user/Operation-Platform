@@ -59,6 +59,17 @@ describe("page registry", () => {
     });
   });
 
+  it("registers the smart sports cockpit as a standalone new-tab page", () => {
+    expect(pageRegistryByKey.get("bureau-smart-sports-cockpit")).toMatchObject({
+      title: "智慧体育数据驾驶舱",
+      path: "/bureau/ai-precision-teaching/smart-sports/cockpit",
+      tenantTypes: ["bureau"],
+      status: "available",
+      surface: "standalone",
+      openMode: "new-tab",
+    });
+  });
+
   it("registers the bureau student growth portrait as an available shell page", () => {
     expect(pageRegistryByKey.get("bureau-student-growth-portrait")).toMatchObject({
       title: "学生成长画像",

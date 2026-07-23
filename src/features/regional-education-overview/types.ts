@@ -11,6 +11,7 @@ export interface EducationLocation {
   name: string;
   type: EducationLocationType;
   coordinate: readonly [number, number];
+  coordinateSystem: "GCJ-02";
   source: "OpenStreetMap" | "public-address-approximation";
   sourceId?: string;
   note?: string;

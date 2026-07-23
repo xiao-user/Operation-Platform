@@ -32,6 +32,29 @@ const EMPTY_USER: UserInfo = {
   tenantRoleIds: {},
 };
 
+interface ConfigurationSaveWaiter {
+  resolve: (configuration: TenantConfiguration) => void;
+  reject: (error: unknown) => void;
+}
+
+interface PendingConfigurationSave {
+  configuration: TenantConfiguration;
+  waiters: ConfigurationSaveWaiter[];
+}
+
+interface ConfigurationSaveState {
+  generation: number;
+  running: boolean;
+  pending: PendingConfigurationSave | null;
+}
+
+function sameConfiguration(
+  first: TenantConfiguration | undefined,
+  second: TenantConfiguration,
+) {
+  return first !== undefined && JSON.stringify(first) === JSON.stringify(second);
+}
+
 export class SupabaseOperationPlatformPersistence implements OperationPlatformPersistence {
   readonly capabilities = {
     localDataExport: false,
@@ -49,6 +72,7 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
   private workbenchLayouts = new Map<string, UserWorkbenchLayout>();
   private loadedTenants = new Set<string>();
   private tenantLoadRequests = new Map<string, Promise<void>>();
+  private configurationSaveStates = new Map<string, ConfigurationSaveState>();
   private generation = 0;
 
   initialState() {
@@ -125,6 +149,7 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
     this.workbenchLayouts.clear();
     this.loadedTenants.clear();
     this.tenantLoadRequests.clear();
+    this.configurationSaveStates.clear();
   }
 
   listTenants() {
@@ -167,6 +192,7 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
     this.members.delete(tenantId);
     this.loadedTenants.delete(tenantId);
     this.tenantLoadRequests.delete(tenantId);
+    this.configurationSaveStates.delete(tenantId);
     this.activeRoles.delete(tenantId);
     this.visualizationThemes.delete(tenantId);
     for (const key of this.workbenchLayouts.keys()) {
@@ -204,16 +230,93 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
       : null;
   }
 
-  async saveConfiguration(tenant: TenantInfo, configuration: TenantConfiguration) {
-    const revision = await supabaseOperationPlatformRepository.saveConfiguration(
-      tenant.id,
-      this.configurationRevisions.get(tenant.id) ?? 0,
-      configuration,
-    );
-    const saved = cloneJson(configuration);
-    this.configurations.set(tenant.id, saved);
-    this.configurationRevisions.set(tenant.id, revision);
-    return cloneJson(saved);
+  saveConfiguration(tenant: TenantInfo, configuration: TenantConfiguration) {
+    const requested = cloneJson(configuration);
+    const existingState = this.configurationSaveStates.get(tenant.id);
+    if (!existingState && sameConfiguration(this.configurations.get(tenant.id), requested)) {
+      return Promise.resolve(cloneJson(requested));
+    }
+
+    const state: ConfigurationSaveState = existingState ?? {
+      generation: this.generation,
+      running: false,
+      pending: null,
+    };
+    if (!existingState) this.configurationSaveStates.set(tenant.id, state);
+
+    const result = new Promise<TenantConfiguration>((resolve, reject) => {
+      if (state.pending) {
+        state.pending.configuration = requested;
+        state.pending.waiters.push({ resolve, reject });
+      } else {
+        state.pending = {
+          configuration: requested,
+          waiters: [{ resolve, reject }],
+        };
+      }
+    });
+
+    if (!state.running) void this.flushConfigurationSaves(tenant.id, state);
+    return result;
+  }
+
+  private async flushConfigurationSaves(tenantId: string, state: ConfigurationSaveState) {
+    state.running = true;
+    try {
+      while (state.pending) {
+        const pending = state.pending;
+        state.pending = null;
+        if (state.generation !== this.generation) {
+          this.rejectConfigurationSave(pending, new Error("登录状态已变化，配置保存已取消"));
+          continue;
+        }
+
+        const cached = this.configurations.get(tenantId);
+        if (sameConfiguration(cached, pending.configuration)) {
+          this.resolveConfigurationSave(pending, pending.configuration);
+          continue;
+        }
+
+        try {
+          const revision = await supabaseOperationPlatformRepository.saveConfiguration(
+            tenantId,
+            this.configurationRevisions.get(tenantId) ?? 0,
+            pending.configuration,
+          );
+          if (state.generation !== this.generation) {
+            this.rejectConfigurationSave(pending, new Error("登录状态已变化，配置保存结果已忽略"));
+            continue;
+          }
+          const saved = cloneJson(pending.configuration);
+          this.configurations.set(tenantId, saved);
+          this.configurationRevisions.set(tenantId, revision);
+          this.resolveConfigurationSave(pending, saved);
+        } catch (error) {
+          this.rejectConfigurationSave(pending, error);
+          if (state.pending) {
+            this.rejectConfigurationSave(state.pending, error);
+            state.pending = null;
+          }
+          break;
+        }
+      }
+    } finally {
+      state.running = false;
+      if (this.configurationSaveStates.get(tenantId) === state) {
+        this.configurationSaveStates.delete(tenantId);
+      }
+    }
+  }
+
+  private resolveConfigurationSave(
+    pending: PendingConfigurationSave,
+    configuration: TenantConfiguration,
+  ) {
+    for (const waiter of pending.waiters) waiter.resolve(cloneJson(configuration));
+  }
+
+  private rejectConfigurationSave(pending: PendingConfigurationSave, error: unknown) {
+    for (const waiter of pending.waiters) waiter.reject(error);
   }
 
   loadMembers(tenant: TenantInfo) {

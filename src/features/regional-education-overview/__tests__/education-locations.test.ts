@@ -24,11 +24,17 @@ describe("rongcheng education locations", () => {
     expect(new Set(ids).size).toBe(ids.length);
 
     rongchengEducationLocations.forEach((location) => {
+      expect(location.coordinateSystem).toBe("GCJ-02");
       const [longitude, latitude] = location.coordinate;
       expect(longitude).toBeGreaterThanOrEqual(116.277156);
       expect(longitude).toBeLessThanOrEqual(116.633936);
       expect(latitude).toBeGreaterThanOrEqual(23.378278);
       expect(latitude).toBeLessThanOrEqual(23.595935);
     });
+  });
+
+  it("normalizes legacy OSM locations before they enter the map engine", () => {
+    expect(rongchengEducationLocations[1]?.coordinate[0]).toBeCloseTo(116.2988, 3);
+    expect(rongchengEducationLocations[1]?.coordinate[1]).toBeCloseTo(23.4680, 3);
   });
 });

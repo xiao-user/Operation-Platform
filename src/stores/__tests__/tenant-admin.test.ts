@@ -57,6 +57,12 @@ describe("tenant admin store", () => {
       shortName: "成员学校",
       type: "school",
       enabled: true,
+      administrativeRegion: {
+        code: "360000",
+        name: "江西省",
+        scope: "province",
+        path: [{ code: "360000", name: "江西省", scope: "province" }],
+      },
     });
 
     const members = tenantMemberRepository.list(tenant).members;
@@ -67,6 +73,7 @@ describe("tenant admin store", () => {
       enabled: true,
       roleIds: [ADMIN_ROLE_ID],
     });
+    expect(tenant.administrativeRegion?.code).toBe("360000");
   });
 
   it("starts in an assigned tenant when an unassigned organization sorts first", () => {

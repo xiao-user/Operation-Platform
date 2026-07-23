@@ -86,6 +86,15 @@ describe("tenant menu templates", () => {
       pageKey: DEVELOPING_PAGE_KEY,
     });
 
+    const precisionTeaching = records.find(
+      (record) => record.parentId === null && record.name === "AI精准教学",
+    )!;
+    const smartSports = child(precisionTeaching.id, "智慧体育");
+    expect(child(smartSports.id, "智慧体育数据驾驶舱")).toMatchObject({
+      type: "page",
+      pageKey: "bureau-smart-sports-cockpit",
+    });
+
     const smartBrain = records.find(
       (record) => record.parentId === null && record.name === "智慧大脑",
     )!;

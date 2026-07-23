@@ -1,31 +1,38 @@
 import * as THREE from "three";
 import type { GeoFeature, Position } from "../geo";
-import type { MapState } from "../map-data-adapter";
+import type { MapState } from "../map-state";
 import type { DigitalTwinMapTheme } from "../map-themes";
 import type { TuningAwareMapSceneLayer } from "./map-scene-layer";
 import type { MapProjection } from "./map-projection";
 import { polygonsOf } from "./map-projection";
 import type { MapVisualTuning } from "./map-visual-tuning";
 import { mapVisualColor } from "./map-visual-tuning";
+import { regionalContextSurfaceZ } from "./regional-context-layer";
 import { ResourceOwner } from "./resource-owner";
 import { themeColor } from "./theme-color";
 
 const topZ = 44;
 const bottomZ = 22;
 const baseThickness = topZ - bottomZ;
+const externalPresentationThickness = 0.05;
 const referenceFrameSeconds = 1 / 60;
 
 function dampingRate(frameFactor: number) {
   return -Math.log(1 - frameFactor) / referenceFrameSeconds;
 }
 
+const focusTransitionDamping = dampingRate(0.14);
+
 const interactionDamping = {
-  scale: dampingRate(0.14),
+  scale: focusTransitionDamping,
   // Keep thickness scale and base offset on the same curve so a hover can grow
   // downward while the region's top surface stays mathematically stationary.
-  elevation: dampingRate(0.14),
+  elevation: focusTransitionDamping,
   highlight: dampingRate(0.2),
   overlay: dampingRate(0.16),
+  // Cross-geometry transitions use the same response curve as district focus
+  // changes so city and district sibling navigation feel identical.
+  presentation: focusTransitionDamping,
 } as const;
 
 function damp(current: number, target: number, rate: number, delta: number, epsilon: number) {
@@ -56,7 +63,9 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
   private readonly regionGroups = new Set<THREE.Group>();
   private readonly regionGroupsByCode = new Map<string, THREE.Group[]>();
   private readonly highlightMaterials = new Map<THREE.Group, THREE.MeshBasicMaterial>();
+  private readonly highlightMeshes = new Map<THREE.Group, THREE.Mesh>();
   private readonly inactiveOverlayMaterials = new Map<THREE.Group, THREE.MeshBasicMaterial>();
+  private readonly inactiveOverlayMeshes = new Map<THREE.Group, THREE.Mesh>();
   private readonly baseMaterial: THREE.MeshBasicMaterial;
   private readonly sideDepthMaterial: THREE.MeshBasicMaterial;
   private readonly sideMaterial: THREE.ShaderMaterial;
@@ -67,7 +76,13 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
   private readonly internalBoundaryMaterial: THREE.LineBasicMaterial;
   private readonly topContourMaterial: THREE.LineBasicMaterial;
   private focusFeatureCode?: string;
+  private emphasizeAll = false;
+  private forceSiblingPresentation = false;
   private hoveredFeatureCode?: string;
+  private presentationOpacity = 1;
+  private targetPresentationOpacity = 1;
+  private externalPresentation = 0;
+  private targetExternalPresentation = 0;
   private tuning: MapVisualTuning;
   private theme: DigitalTwinMapTheme;
 
@@ -212,16 +227,20 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
           groups.push(regionGroup);
           this.regionGroupsByCode.set(featureCode, groups);
         }
+        // All coplanar caps use identical triangulation. Sharing the geometry
+        // removes three ShapeGeometry allocations per polygon and keeps GPU
+        // buffers stable during province/city transitions.
+        const capGeometry = this.owner.geometry(new THREE.ShapeGeometry(shape));
 
         const base = new THREE.Mesh(
-          this.owner.geometry(new THREE.ShapeGeometry(shape)),
+          capGeometry,
           this.baseMaterial,
         );
         base.position.z = bottomZ;
         regionGroup.add(base, ...this.createSideWalls(outerRing));
 
         const terrain = new THREE.Mesh(
-          this.owner.geometry(new THREE.ShapeGeometry(shape)),
+          capGeometry,
           this.terrainMaterials[terrainToneIndex],
         );
         terrain.position.z = topZ;
@@ -240,12 +259,14 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
         }));
         highlightMaterial.userData.targetOpacity = 0;
         const highlight = new THREE.Mesh(
-          this.owner.geometry(new THREE.ShapeGeometry(shape)),
+          capGeometry,
           highlightMaterial,
         );
         highlight.position.z = topZ + 2;
+        highlight.visible = false;
         regionGroup.add(highlight);
         this.highlightMaterials.set(regionGroup, highlightMaterial);
+        this.highlightMeshes.set(regionGroup, highlight);
 
         const inactiveOverlayMaterial = this.owner.material(new THREE.MeshBasicMaterial({
           transparent: true,
@@ -256,12 +277,14 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
         }));
         inactiveOverlayMaterial.userData.targetOpacity = 0;
         const inactiveOverlay = new THREE.Mesh(
-          this.owner.geometry(new THREE.ShapeGeometry(shape)),
+          capGeometry,
           inactiveOverlayMaterial,
         );
         inactiveOverlay.position.z = topZ + 2.5;
+        inactiveOverlay.visible = false;
         regionGroup.add(inactiveOverlay);
         this.inactiveOverlayMaterials.set(regionGroup, inactiveOverlayMaterial);
+        this.inactiveOverlayMeshes.set(regionGroup, inactiveOverlay);
 
         for (const ring of polygon) {
           regionGroup.add(this.createBoundary(ring, topZ + 0.6, this.internalBoundaryMaterial));
@@ -292,36 +315,67 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
       mapVisualColor(tuning, "sideBottom", theme.sideBottom),
       regionTop,
     );
-    this.baseMaterial.color.set(theme.bottomFill);
-    this.baseMaterial.opacity = tuning.regionBaseOpacity;
-    this.sideMaterial.uniforms.topColor!.value.set(
-      mapVisualColor(tuning, "sideTop", theme.sideTop),
+    const solidVisibility = 1 - this.externalPresentation;
+    const terrainExitProgress = THREE.MathUtils.smoothstep(
+      this.externalPresentation,
+      0.35,
+      1,
     );
-    this.sideMaterial.uniforms.bottomColor!.value.copy(bottom.color);
-    this.sideMaterial.uniforms.topOpacity!.value = tuning.regionSideTopOpacity;
+    this.baseMaterial.color.set(theme.bottomFill);
+    this.baseMaterial.opacity = (
+      tuning.regionBaseOpacity * this.presentationOpacity * solidVisibility
+    );
+    this.sideMaterial.uniforms.topColor!.value
+      .set(mapVisualColor(tuning, "sideTop", theme.sideTop));
+    this.sideMaterial.uniforms.bottomColor!.value
+      .copy(bottom.color);
+    this.sideMaterial.uniforms.topOpacity!.value = (
+      tuning.regionSideTopOpacity * this.presentationOpacity * solidVisibility
+    );
     this.sideMaterial.uniforms.bottomOpacity!.value = (
-      bottom.opacity * tuning.regionSideBottomOpacityScale
+      bottom.opacity
+      * tuning.regionSideBottomOpacityScale
+      * this.presentationOpacity
+      * solidVisibility
     );
     const terrainColors = [baseTerrainColor, variedTerrainColor] as const;
-    const terrainTransparent = tuning.regionTerrainOpacity < 0.999;
+    const terrainOpacity = (
+      tuning.regionTerrainOpacity
+      * (1 - terrainExitProgress)
+      * this.presentationOpacity
+    );
+    const terrainTransparent = terrainOpacity < 0.999;
     for (const [index, material] of this.terrainMaterials.entries()) {
       const color = terrainColors[index] ?? baseTerrainColor;
       material.color.copy(color);
       material.emissive.copy(color);
-      material.opacity = tuning.regionTerrainOpacity;
+      material.opacity = terrainOpacity;
       if (material.transparent !== terrainTransparent) {
         material.transparent = terrainTransparent;
         material.needsUpdate = true;
       }
-      material.depthWrite = !terrainTransparent;
-      material.emissiveIntensity = tuning.regionTerrainEmissiveIntensity;
+      // Keep the cap fully opaque during the first part of the height collapse.
+      // Once it starts fading, stop writing depth so the real external layer
+      // beneath it becomes the color target directly, without an intermediate tint.
+      material.depthWrite = terrainExitProgress <= 0.001 && !terrainTransparent;
+      material.emissiveIntensity = (
+        tuning.regionTerrainEmissiveIntensity * (1 - terrainExitProgress)
+      );
     }
     this.internalBoundaryMaterial.color.copy(internal.color);
     this.internalBoundaryMaterial.opacity = (
-      internal.opacity * tuning.regionInternalBoundaryOpacityScale
+      internal.opacity
+      * tuning.regionInternalBoundaryOpacityScale
+      * solidVisibility
+      * this.presentationOpacity
     );
     this.topContourMaterial.color.set(outline);
-    this.topContourMaterial.opacity = tuning.regionTopContourOpacity;
+    this.topContourMaterial.opacity = (
+      tuning.regionTopContourOpacity * solidVisibility * this.presentationOpacity
+    );
+    this.sideDepthMaterial.depthWrite = (
+      this.presentationOpacity > 0.98 && this.externalPresentation < 0.999
+    );
     for (const material of this.highlightMaterials.values()) {
       material.color.set(mapVisualColor(tuning, "hover", theme.primary));
     }
@@ -337,6 +391,12 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
     return feature && group ? { feature, group } : undefined;
   }
 
+  featureHit(featureCode: string): RegionHit | undefined {
+    const group = this.regionGroupsByCode.get(featureCode)?.find((item) => item.visible);
+    const feature = group?.userData.feature as GeoFeature | undefined;
+    return feature && group ? { feature, group } : undefined;
+  }
+
   setHovered(group?: THREE.Group) {
     const hoveredFeature = group?.userData.feature as GeoFeature | undefined;
     this.hoveredFeatureCode = typeof hoveredFeature?.properties.code === "string"
@@ -346,13 +406,22 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
   }
 
   private applyInteractionTargets() {
-    const hasFocus = Boolean(this.focusFeatureCode);
+    const hasFocus = this.forceSiblingPresentation
+      || this.emphasizeAll
+      || Boolean(this.focusFeatureCode);
     for (const regionGroup of this.regionGroups) {
       const feature = regionGroup.userData.feature as GeoFeature | undefined;
       const code = feature?.properties.code;
-      const focused = hasFocus && code === this.focusFeatureCode;
+      const focused = !this.forceSiblingPresentation
+        && regionGroup.visible
+        && (this.emphasizeAll || (hasFocus && code === this.focusFeatureCode));
       const hovered = code === this.hoveredFeatureCode;
-      if (!hasFocus) {
+      if (this.targetExternalPresentation > 0.5) {
+        const scale = externalPresentationThickness / baseThickness;
+        regionGroup.userData.targetScaleZ = scale;
+        regionGroup.userData.targetBaseZ = regionalContextSurfaceZ - topZ * scale;
+        regionGroup.renderOrder = 1;
+      } else if (!hasFocus) {
         const thickness = hovered
           ? this.tuning.districtHoverThickness
           : this.tuning.districtThickness;
@@ -379,24 +448,106 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
       }
       const highlight = this.highlightMaterials.get(regionGroup);
       if (highlight) {
-        highlight.userData.targetOpacity = hovered
+        const targetOpacity = this.targetExternalPresentation > 0.5
+          ? 0
+          : hovered
           ? hasFocus ? this.tuning.townshipHoverOpacity : this.tuning.districtHoverOpacity
           : 0;
+        highlight.userData.targetOpacity = targetOpacity;
+        if (targetOpacity > 0) this.highlightMeshes.get(regionGroup)!.visible = true;
       }
       const overlay = this.inactiveOverlayMaterials.get(regionGroup);
       if (overlay) {
-        overlay.userData.targetOpacity = hasFocus && !focused
+        const targetOpacity = this.targetExternalPresentation > 0.5
+          ? 0
+          : hasFocus && !focused
           ? this.tuning.townshipSiblingOverlayOpacity * (hovered ? 0.45 : 1)
           : 0;
+        overlay.userData.targetOpacity = targetOpacity;
+        if (targetOpacity > 0) this.inactiveOverlayMeshes.get(regionGroup)!.visible = true;
       }
     }
   }
 
-  setFocus(featureCode: string | undefined, tuning: MapVisualTuning) {
+  setFocus(
+    featureCode: string | undefined,
+    tuning: MapVisualTuning,
+    emphasizeAll = false,
+  ) {
+    this.forceSiblingPresentation = false;
     this.focusFeatureCode = featureCode;
+    this.emphasizeAll = emphasizeAll;
     this.hoveredFeatureCode = undefined;
     this.tuning = tuning;
     this.applyInteractionTargets();
+  }
+
+  setAllAsSiblings(tuning: MapVisualTuning) {
+    this.forceSiblingPresentation = true;
+    this.focusFeatureCode = undefined;
+    this.emphasizeAll = false;
+    this.hoveredFeatureCode = undefined;
+    this.tuning = tuning;
+    this.applyInteractionTargets();
+  }
+
+  setExternalPresentation(external: boolean, immediate = false) {
+    this.targetExternalPresentation = external ? 1 : 0;
+    if (immediate) this.externalPresentation = this.targetExternalPresentation;
+    this.applyInteractionTargets();
+    if (immediate) this.applyTheme(this.theme, this.tuning);
+  }
+
+  setExcludedFeature(featureCode?: string) {
+    this.setExcludedFeatures(featureCode ? [featureCode] : []);
+  }
+
+  setExcludedFeatures(featureCodes: Iterable<string>) {
+    const excludedCodes = new Set(featureCodes);
+    for (const [code, groups] of this.regionGroupsByCode) {
+      const visible = !excludedCodes.has(code);
+      for (const group of groups) group.visible = visible;
+    }
+    // Hidden current-region geometry must keep tracking the sibling target.
+    // Otherwise revealing it during a same-level switch briefly resurrects its
+    // old focused height and leaves a vertical glow trail.
+    this.applyInteractionTargets();
+  }
+
+  hasFeature(featureCode: string) {
+    return this.regionGroupsByCode.has(featureCode);
+  }
+
+  setPresentationOpacity(opacity: number, immediate = false) {
+    this.targetPresentationOpacity = THREE.MathUtils.clamp(opacity, 0, 1);
+    if (!immediate) return;
+    this.presentationOpacity = this.targetPresentationOpacity;
+    this.root.visible = this.presentationOpacity > 0.001;
+    this.applyTheme(this.theme, this.tuning);
+  }
+
+  isPresentationHidden() {
+    return this.presentationOpacity <= 0.001 && this.targetPresentationOpacity <= 0.001;
+  }
+
+  isTransitionSettled() {
+    if (Math.abs(this.presentationOpacity - this.targetPresentationOpacity) > 0.001) return false;
+    if (Math.abs(this.externalPresentation - this.targetExternalPresentation) > 0.001) return false;
+    for (const group of this.regionGroups) {
+      if (
+        Math.abs(group.scale.z - Number(group.userData.targetScaleZ ?? 1)) > 0.001
+        || Math.abs(group.position.z - Number(group.userData.targetBaseZ ?? 0)) > 0.01
+      ) return false;
+      const highlight = this.highlightMaterials.get(group);
+      const highlightTarget = Number(highlight?.userData.targetOpacity ?? 0)
+        * this.presentationOpacity;
+      if (highlight && Math.abs(highlight.opacity - highlightTarget) > 0.001) return false;
+      const overlay = this.inactiveOverlayMaterials.get(group);
+      const overlayTarget = Number(overlay?.userData.targetOpacity ?? 0)
+        * this.presentationOpacity;
+      if (overlay && Math.abs(overlay.opacity - overlayTarget) > 0.001) return false;
+    }
+    return true;
   }
 
   setTuning(tuning: MapVisualTuning) {
@@ -410,10 +561,15 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
   }
 
   getActiveSurfaceZ() {
-    return this.focusFeatureCode
+    return this.focusFeatureCode || this.emphasizeAll
       ? this.tuning.townshipFocusLift
         + topZ * (this.tuning.townshipFocusThickness / baseThickness)
       : topZ * (this.tuning.districtThickness / baseThickness);
+  }
+
+  getFocusedSurfaceZ() {
+    return this.tuning.townshipFocusLift
+      + topZ * (this.tuning.townshipFocusThickness / baseThickness);
   }
 
   private groupSurfaceZ(group: THREE.Group) {
@@ -468,38 +624,68 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
       const targetOpacity = Number(material.userData.targetOpacity ?? 0);
       const nextOpacity = interactionValue(
         material.opacity,
-        targetOpacity,
+        targetOpacity * this.presentationOpacity,
         interactionDamping.highlight,
         delta,
         0.001,
       );
       if (Math.abs(nextOpacity - material.opacity) > 0.0001) dirty = true;
       material.opacity = nextOpacity;
+      this.highlightMeshes.get(group)!.visible = nextOpacity > 0.001 || targetOpacity > 0;
     }
     const overlay = this.inactiveOverlayMaterials.get(group);
     if (overlay) {
       const overlayTarget = Number(overlay.userData.targetOpacity ?? 0);
       const overlayOpacity = interactionValue(
         overlay.opacity,
-        overlayTarget,
+        overlayTarget * this.presentationOpacity,
         interactionDamping.overlay,
         delta,
         0.001,
       );
       if (Math.abs(overlayOpacity - overlay.opacity) > 0.0001) dirty = true;
       overlay.opacity = overlayOpacity;
+      this.inactiveOverlayMeshes.get(group)!.visible = (
+        overlayOpacity > 0.001 || overlayTarget > 0
+      );
     }
     return dirty;
   }
 
+  private updatePresentation(delta?: number) {
+    const nextOpacity = interactionValue(
+      this.presentationOpacity,
+      this.targetPresentationOpacity,
+      interactionDamping.presentation,
+      delta,
+      0.001,
+    );
+    const nextExternalPresentation = interactionValue(
+      this.externalPresentation,
+      this.targetExternalPresentation,
+      interactionDamping.presentation,
+      delta,
+      0.001,
+    );
+    if (
+      Math.abs(nextOpacity - this.presentationOpacity) <= 0.0001
+      && Math.abs(nextExternalPresentation - this.externalPresentation) <= 0.0001
+    ) return false;
+    this.presentationOpacity = nextOpacity;
+    this.externalPresentation = nextExternalPresentation;
+    this.root.visible = this.presentationOpacity > 0.001;
+    this.applyTheme(this.theme, this.tuning);
+    return true;
+  }
+
   animate(delta = referenceFrameSeconds) {
-    let dirty = false;
+    let dirty = this.updatePresentation(delta);
     for (const group of this.regionGroups) dirty = this.updateGroup(group, delta) || dirty;
     return dirty;
   }
 
   settle() {
-    let dirty = false;
+    let dirty = this.updatePresentation();
     for (const group of this.regionGroups) dirty = this.updateGroup(group) || dirty;
     return dirty;
   }
@@ -511,7 +697,9 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
     this.regionGroups.clear();
     this.regionGroupsByCode.clear();
     this.highlightMaterials.clear();
+    this.highlightMeshes.clear();
     this.inactiveOverlayMaterials.clear();
+    this.inactiveOverlayMeshes.clear();
   }
 }
 

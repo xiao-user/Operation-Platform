@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
-import type { MapState } from "../map-data-adapter";
+import type { MapState } from "../map-state";
 import type { DigitalTwinMapTheme } from "../map-themes";
 import type { EducationLocation } from "../types";
 import type { TuningAwareMapSceneLayer } from "./map-scene-layer";

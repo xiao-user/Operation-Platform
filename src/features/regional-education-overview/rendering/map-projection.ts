@@ -195,14 +195,20 @@ export function largestOuterRingOfFeature(feature: GeoFeature | undefined) {
   return largestOuterRing({ type: "FeatureCollection", features: [feature] });
 }
 
-export function featureCenter(feature: GeoFeature): Position | undefined {
-  const configuredCenter = feature.properties.center;
+/**
+ * Resolves the center of the visible geometry instead of the administrative
+ * seat stored in `properties.center`. The returned point is always kept inside
+ * the feature so camera pivots and overlays cannot drift into holes or the sea.
+ */
+export function featureVisualCenter(feature: GeoFeature): Position | undefined {
+  const sourceCentroid = feature.properties.centroid;
   if (
-    Array.isArray(configuredCenter)
-    && configuredCenter.length === 2
-    && featureContainsCoordinate(feature, configuredCenter)
+    Array.isArray(sourceCentroid)
+    && sourceCentroid.length === 2
+    && sourceCentroid.every((value) => typeof value === "number" && Number.isFinite(value))
+    && featureContainsCoordinate(feature, sourceCentroid as Position)
   ) {
-    return configuredCenter;
+    return sourceCentroid as Position;
   }
 
   const polygonCentroids = polygonsOf(feature)
@@ -212,6 +218,21 @@ export function featureCenter(feature: GeoFeature): Position | undefined {
       return outerRing && centroid ? [{ area: ringArea(outerRing), centroid }] : [];
     })
     .sort((left, right) => right.area - left.area);
+  const totalArea = polygonCentroids.reduce((sum, item) => sum + item.area, 0);
+  if (totalArea > 0) {
+    const weightedCentroid: Position = [
+      polygonCentroids.reduce(
+        (sum, item) => sum + item.centroid[0] * item.area,
+        0,
+      ) / totalArea,
+      polygonCentroids.reduce(
+        (sum, item) => sum + item.centroid[1] * item.area,
+        0,
+      ) / totalArea,
+    ];
+    if (featureContainsCoordinate(feature, weightedCentroid)) return weightedCentroid;
+  }
+
   for (const { centroid } of polygonCentroids) {
     if (featureContainsCoordinate(feature, centroid)) return centroid;
   }

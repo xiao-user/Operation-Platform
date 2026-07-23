@@ -5,6 +5,7 @@ import { digitalTwinMotion } from "../motion";
 
 const props = defineProps<{
   value: number;
+  formatter?: (value: number) => string;
 }>();
 
 const displayedValue = ref(0);
@@ -60,5 +61,5 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <span class="animated-number">{{ displayedValue }}</span>
+  <span class="animated-number">{{ formatter ? formatter(displayedValue) : displayedValue }}</span>
 </template>

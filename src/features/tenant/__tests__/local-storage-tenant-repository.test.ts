@@ -32,6 +32,12 @@ describe("LocalStorageTenantRepository", () => {
       shortName: "自定义",
       type: "org",
       enabled: false,
+      administrativeRegion: {
+        code: "360000",
+        name: "江西省",
+        scope: "province",
+        path: [{ code: "360000", name: "江西省", scope: "province" }],
+      },
     };
 
     repository.replace([...tenants, customTenant]);
@@ -39,6 +45,23 @@ describe("LocalStorageTenantRepository", () => {
     expect(repository.list().tenants).toEqual(
       expect.arrayContaining([expect.objectContaining(customTenant)]),
     );
+    expect(repository.list().tenants.find((tenant) => tenant.id === customTenant.id)?.administrativeRegion)
+      .toEqual(customTenant.administrativeRegion);
+  });
+
+  it("migrates legacy non-platform tenants to the Guangdong map root", () => {
+    const legacyTenants = MOCK_TENANTS.map(({ administrativeRegion: _region, ...tenant }) => tenant);
+    localStorage.setItem(tenantStorageKey, JSON.stringify(legacyTenants));
+    const repository = new LocalStorageTenantRepository(localStorage, () => 1000);
+
+    const result = repository.list();
+
+    expect(result.recoveryNotice).toBeNull();
+    expect(result.tenants.filter((tenant) => tenant.type !== "platform").every(
+      (tenant) => tenant.administrativeRegion?.code === "440000",
+    )).toBe(true);
+    expect(result.tenants.find((tenant) => tenant.type === "platform")?.administrativeRegion)
+      .toBeUndefined();
   });
 
   it("backs up invalid data and recovers to default tenants", () => {

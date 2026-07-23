@@ -1,30 +1,31 @@
-import rongchengTownships from "@/assets/maps/rongcheng-townships.json";
 import rongchengRegionalContext from "@/assets/maps/rongcheng-regional-context.json";
-import rongchengDistrictBoundary from "@/assets/maps/rongcheng-district-boundary.json";
-import type { GeoFeature, GeoFeatureCollection } from "./geo";
-import { featureContainsCoordinate } from "./geo";
-import type { EducationLocation } from "./types";
+import { wgs84CollectionToGcj02 } from "../coordinate-system";
+import { featureContainsCoordinate } from "../geo";
+import type { GeoFeature, GeoFeatureCollection } from "../geo";
+import {
+  rongchengDistrictBoundaryGeoData,
+  rongchengTownshipGeoData,
+} from "../rongcheng-map-data";
+import type { MapState } from "../map-state";
+import type { EducationLocation } from "../types";
 
-type MapScope = "district" | "township";
-
-export interface MapState {
-  readonly scope: MapScope;
-  readonly regionName: string;
-  readonly code: string;
-  readonly geoData: GeoFeatureCollection;
-  readonly terminal: boolean;
-  readonly focusFeatureCode?: string;
-}
-
-export const regionalContextGeoData = rongchengRegionalContext as unknown as GeoFeatureCollection;
-export const districtBoundaryGeoData = rongchengDistrictBoundary as unknown as GeoFeatureCollection;
+export const regionalContextGeoData = wgs84CollectionToGcj02(
+  rongchengRegionalContext as unknown as GeoFeatureCollection,
+);
+export const districtBoundaryGeoData = rongchengDistrictBoundaryGeoData;
 
 export const initialMapState: MapState = {
   scope: "district",
   regionName: "榕城区",
   code: "445202",
-  geoData: rongchengTownships as unknown as GeoFeatureCollection,
+  geometryKey: "rongcheng-townships",
+  projectionKey: "rongcheng-townships",
+  geoData: rongchengTownshipGeoData,
   terminal: false,
+  boundaryFeature: districtBoundaryGeoData.features[0],
+  externalGeoData: regionalContextGeoData,
+  externalGeometryKey: "rongcheng-regional-context",
+  externalRegionCode: "445202",
 };
 
 const townshipFeaturesByCode = new Map(
@@ -39,18 +40,21 @@ function createTownshipMapState(feature: GeoFeature): MapState {
   return {
     scope: "township",
     regionName: feature.properties.name ?? "未命名镇街",
+    parentRegionName: initialMapState.regionName,
     code,
+    geometryKey: initialMapState.geometryKey,
+    projectionKey: initialMapState.projectionKey,
     geoData: initialMapState.geoData,
     terminal: true,
     focusFeatureCode: code,
+    boundaryFeature: feature,
+    externalGeoData: initialMapState.externalGeoData,
+    externalGeometryKey: initialMapState.externalGeometryKey,
+    externalRegionCode: initialMapState.externalRegionCode,
+    projectionGeoData: initialMapState.projectionGeoData,
   };
 }
 
-/**
- * Resolves the local prototype dataset synchronously.
- * A future API-backed adapter should implement a separate asynchronous repository
- * instead of making in-memory lookup appear to prefetch or perform network I/O.
- */
 export function loadMapLevel(code = initialMapState.code) {
   if (code === initialMapState.code) return initialMapState;
   const feature = townshipFeaturesByCode.get(code);
@@ -79,6 +83,7 @@ export function townshipMapStateForCoordinate(coordinate: readonly [number, numb
 }
 
 export function boundaryFeatureForMapState(state: MapState) {
+  if (state.boundaryFeature) return state.boundaryFeature;
   if (state.scope === "district") return districtBoundaryGeoData.features[0];
   return state.focusFeatureCode
     ? townshipFeaturesByCode.get(state.focusFeatureCode)

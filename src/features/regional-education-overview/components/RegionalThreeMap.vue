@@ -15,7 +15,7 @@
     <div ref="canvasHost" class="map-canvas-host" />
 
     <div class="map-camera-control" aria-label="地图视角与点位控制">
-      <button type="button" class="map-layer-button" :class="{ 'is-active': dataLayerMode === 'institutions' }" :aria-pressed="dataLayerMode === 'institutions'" @click="emit('update:dataLayerMode', 'institutions')">学校网络</button>
+      <button v-if="institutionNetworkAvailable" type="button" class="map-layer-button" :class="{ 'is-active': dataLayerMode === 'institutions' }" :aria-pressed="dataLayerMode === 'institutions'" @click="emit('update:dataLayerMode', 'institutions')">学校网络</button>
       <button type="button" class="map-layer-button" :class="{ 'is-active': dataLayerMode === 'energy-towers' }" :aria-pressed="dataLayerMode === 'energy-towers'" @click="emit('update:dataLayerMode', 'energy-towers')">能量锥峰</button>
       <button type="button" @click="resetCameraView">重置视角</button>
       <MapMaterialTuningPanel
@@ -24,15 +24,41 @@
         @update:tuning="emit('update:visualTuning', $event)"
         @update:theme="emit('update:theme', $event)"
       />
+      <ElSelect
+        v-model="schoolSearchValue"
+        class="map-school-search"
+        aria-label="搜索学校"
+        filterable
+        clearable
+        :disabled="searchableSchools.length === 0"
+        :placeholder="searchableSchools.length ? '搜索学校' : '暂无学校'"
+        :teleported="false"
+        fit-input-width
+        placement="top-start"
+        popper-class="map-school-search-popper"
+        @change="selectSearchedSchool"
+      >
+        <ElOption
+          v-for="school in searchableSchools"
+          :key="school.id"
+          :label="school.name"
+          :value="school.id"
+        >
+          <span>{{ school.name }}</span>
+          <small>{{ educationLocationTypeMeta[school.type].label }}</small>
+        </ElOption>
+      </ElSelect>
     </div>
 
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { ElOption, ElSelect } from "element-plus";
 import MapMaterialTuningPanel from "./MapMaterialTuningPanel.vue";
-import type { MapState } from "../map-data-adapter";
+import { educationLocationTypeMeta } from "../education-locations";
+import type { MapState } from "../map-state";
 import type { DigitalTwinMapTheme } from "../map-themes";
 import type { MapVisualTuning } from "../rendering/map-visual-tuning";
 import {
@@ -45,16 +71,21 @@ import type {
   MapCameraView,
 } from "../types";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   mapState: MapState;
   theme: DigitalTwinMapTheme;
   locations: readonly EducationLocation[];
+  searchLocations?: readonly EducationLocation[];
   selectedLocationId?: string;
   dataLayerMode: MapDataLayerMode;
   visualTuning: Readonly<MapVisualTuning>;
-}>();
+  institutionNetworkAvailable?: boolean;
+}>(), {
+  institutionNetworkAvailable: true,
+});
 const emit = defineEmits<{
   select: [location: EducationLocation];
+  schoolSearchSelect: [location: EducationLocation];
   featureSelect: [feature: MapState["geoData"]["features"][number]];
   scopeBack: [];
   "update:dataLayerMode": [mode: MapDataLayerMode];
@@ -62,8 +93,12 @@ const emit = defineEmits<{
   "update:theme": [theme: DigitalTwinMapTheme];
 }>();
 const canvasHost = ref<HTMLElement>();
+const schoolSearchValue = ref("");
+const searchableSchools = computed(() => (props.searchLocations ?? props.locations).filter(
+  (location) => location.type !== "bureau",
+));
 let engine: RegionalMapEngine | undefined;
-let renderedScopeCode = props.mapState.code;
+let renderedMapState = props.mapState;
 let visualTuningFrame = 0;
 let pendingVisualTuning: Readonly<MapVisualTuning> | undefined;
 
@@ -80,6 +115,12 @@ function scheduleVisualTuning(tuning: Readonly<MapVisualTuning>) {
 
 function resetCameraView() {
   void engine?.animateCameraView(defaultRegionalMapCameraView);
+}
+
+function selectSearchedSchool(locationId: string | number | boolean | undefined) {
+  if (typeof locationId !== "string") return;
+  const school = searchableSchools.value.find((location) => location.id === locationId);
+  if (school) emit("schoolSearchSelect", school);
 }
 
 onMounted(() => {
@@ -103,8 +144,8 @@ onMounted(() => {
 watch(
   [() => props.mapState, () => props.locations],
   ([mapState, locations]) => {
-    if (mapState.code !== renderedScopeCode) {
-      renderedScopeCode = mapState.code;
+    if (mapState !== renderedMapState) {
+      renderedMapState = mapState;
       engine?.setMapState(mapState, locations);
     } else {
       engine?.setLocations(locations);
@@ -123,13 +164,26 @@ watch(
   () => props.selectedLocationId,
   (locationId) => engine?.setSelectedLocation(locationId),
 );
+watch(
+  () => props.mapState.code,
+  () => {
+    schoolSearchValue.value = "";
+  },
+);
 
 defineExpose({
   getCameraView: () => engine?.getCameraView(),
-  focusFeature: (featureCode: string, applyTownshipDefaults: boolean) => (
-    engine?.focusFeature(featureCode, applyTownshipDefaults) ?? Promise.resolve()
+  previewFeature: (featureCode: string, applyScopeDefaults: boolean) => (
+    engine?.previewFeature(featureCode, applyScopeDefaults) ?? Promise.resolve()
+  ),
+  focusFeature: (featureCode: string, applyScopeDefaults: boolean) => (
+    engine?.focusFeature(featureCode, applyScopeDefaults) ?? Promise.resolve()
   ),
   animateCameraView: (view: MapCameraView) => engine?.animateCameraView(view) ?? Promise.resolve(),
+  resetCameraView: () => engine?.animateCameraView(defaultRegionalMapCameraView) ?? Promise.resolve(),
+  focusCurrentBoundary: () => engine?.focusCurrentBoundary() ?? Promise.resolve(),
+  restoreMapPresentation: () => engine?.restoreMapPresentation(),
+  prepareMapState: (mapState: MapState) => engine?.prepareMapState(mapState) ?? Promise.resolve(),
   setSelectedEnergyTower: (energyTowerId?: string) => (
     engine?.setSelectedEnergyTower(energyTowerId)
   ),
@@ -179,8 +233,8 @@ onBeforeUnmount(() => {
 
 .map-camera-control {
   position: absolute;
-  bottom: calc(var(--dt-statusbar-height) + var(--dt-space-4));
-  left: var(--dt-map-hud-left);
+  bottom: var(--dt-map-control-bottom);
+  left: var(--dt-left-panel-left);
   z-index: var(--dt-z-map-hud);
   display: flex;
   min-height: var(--dt-control-height);
@@ -211,6 +265,74 @@ onBeforeUnmount(() => {
 
 .map-camera-control .map-layer-button { color: color-mix(in srgb, var(--map-label-text) 58%, transparent); }
 .map-camera-control .map-layer-button.is-active { border-color: color-mix(in srgb, var(--map-primary) 62%, transparent); background: color-mix(in srgb, var(--map-primary) 14%, var(--dt-color-panel)); color: var(--map-primary); box-shadow: inset 0 0 var(--dt-space-3) color-mix(in srgb, var(--map-primary) 18%, transparent), 0 0 var(--dt-space-3) color-mix(in srgb, var(--map-primary) 10%, transparent); }
+
+.map-school-search {
+  width: var(--dt-control-select-width);
+  --el-color-primary: var(--map-primary);
+  --el-text-color-regular: var(--map-label-text);
+  --el-text-color-placeholder: color-mix(in srgb, var(--map-label-text) 52%, transparent);
+  --el-border-color: var(--dt-color-border-muted);
+  --el-border-color-hover: var(--map-primary);
+  --el-fill-color-blank: transparent;
+  --el-bg-color-overlay: var(--dt-color-panel);
+}
+
+.map-school-search :deep(.el-select__wrapper) {
+  min-height: var(--dt-control-height);
+  border-radius: var(--dt-radius-xs);
+  padding: 0 var(--dt-space-2);
+  background: var(--dt-color-panel-soft);
+  box-shadow: inset 0 0 0 var(--dt-border-width) var(--dt-color-border-muted), inset 0 0 var(--dt-space-3) color-mix(in srgb, var(--map-primary) 8%, transparent);
+  transition: box-shadow var(--dt-transition-fast), background var(--dt-transition-fast);
+}
+
+.map-school-search :deep(.el-select__wrapper:hover),
+.map-school-search :deep(.el-select__wrapper.is-focused) {
+  background: color-mix(in srgb, var(--map-primary) 8%, var(--dt-color-panel));
+  box-shadow: inset 0 0 0 var(--dt-border-width) var(--map-primary), inset 0 0 var(--dt-space-3) color-mix(in srgb, var(--map-primary) 12%, transparent);
+}
+
+.map-school-search :deep(.el-select__selected-item),
+.map-school-search :deep(.el-select__placeholder) {
+  overflow: hidden;
+  color: var(--map-label-text);
+  font: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-school-search :deep(.el-select__caret) {
+  color: color-mix(in srgb, var(--map-label-text) 58%, transparent);
+}
+
+.map-school-search :deep(.map-school-search-popper.el-popper) {
+  border: var(--dt-border-width) solid var(--dt-color-border-muted);
+  background: var(--dt-color-panel);
+  box-shadow: var(--dt-panel-shadow);
+}
+
+.map-school-search :deep(.map-school-search-popper .el-select-dropdown__item) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dt-space-3);
+  color: color-mix(in srgb, var(--map-label-text) 78%, transparent);
+  font-size: var(--dt-font-size-xs);
+}
+
+.map-school-search :deep(.map-school-search-popper .el-select-dropdown__item small) {
+  flex: none;
+  color: color-mix(in srgb, var(--map-label-text) 46%, transparent);
+  font-size: 10px;
+}
+
+.map-school-search :deep(.map-school-search-popper .el-select-dropdown__item.is-hovering) {
+  background: color-mix(in srgb, var(--map-primary) 10%, transparent);
+}
+
+.map-school-search :deep(.map-school-search-popper .el-select-dropdown__item.is-selected) {
+  color: var(--map-primary);
+}
 
 
 .map-canvas-host :deep(.map-region-label) {
@@ -279,16 +401,24 @@ onBeforeUnmount(() => {
 }
 
 .map-canvas-host :deep(.map-context-label) {
-  color: color-mix(in srgb, var(--map-label-text) 28%, transparent);
+  color: var(--map-label-text);
   font-size: var(--dt-font-size-xs);
   line-height: var(--dt-line-height-xs);
   letter-spacing: var(--dt-letter-spacing-label);
   text-shadow: 0 0 var(--dt-space-2) var(--dt-color-canvas);
   white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--dt-transition-fast), visibility var(--dt-transition-fast);
 }
 
-@media (max-width: 1180px) {
-  .map-camera-control { left: var(--dt-space-6); }
+.map-canvas-host :deep(.map-context-label.is-visible) {
+  opacity: calc(var(--context-layer-opacity, 1) * var(--dt-map-external-label-opacity));
+  visibility: visible;
+}
+
+.map-canvas-host :deep(.map-context-label.is-peer.is-visible) {
+  opacity: calc(var(--context-layer-opacity, 1) * var(--dt-map-peer-label-opacity));
 }
 
 </style>

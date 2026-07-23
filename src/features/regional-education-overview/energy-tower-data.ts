@@ -1,7 +1,7 @@
 import type { GeoFeature, Position } from "./geo";
 import { featureContainsCoordinate } from "./geo";
-import type { MapState } from "./map-data-adapter";
-import { featureCenter } from "./rendering/map-projection";
+import type { MapState } from "./map-state";
+import { featureVisualCenter } from "./rendering/map-projection";
 import type { EducationLocation } from "./types";
 
 export interface EnergyTowerDatum {
@@ -13,15 +13,52 @@ export interface EnergyTowerDatum {
   readonly feature?: GeoFeature;
   readonly location?: EducationLocation;
   readonly schoolNames?: readonly string[];
+  readonly metric: "school-count" | "coverage-population";
 }
 
 export const townshipEnergyGridCellSizeDegrees = 0.025;
+
+export function formatCoveragePopulation(value: number) {
+  const safeValue = Math.max(0, Math.round(value));
+  if (safeValue >= 10_000) {
+    const valueInTenThousands = safeValue / 10_000;
+    const maximumFractionDigits = valueInTenThousands >= 100 ? 0 : 1;
+    return `${new Intl.NumberFormat("zh-CN", {
+      maximumFractionDigits,
+    }).format(valueInTenThousands)} 万人`;
+  }
+  if (safeValue >= 1_000) {
+    return `${new Intl.NumberFormat("zh-CN", {
+      maximumFractionDigits: 1,
+    }).format(safeValue / 1_000)} 千人`;
+  }
+  return `${safeValue} 人`;
+}
 
 export function buildEnergyTowerData(
   mapState: MapState,
   locations: readonly EducationLocation[],
   townshipGridCellSizeDegrees = townshipEnergyGridCellSizeDegrees,
 ): EnergyTowerDatum[] {
+  if (mapState.energyTowerMetric === "coverage-population") {
+    return mapState.geoData.features.flatMap((feature) => {
+      const coordinate = featureVisualCenter(feature);
+      const code = feature.properties.code;
+      if (!coordinate || typeof code !== "string") return [];
+      const value = Math.max(0, Math.round(mapState.energyTowerValues?.[code] ?? 0));
+      if (value === 0) return [];
+      return [{
+        id: code,
+        name: feature.properties.name ?? "未命名区域",
+        coordinate,
+        value,
+        valueLabel: `覆盖人数 ${formatCoveragePopulation(value)}`,
+        feature,
+        metric: "coverage-population" as const,
+      }];
+    });
+  }
+
   const schools = locations.filter((location) => location.type !== "bureau");
   if (mapState.scope === "township") {
     const feature = mapState.geoData.features.find(
@@ -51,12 +88,13 @@ export function buildEnergyTowerData(
         valueLabel: `${cell.schools.length} 所学校`,
         feature,
         schoolNames: cell.schools.map((school) => school.name),
+        metric: "school-count" as const,
       };
     });
   }
 
   return mapState.geoData.features.flatMap((feature) => {
-    const coordinate = featureCenter(feature);
+    const coordinate = featureVisualCenter(feature);
     if (!coordinate) return [];
     const count = schools.filter((school) => (
       featureContainsCoordinate(feature, school.coordinate)
@@ -70,6 +108,7 @@ export function buildEnergyTowerData(
       value: count,
       valueLabel: `${count} 所学校`,
       feature,
+      metric: "school-count" as const,
     }];
   });
 }

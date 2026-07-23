@@ -20,6 +20,7 @@
     "test:e2e:ui": "playwright test --ui",
     "map:refresh:rongcheng": "node scripts/fetch-rongcheng-townships.mjs",
     "map:refresh:rongcheng-context": "node scripts/fetch-rongcheng-regional-context.mjs",
+    "map:refresh:guangdong-cities": "node scripts/fetch-guangdong-cities.mjs",
     "map:normalize:rongcheng": "node scripts/normalize-map-json.mjs src/assets/maps/rongcheng-townships.json",
     "lint": "run-p lint:check:oxlint lint:check:eslint",
     "lint:check:oxlint": "oxlint .",

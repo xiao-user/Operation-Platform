@@ -61,6 +61,11 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="地图范围" min-width="220">
+          <template #default="{ row }">
+            <span>{{ administrativeRegionLabel(row.administrativeRegion) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="id" label="组织 ID" min-width="220" />
         <el-table-column label="状态" width="120">
           <template #default="{ row }">
@@ -88,7 +93,7 @@
       </el-table>
     </section>
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑组织' : '新增组织'" width="520px">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑组织' : '新增组织'" width="680px">
       <el-form label-width="96px">
         <el-form-item label="组织类型" required>
           <el-select v-model="draft.type" :disabled="Boolean(editingId)">
@@ -105,6 +110,9 @@
         </el-form-item>
         <el-form-item label="简称" required>
           <el-input v-model="draft.shortName" maxlength="16" placeholder="用于窄空间展示" />
+        </el-form-item>
+        <el-form-item v-if="draft.type !== 'platform'" label="地图范围" required>
+          <AdministrativeRegionSelector v-model="draft.administrativeRegion" />
         </el-form-item>
         <el-form-item label="启用状态">
           <el-switch v-model="draft.enabled" :disabled="editingTenant?.type === 'platform'" />
@@ -132,8 +140,14 @@ import {
 } from "@/features/data-migration/local-storage-export";
 import { useTenantAdminStore, type TenantDraft } from "@/stores/tenant-admin";
 import TenantMemberDrawer from "@/views/system/organization/TenantMemberDrawer.vue";
+import AdministrativeRegionSelector from "@/views/system/organization/AdministrativeRegionSelector.vue";
 import type { TenantInfo, TenantType } from "@/types/user";
 import { operationPlatformPersistenceCapabilities } from "@/features/persistence/runtime-operation-platform-persistence";
+import {
+  administrativeRegionLabel,
+  cloneTenantAdministrativeRegion,
+  guangdongProvinceRegion,
+} from "@/features/tenant/administrative-region";
 
 const tenantAdminStore = useTenantAdminStore();
 const { tenants, recoveryNotice } = storeToRefs(tenantAdminStore);
@@ -149,6 +163,7 @@ const draft = reactive<TenantDraft>({
   shortName: "",
   type: "school",
   enabled: true,
+  administrativeRegion: cloneTenantAdministrativeRegion(guangdongProvinceRegion),
 });
 
 const editingTenant = computed(() =>
@@ -170,6 +185,11 @@ function assignDraft(tenant?: TenantInfo) {
   draft.shortName = tenant?.shortName ?? "";
   draft.type = tenant?.type === "platform" ? "platform" : tenant?.type ?? "school";
   draft.enabled = tenant?.enabled !== false;
+  draft.administrativeRegion = tenant?.administrativeRegion
+    ? cloneTenantAdministrativeRegion(tenant.administrativeRegion)
+    : tenant?.type === "platform"
+      ? undefined
+      : cloneTenantAdministrativeRegion(guangdongProvinceRegion);
 }
 
 function openCreate() {
@@ -192,6 +212,7 @@ function openMembers(tenant: TenantInfo) {
 function validateDraft() {
   if (!draft.name.trim()) return "请输入组织名称";
   if (!draft.shortName.trim()) return "请输入组织简称";
+  if (draft.type !== "platform" && !draft.administrativeRegion) return "请选择地图范围";
   return "";
 }
 

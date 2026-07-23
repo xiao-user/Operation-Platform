@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { countLocationsByType } from "../education-locations";
+import type { MapNavigationNode } from "../map-state";
 import type { EducationLocation, EducationLocationType } from "../types";
 import AnimatedNumber from "./AnimatedNumber.vue";
 
@@ -8,12 +9,13 @@ const props = defineProps<{
   locations: readonly EducationLocation[];
   selectedType?: EducationLocationType;
   scopeName: string;
-  isTownship: boolean;
+  scopePath: readonly MapNavigationNode[];
   coverageLabel?: string;
 }>();
 
 const emit = defineEmits<{
   scopeBack: [];
+  scopeNavigate: [code: string];
   typeSelect: [types: readonly EducationLocationType[]];
 }>();
 
@@ -36,6 +38,11 @@ const summaryItems = computed<SummaryItem[]>(() => [
   },
 ]);
 
+function navigateTo(node: MapNavigationNode) {
+  if (node.code) emit("scopeNavigate", node.code);
+  else emit("scopeBack");
+}
+
 function isSelected(types: readonly EducationLocationType[]) {
   return props.selectedType ? types.includes(props.selectedType) : false;
 }
@@ -43,10 +50,16 @@ function isSelected(types: readonly EducationLocationType[]) {
 
 <template>
   <aside class="left-panel" aria-label="区域教育数据汇总">
-    <nav v-if="isTownship" class="scope-breadcrumb" aria-label="地图下钻路径">
-      <button type="button" @click="emit('scopeBack')">榕城区</button>
-      <span>/</span>
-      <h2>{{ scopeName }}</h2>
+    <nav v-if="scopePath.length > 1" class="scope-breadcrumb" aria-label="地图下钻路径">
+      <template v-for="(node, index) in scopePath" :key="`${node.scope}-${node.code}`">
+        <button
+          v-if="index < scopePath.length - 1"
+          type="button"
+          @click="navigateTo(node)"
+        >{{ node.name }}</button>
+        <h2 v-else>{{ node.name }}</h2>
+        <span v-if="index < scopePath.length - 1">/</span>
+      </template>
     </nav>
     <h2 v-else>{{ scopeName }}</h2>
 
@@ -93,13 +106,20 @@ function isSelected(types: readonly EducationLocationType[]) {
 
 .scope-breadcrumb {
   display: flex;
-  min-width: 0;
+  width: max-content;
+  max-width: calc(
+    100vw
+    - var(--dt-left-panel-left)
+    - var(--dt-right-panel-width)
+    - var(--dt-space-10)
+  );
   height: var(--dt-line-height-md);
   align-items: center;
   gap: var(--dt-space-2);
 }
 
 .scope-breadcrumb button {
+  flex: 0 0 auto;
   border: 0;
   padding: 0;
   background: transparent;
@@ -108,6 +128,7 @@ function isSelected(types: readonly EducationLocationType[]) {
   line-height: var(--dt-line-height-md);
   font-weight: var(--dt-font-weight-light);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .scope-breadcrumb button:hover {
@@ -120,10 +141,8 @@ function isSelected(types: readonly EducationLocationType[]) {
 }
 
 .scope-breadcrumb h2 {
-  min-width: 0;
-  overflow: hidden;
+  flex: 0 0 auto;
   color: var(--dt-color-text);
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

@@ -390,7 +390,7 @@ onBeforeUnmount(() => {
 
       <div v-else class="empty-profile">
         <h2>{{ scopeName }}</h2>
-        <p>当前镇街暂无公开学校点位，仍可查看行政边界。</p>
+        <p>当前范围暂无公开学校点位，仍可查看行政边界。</p>
       </div>
     </aside>
   </div>

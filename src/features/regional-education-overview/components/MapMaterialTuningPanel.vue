@@ -65,6 +65,18 @@ const towerOpacityControls: NumericControl[] = [
   { key: "energyTowerGlowOpacity", label: "底部光晕透明度", min: 0, max: 1, step: 0.01 },
 ];
 
+const towerSizeControls: NumericControl[] = [
+  { key: "energyTowerCoverageHeightContrast", label: "人数高度对比", min: 0.5, max: 4, step: 0.05 },
+  { key: "energyTowerProvinceHeightScale", label: "省级高度倍率", min: 0.1, max: 1.5, step: 0.01 },
+  { key: "energyTowerProvinceRadiusScale", label: "省级半径倍率", min: 0.1, max: 1.5, step: 0.01 },
+  { key: "energyTowerCityHeightScale", label: "市级高度倍率", min: 0.1, max: 1.5, step: 0.01 },
+  { key: "energyTowerCityRadiusScale", label: "市级半径倍率", min: 0.1, max: 1.5, step: 0.01 },
+  { key: "energyTowerDistrictHeightScale", label: "区县高度倍率", min: 0.1, max: 1.5, step: 0.01 },
+  { key: "energyTowerDistrictRadiusScale", label: "区县半径倍率", min: 0.1, max: 1.5, step: 0.01 },
+  { key: "energyTowerTownshipHeightScale", label: "镇街高度倍率", min: 0.1, max: 1.5, step: 0.01 },
+  { key: "energyTowerTownshipRadiusScale", label: "镇街半径倍率", min: 0.1, max: 1.5, step: 0.01 },
+];
+
 const schoolMarkerControls: NumericControl[] = [
   { key: "institutionDefaultOpacity", label: "默认透明度", min: 0.1, max: 1, step: 0.01 },
   { key: "institutionSelectedOpacity", label: "选中透明度", min: 0.1, max: 1, step: 0.01 },
@@ -325,6 +337,15 @@ function resetMaterialTuning() {
             <span>{{ control.label }}</span>
             <input type="range" :min="control.min" :max="control.max" :step="control.step" :value="tuning[control.key]" @input="updateNumber(control.key, $event)">
             <output>{{ Number(tuning[control.key]).toFixed(3) }}</output>
+          </label>
+        </section>
+
+        <section>
+          <h3>覆盖人数锥峰尺寸</h3>
+          <label v-for="control in towerSizeControls" :key="control.key" class="material-tuning__row">
+            <span>{{ control.label }}</span>
+            <input type="range" :min="control.min" :max="control.max" :step="control.step" :value="tuning[control.key]" @input="updateNumber(control.key, $event)">
+            <output>{{ Number(tuning[control.key]).toFixed(2) }}</output>
           </label>
         </section>
 

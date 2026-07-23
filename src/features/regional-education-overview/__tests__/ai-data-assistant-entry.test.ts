@@ -13,6 +13,7 @@ describe("AiDataAssistantEntry", () => {
       href: "#",
       target: "_blank",
       rel: "noopener noreferrer",
+      draggable: "false",
       "aria-disabled": "true",
       "data-node-id": "2054:2781",
     });
@@ -33,6 +34,20 @@ describe("AiDataAssistantEntry", () => {
     expect(link.element.getAttribute("href")).toBe("#");
     wrapper.unmount();
     vi.useRealTimers();
+  });
+
+  it("prevents the browser-native link drag preview", async () => {
+    const wrapper = shallowMount(AiDataAssistantEntry, {
+      props: { href: "/bureau/visualization/ai-data-assistant" },
+    });
+    const link = wrapper.get("a");
+    const dragStart = new Event("dragstart", { bubbles: true, cancelable: true });
+
+    link.element.dispatchEvent(dragStart);
+
+    expect(dragStart.defaultPrevented).toBe(true);
+    expect(link.attributes("draggable")).toBe("false");
+    wrapper.unmount();
   });
 
   it("opens a configured destination in a new tab", () => {
@@ -101,8 +116,12 @@ describe("AiDataAssistantEntry", () => {
       clientX: 300,
       clientY: 180,
     });
-    expect(link.element.style.getPropertyValue("--ai-entry-drag-x")).toBe("-100px");
-    expect(link.element.style.getPropertyValue("--ai-entry-drag-y")).toBe("-100px");
+    expect(link.element.style.getPropertyValue("--ai-drag-x")).toBe("-100px");
+    expect(link.element.style.getPropertyValue("--ai-drag-y")).toBe("-100px");
+    expect(link.element.style.left).toBe("");
+    expect(link.element.style.top).toBe("");
+    expect(link.element.style.right).toBe("");
+    expect(link.element.style.bottom).toBe("");
     expect(link.classes()).toContain("is-dragging");
 
     dispatchPointer("pointerup", { pointerId: 7 });

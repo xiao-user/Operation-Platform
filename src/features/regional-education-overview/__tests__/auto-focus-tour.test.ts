@@ -5,29 +5,29 @@ import type { AutoFocusTourAdapter } from "../auto-focus-tour";
 function createHarness() {
   let visible = true;
   let currentCode: string | undefined;
-  const enterTownship = vi.fn(async (code: string) => {
+  const enterChild = vi.fn(async (code: string) => {
     currentCode = code;
     return true;
   });
-  const leaveTownship = vi.fn(async () => {
+  const leaveChild = vi.fn(async () => {
     currentCode = undefined;
     return true;
   });
   const adapter: AutoFocusTourAdapter = {
     isVisible: () => visible,
-    isTownshipScope: () => currentCode !== undefined,
-    currentTownshipCode: () => currentCode,
-    townshipCodes: () => ["township-a", "township-b", "township-c"],
-    enterTownship,
-    leaveTownship,
-    districtDwellDurationMs: () => 100,
-    townshipDwellDurationMs: () => 30,
+    isChildScope: () => currentCode !== undefined,
+    currentChildCode: () => currentCode,
+    childCodes: () => ["child-a", "child-b", "child-c"],
+    enterChild,
+    leaveChild,
+    parentDwellDurationMs: () => 100,
+    childDwellDurationMs: () => 30,
   };
   const tour = new AutoFocusTour(adapter);
   return {
     tour,
-    enterTownship,
-    leaveTownship,
+    enterChild,
+    leaveChild,
     currentCode: () => currentCode,
     setVisible: (next: boolean) => {
       visible = next;
@@ -39,50 +39,50 @@ describe("AutoFocusTour", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it("dwells on every sibling before returning to the district and rearming idle time", async () => {
+  it("dwells on every child before returning to the parent and rearming idle time", async () => {
     const harness = createHarness();
     harness.tour.start();
 
     await vi.advanceTimersByTimeAsync(99);
-    expect(harness.enterTownship).not.toHaveBeenCalled();
+    expect(harness.enterChild).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
-    expect(harness.enterTownship.mock.calls.map(([code]) => code)).toEqual(["township-a"]);
+    expect(harness.enterChild.mock.calls.map(([code]) => code)).toEqual(["child-a"]);
 
     await vi.advanceTimersByTimeAsync(30);
-    expect(harness.enterTownship.mock.calls.map(([code]) => code))
-      .toEqual(["township-a", "township-b"]);
-    expect(harness.leaveTownship).not.toHaveBeenCalled();
+    expect(harness.enterChild.mock.calls.map(([code]) => code))
+      .toEqual(["child-a", "child-b"]);
+    expect(harness.leaveChild).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(30);
-    expect(harness.enterTownship.mock.calls.map(([code]) => code))
-      .toEqual(["township-a", "township-b", "township-c"]);
-    expect(harness.leaveTownship).not.toHaveBeenCalled();
+    expect(harness.enterChild.mock.calls.map(([code]) => code))
+      .toEqual(["child-a", "child-b", "child-c"]);
+    expect(harness.leaveChild).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(30);
-    expect(harness.leaveTownship).toHaveBeenCalledOnce();
+    expect(harness.leaveChild).toHaveBeenCalledOnce();
     expect(harness.currentCode()).toBeUndefined();
 
     await vi.advanceTimersByTimeAsync(99);
-    expect(harness.enterTownship).toHaveBeenCalledTimes(3);
+    expect(harness.enterChild).toHaveBeenCalledTimes(3);
     await vi.advanceTimersByTimeAsync(1);
-    expect(harness.enterTownship).toHaveBeenLastCalledWith("township-a");
+    expect(harness.enterChild).toHaveBeenLastCalledWith("child-a");
     harness.tour.dispose();
   });
 
-  it("starts a full sibling round from the currently focused township", async () => {
+  it("starts a full sibling round from the currently focused child", async () => {
     const harness = createHarness();
-    await harness.enterTownship("township-b");
-    harness.enterTownship.mockClear();
+    await harness.enterChild("child-b");
+    harness.enterChild.mockClear();
     harness.tour.start();
 
     await vi.advanceTimersByTimeAsync(100);
-    expect(harness.enterTownship).not.toHaveBeenCalled();
+    expect(harness.enterChild).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(30);
-    expect(harness.enterTownship).toHaveBeenLastCalledWith("township-c");
+    expect(harness.enterChild).toHaveBeenLastCalledWith("child-c");
     await vi.advanceTimersByTimeAsync(30);
-    expect(harness.enterTownship).toHaveBeenLastCalledWith("township-a");
+    expect(harness.enterChild).toHaveBeenLastCalledWith("child-a");
     await vi.advanceTimersByTimeAsync(30);
-    expect(harness.leaveTownship).toHaveBeenCalledOnce();
+    expect(harness.leaveChild).toHaveBeenCalledOnce();
     harness.tour.dispose();
   });
 
@@ -90,15 +90,15 @@ describe("AutoFocusTour", () => {
     const harness = createHarness();
     harness.tour.start();
     await vi.advanceTimersByTimeAsync(100);
-    expect(harness.enterTownship).toHaveBeenCalledOnce();
+    expect(harness.enterChild).toHaveBeenCalledOnce();
 
     harness.tour.notifyUserActivity();
     await vi.advanceTimersByTimeAsync(99);
-    expect(harness.enterTownship).toHaveBeenCalledOnce();
+    expect(harness.enterChild).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(1);
-    expect(harness.enterTownship).toHaveBeenCalledOnce();
+    expect(harness.enterChild).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(30);
-    expect(harness.enterTownship).toHaveBeenLastCalledWith("township-b");
+    expect(harness.enterChild).toHaveBeenLastCalledWith("child-b");
     harness.tour.dispose();
   });
 
@@ -108,12 +108,12 @@ describe("AutoFocusTour", () => {
     harness.setVisible(false);
     harness.tour.handleVisibilityChange();
     await vi.advanceTimersByTimeAsync(500);
-    expect(harness.enterTownship).not.toHaveBeenCalled();
+    expect(harness.enterChild).not.toHaveBeenCalled();
 
     harness.setVisible(true);
     harness.tour.handleVisibilityChange();
     await vi.advanceTimersByTimeAsync(100);
-    expect(harness.enterTownship).toHaveBeenCalledOnce();
+    expect(harness.enterChild).toHaveBeenCalledOnce();
     harness.tour.dispose();
   });
 });

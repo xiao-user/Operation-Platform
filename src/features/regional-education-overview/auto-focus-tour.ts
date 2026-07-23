@@ -1,12 +1,12 @@
 export interface AutoFocusTourAdapter {
   isVisible(): boolean;
-  isTownshipScope(): boolean;
-  currentTownshipCode(): string | undefined;
-  townshipCodes(): readonly string[];
-  enterTownship(code: string): Promise<boolean>;
-  leaveTownship(): Promise<boolean>;
-  districtDwellDurationMs(): number;
-  townshipDwellDurationMs(): number;
+  isChildScope(): boolean;
+  currentChildCode(): string | undefined;
+  childCodes(): readonly string[];
+  enterChild(code: string): Promise<boolean>;
+  leaveChild(): Promise<boolean>;
+  parentDwellDurationMs(): number;
+  childDwellDurationMs(): number;
 }
 
 export class AutoFocusTour {
@@ -67,28 +67,28 @@ export class AutoFocusTour {
   private armIdleTimer() {
     if (!this.started || !this.adapter.isVisible()) return;
     const runId = this.runId;
-    this.schedule(runId, this.adapter.districtDwellDurationMs(), () => {
-      void this.beginTownshipRound(runId);
+    this.schedule(runId, this.adapter.parentDwellDurationMs(), () => {
+      void this.beginChildRound(runId);
     });
   }
 
-  private async beginTownshipRound(runId: number) {
-    const codes = [...this.adapter.townshipCodes()];
+  private async beginChildRound(runId: number) {
+    const codes = [...this.adapter.childCodes()];
     if (codes.length === 0) {
       this.armIdleTimer();
       return;
     }
-    const currentCode = this.adapter.isTownshipScope()
-      ? this.adapter.currentTownshipCode()
+    const currentCode = this.adapter.isChildScope()
+      ? this.adapter.currentChildCode()
       : undefined;
     const currentIndex = currentCode ? codes.indexOf(currentCode) : -1;
     const orderedCodes = currentIndex >= 0
       ? [...codes.slice(currentIndex), ...codes.slice(0, currentIndex)]
       : codes;
-    await this.visitTownship(runId, orderedCodes, 0, currentIndex >= 0);
+    await this.visitChild(runId, orderedCodes, 0, currentIndex >= 0);
   }
 
-  private async visitTownship(
+  private async visitChild(
     runId: number,
     codes: readonly string[],
     index: number,
@@ -96,24 +96,24 @@ export class AutoFocusTour {
   ) {
     if (!this.isCurrentRun(runId)) return;
     if (index >= codes.length) {
-      await this.finishTownshipRound(runId);
+      await this.finishChildRound(runId);
       return;
     }
     if (!alreadyFocused) {
-      const entered = await this.adapter.enterTownship(codes[index]!);
+      const entered = await this.adapter.enterChild(codes[index]!);
       if (!this.isCurrentRun(runId)) return;
       if (!entered) {
-        await this.visitTownship(runId, codes, index + 1, false);
+        await this.visitChild(runId, codes, index + 1, false);
         return;
       }
     }
-    this.schedule(runId, this.adapter.townshipDwellDurationMs(), () => {
-      void this.visitTownship(runId, codes, index + 1, false);
+    this.schedule(runId, this.adapter.childDwellDurationMs(), () => {
+      void this.visitChild(runId, codes, index + 1, false);
     });
   }
 
-  private async finishTownshipRound(runId: number) {
-    if (this.adapter.isTownshipScope()) await this.adapter.leaveTownship();
+  private async finishChildRound(runId: number) {
+    if (this.adapter.isChildScope()) await this.adapter.leaveChild();
     if (!this.isCurrentRun(runId)) return;
     this.armIdleTimer();
   }

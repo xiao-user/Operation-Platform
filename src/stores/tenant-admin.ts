@@ -6,6 +6,10 @@ import { operationPlatformPersistence } from "@/features/persistence/runtime-ope
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
 import type { TenantInfo, TenantType } from "@/types/user";
+import {
+  cloneTenantAdministrativeRegion,
+  normalizeTenantAdministrativeRegion,
+} from "@/features/tenant/administrative-region";
 
 export type TenantDraft = Omit<TenantInfo, "id"> & { id?: string };
 
@@ -31,12 +35,19 @@ export const useTenantAdminStore = defineStore("tenant-admin", () => {
     if (tenants.value.some((tenant) => tenant.name === name)) {
       throw new Error("组织名称不能重复");
     }
+    const administrativeRegion = normalizeTenantAdministrativeRegion(input.administrativeRegion);
+    if (input.type !== "platform" && !administrativeRegion) {
+      throw new Error("请选择有效的地图范围");
+    }
     const tenant: TenantInfo = {
       id: input.id ?? nextTenantId(input.type),
       name,
       shortName: input.shortName.trim(),
       type: input.type,
       enabled: input.enabled !== false,
+      administrativeRegion: administrativeRegion
+        ? cloneTenantAdministrativeRegion(administrativeRegion)
+        : undefined,
     };
     const member = createCurrentUserAdminMember(tenant, userStore.userInfo);
     const configuration = createDefaultTenantConfiguration(tenant);
@@ -52,11 +63,18 @@ export const useTenantAdminStore = defineStore("tenant-admin", () => {
     }
     const existing = tenants.value.find((tenant) => tenant.id === tenantId);
     if (!existing) throw new Error("组织不存在或已被删除");
+    const administrativeRegion = normalizeTenantAdministrativeRegion(input.administrativeRegion);
+    if (existing.type !== "platform" && !administrativeRegion) {
+      throw new Error("请选择有效的地图范围");
+    }
     await operationPlatformPersistence.updateTenant({
       ...existing,
       name,
       shortName: input.shortName.trim(),
       enabled: existing.type === "platform" ? true : input.enabled !== false,
+      administrativeRegion: administrativeRegion
+        ? cloneTenantAdministrativeRegion(administrativeRegion)
+        : undefined,
     });
     syncRuntimeStores();
   }

@@ -15,18 +15,13 @@ const orbState = ref<AiOrbState>("listening");
 const entryRoot = ref<HTMLAnchorElement>();
 let orbStateTimer: number | undefined;
 let activePointerId: number | undefined;
-let dragStartClientX = 0;
-let dragStartClientY = 0;
-let dragStartOffsetX = 0;
-let dragStartOffsetY = 0;
-let dragOffsetX = 0;
-let dragOffsetY = 0;
-let dragMinX = 0;
-let dragMaxX = 0;
-let dragMinY = 0;
-let dragMaxY = 0;
+let dragPointerOffsetX = 0;
+let dragPointerOffsetY = 0;
+let dragContainerRect: DOMRect | undefined;
 let dragActivated = false;
 let suppressNextClick = false;
+let dragTranslateX = 0;
+let dragTranslateY = 0;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -36,28 +31,14 @@ function dragBoundaryPadding(entry: HTMLElement) {
   return Number.parseFloat(getComputedStyle(entry).getPropertyValue("--dt-space-2")) || 8;
 }
 
-function applyDragOffset(x: number, y: number) {
+function applyDragPosition(clientLeft: number, clientTop: number) {
   const entry = entryRoot.value;
   if (!entry) return;
-  dragOffsetX = x;
-  dragOffsetY = y;
-  entry.style.setProperty("--ai-entry-drag-x", `${x}px`);
-  entry.style.setProperty("--ai-entry-drag-y", `${y}px`);
-}
-
-function resolveDragBounds() {
-  const entry = entryRoot.value;
-  const container = entry?.parentElement;
-  if (!entry || !container) return;
   const entryRect = entry.getBoundingClientRect();
-  const containerRect = container.getBoundingClientRect();
-  const padding = dragBoundaryPadding(entry);
-  const baseLeft = entryRect.left - dragOffsetX;
-  const baseTop = entryRect.top - dragOffsetY;
-  dragMinX = containerRect.left + padding - baseLeft;
-  dragMaxX = containerRect.right - padding - entryRect.width - baseLeft;
-  dragMinY = containerRect.top + padding - baseTop;
-  dragMaxY = containerRect.bottom - padding - entryRect.height - baseTop;
+  dragTranslateX += clientLeft - entryRect.left;
+  dragTranslateY += clientTop - entryRect.top;
+  entry.style.setProperty("--ai-drag-x", `${dragTranslateX}px`);
+  entry.style.setProperty("--ai-drag-y", `${dragTranslateY}px`);
 }
 
 function constrainToViewport() {
@@ -67,20 +48,18 @@ function constrainToViewport() {
   const entryRect = entry.getBoundingClientRect();
   const containerRect = container.getBoundingClientRect();
   const padding = dragBoundaryPadding(entry);
-  let correctionX = 0;
-  let correctionY = 0;
-  if (entryRect.left < containerRect.left + padding) {
-    correctionX = containerRect.left + padding - entryRect.left;
-  } else if (entryRect.right > containerRect.right - padding) {
-    correctionX = containerRect.right - padding - entryRect.right;
-  }
-  if (entryRect.top < containerRect.top + padding) {
-    correctionY = containerRect.top + padding - entryRect.top;
-  } else if (entryRect.bottom > containerRect.bottom - padding) {
-    correctionY = containerRect.bottom - padding - entryRect.bottom;
-  }
-  if (correctionX !== 0 || correctionY !== 0) {
-    applyDragOffset(dragOffsetX + correctionX, dragOffsetY + correctionY);
+  const nextLeft = clamp(
+    entryRect.left,
+    containerRect.left + padding,
+    containerRect.right - padding - entryRect.width,
+  );
+  const nextTop = clamp(
+    entryRect.top,
+    containerRect.top + padding,
+    containerRect.bottom - padding - entryRect.height,
+  );
+  if (nextLeft !== entryRect.left || nextTop !== entryRect.top) {
+    applyDragPosition(nextLeft, nextTop);
   }
 }
 
@@ -92,29 +71,35 @@ function handleClick(event: MouseEvent) {
 function handlePointerDown(event: PointerEvent) {
   const entry = entryRoot.value;
   if (!entry || event.button !== 0 || activePointerId !== undefined) return;
+  const container = entry.parentElement;
+  if (!container) return;
+  const entryRect = entry.getBoundingClientRect();
   activePointerId = event.pointerId;
-  dragStartClientX = event.clientX;
-  dragStartClientY = event.clientY;
-  dragStartOffsetX = dragOffsetX;
-  dragStartOffsetY = dragOffsetY;
+  dragPointerOffsetX = event.clientX - entryRect.left;
+  dragPointerOffsetY = event.clientY - entryRect.top;
+  dragContainerRect = container.getBoundingClientRect();
   dragActivated = false;
-  resolveDragBounds();
   entry.setPointerCapture?.(event.pointerId);
   entry.classList.add("is-dragging");
 }
 
 function handlePointerMove(event: PointerEvent) {
   if (event.pointerId !== activePointerId) return;
-  const deltaX = event.clientX - dragStartClientX;
-  const deltaY = event.clientY - dragStartClientY;
-  if (!dragActivated && Math.hypot(deltaX, deltaY) >= DRAG_ACTIVATION_DISTANCE) {
+  const entry = entryRoot.value;
+  const containerRect = dragContainerRect;
+  if (!entry || !containerRect) return;
+  const entryRect = entry.getBoundingClientRect();
+  const desiredLeft = event.clientX - dragPointerOffsetX;
+  const desiredTop = event.clientY - dragPointerOffsetY;
+  if (!dragActivated && Math.hypot(desiredLeft - entryRect.left, desiredTop - entryRect.top) >= DRAG_ACTIVATION_DISTANCE) {
     dragActivated = true;
   }
   if (!dragActivated) return;
   event.preventDefault();
-  applyDragOffset(
-    clamp(dragStartOffsetX + deltaX, dragMinX, dragMaxX),
-    clamp(dragStartOffsetY + deltaY, dragMinY, dragMaxY),
+  const padding = dragBoundaryPadding(entry);
+  applyDragPosition(
+    clamp(desiredLeft, containerRect.left + padding, containerRect.right - padding - entryRect.width),
+    clamp(desiredTop, containerRect.top + padding, containerRect.bottom - padding - entryRect.height),
   );
 }
 
@@ -127,6 +112,7 @@ function finishDragging(event?: PointerEvent) {
   }
   entry?.classList.remove("is-dragging");
   activePointerId = undefined;
+  dragContainerRect = undefined;
   dragActivated = false;
 }
 
@@ -150,11 +136,13 @@ onBeforeUnmount(() => {
     :href="href ?? '#'"
     target="_blank"
     rel="noopener noreferrer"
+    draggable="false"
     :aria-disabled="href ? undefined : 'true'"
     aria-label="AI数据助手，新标签打开"
     aria-describedby="ai-data-assistant-drag-hint"
     data-node-id="2054:2781"
     @click="handleClick"
+    @dragstart.prevent
     @pointerdown="handlePointerDown"
     @pointermove="handlePointerMove"
     @pointerup="finishDragging"
@@ -177,7 +165,7 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: calc(var(--dt-z-hud) + 1);
   bottom: var(--dt-ai-entry-bottom);
-  right: var(--dt-screen-gutter);
+  right: var(--dt-ai-entry-right);
   display: inline-flex;
   width: max-content;
   max-width: calc(100% - var(--dt-space-4));
@@ -197,12 +185,8 @@ onBeforeUnmount(() => {
   cursor: grab;
   touch-action: none;
   user-select: none;
+  transform: translate3d(var(--ai-drag-x, 0px), var(--ai-drag-y, 0px), 0);
   backdrop-filter: blur(var(--dt-ai-entry-blur));
-  transform: translate3d(
-    var(--ai-entry-drag-x, 0),
-    var(--ai-entry-drag-y, 0),
-    0
-  );
   transition:
     background var(--dt-transition-fast),
     box-shadow var(--dt-transition-fast);

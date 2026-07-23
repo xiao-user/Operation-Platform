@@ -1,5 +1,23 @@
 import { expect, test } from "@playwright/test";
 
+const deterministicJieyangDistricts = {
+  type: "FeatureCollection",
+  features: [{
+    type: "Feature",
+    properties: { adcode: 445202, name: "榕城区", level: "district" },
+    geometry: {
+      type: "Polygon",
+      coordinates: [[
+        [116.25, 23.45],
+        [116.48, 23.45],
+        [116.48, 23.68],
+        [116.25, 23.68],
+        [116.25, 23.45],
+      ]],
+    },
+  }],
+};
+
 test("首次进入工作台并打开业务模块", async ({ page }) => {
   await page.goto("/");
 
@@ -51,12 +69,272 @@ test("二次确认弹窗保持居中卡片布局", async ({ page }) => {
   await expect(messageBox).toBeHidden();
 });
 
-test("区域教育总览从教育局菜单打开独立数字孪生首页", async ({ page }) => {
-  test.setTimeout(60_000);
+test("智慧体育数据驾驶舱从 AI精准教学菜单打开并完整复用区域大屏", async ({
+  context,
+  page,
+}) => {
+  test.setTimeout(90_000);
+  let mapRequestCount = 0;
+  await context.route("**/areas_v3/bound/*_full.json", (route) => {
+    mapRequestCount += 1;
+    return route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(deterministicJieyangDistricts),
+    });
+  });
   await page.goto("/");
 
   await page.getByRole("button", { name: /学校 体育东路小学海明学校/ }).click();
   await page.getByRole("menuitem", { name: "体验区教育局", exact: true }).click();
+
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "AI精准教学", exact: true })
+    .click();
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "智慧体育", exact: true })
+    .click();
+
+  const newTabPromise = page.waitForEvent("popup");
+  await page.getByRole("link", { name: "智慧体育数据驾驶舱", exact: true }).click();
+  const sportsPage = await newTabPromise;
+  await sportsPage.waitForLoadState("domcontentloaded");
+  await sportsPage.bringToFront();
+
+  await expect(sportsPage).toHaveURL(
+    /\/bureau\/ai-precision-teaching\/smart-sports\/cockpit\?tenantId=bureau-001$/,
+  );
+  await expect(sportsPage.locator(".regional-digital-twin")).toBeVisible({ timeout: 20_000 });
+  await expect(sportsPage).toHaveTitle(/智慧体育数据驾驶舱/);
+  await expect(
+    sportsPage.getByLabel("智慧体育范围概览")
+      .getByRole("heading", { name: "广东省", exact: true }),
+  )
+    .toBeVisible({ timeout: 20_000 });
+  await expect(sportsPage.locator(".regional-map-canvas")).toBeVisible({ timeout: 20_000 });
+  await expect(sportsPage.locator(".map-region-label")).toHaveCount(21);
+  await expect(sportsPage.locator(".map-region-label", { hasText: "揭阳市" }))
+    .toHaveCount(1);
+  await expect(sportsPage.getByRole("tablist", { name: "驾驶舱主导航" }))
+    .toHaveCount(0);
+  await expect(sportsPage.getByRole("tablist", { name: "数据驾驶舱导航" }))
+    .toHaveCount(0);
+  await expect(sportsPage.getByRole("button", { name: "切换至生态荧光" }))
+    .toBeVisible();
+  await expect(sportsPage.getByRole("button", { name: /用户/ }))
+    .toBeVisible();
+  await expect(sportsPage.getByRole("button", { name: "学校网络", exact: true }))
+    .toHaveCount(0);
+  await expect(sportsPage.getByRole("button", { name: "能量锥峰", exact: true }))
+    .toHaveAttribute("aria-pressed", "true");
+  await expect(sportsPage.getByLabel("区域指标排名")).toBeVisible();
+
+  const goalsBounds = (await sportsPage.getByRole("region", {
+    name: "省级健康目标达成",
+  }).boundingBox())!;
+  const mapControlsBounds = (await sportsPage.getByLabel("地图视角与点位控制").boundingBox())!;
+  const assistant = sportsPage.getByRole("link", { name: "AI数据助手，新标签打开" });
+  const assistantBounds = (await assistant.boundingBox())!;
+  expect(mapControlsBounds.y + mapControlsBounds.height)
+    .toBeLessThanOrEqual(goalsBounds.y - 16);
+  expect(assistantBounds.y + assistantBounds.height)
+    .toBeLessThanOrEqual(goalsBounds.y - 16);
+
+  await sportsPage.mouse.move(
+    assistantBounds.x + assistantBounds.width / 2,
+    assistantBounds.y + assistantBounds.height / 2,
+  );
+  await sportsPage.mouse.down();
+  await sportsPage.mouse.move(
+    assistantBounds.x + assistantBounds.width / 2 - 120,
+    assistantBounds.y + assistantBounds.height / 2 - 60,
+  );
+  await sportsPage.mouse.up();
+  const movedAssistantBounds = (await assistant.boundingBox())!;
+  expect(movedAssistantBounds.x).toBeCloseTo(assistantBounds.x - 120, 0);
+  expect(movedAssistantBounds.y).toBeCloseTo(assistantBounds.y - 60, 0);
+  const assistantInlineStyle = await assistant.getAttribute("style");
+  expect(assistantInlineStyle).not.toContain("inset");
+  expect(assistantInlineStyle).not.toMatch(/(?:^|;)\s*(?:top|right|bottom|left):/);
+
+  await sportsPage.getByRole("button", { name: "学段对比", exact: true }).click();
+  await expect(sportsPage.getByLabel("学段体测覆盖率排行榜")).toContainText("小学");
+  await expect(sportsPage.getByLabel("1000米长跑覆盖率排行榜")).toContainText("小学");
+  await sportsPage.getByRole("tab", { name: "运动参与率", exact: true }).click();
+  await expect(sportsPage.getByLabel("学段运动参与率排行榜")).toContainText("参与率");
+  await sportsPage.getByRole("tab", { name: "阳光长跑", exact: true }).click();
+  await expect(sportsPage.getByText("省级阳光长跑目标达成", { exact: true })).toBeVisible();
+
+  const themeVariables = await sportsPage.locator(".regional-digital-twin").evaluate(
+    (element) => {
+      const style = element.ownerDocument.defaultView!.getComputedStyle(element);
+      return [
+        style.getPropertyValue("--dt-topbar-height").trim(),
+        style.getPropertyValue("--dt-right-panel-width").trim(),
+        style.getPropertyValue("--charts--2-100").replace(/\s/g, ""),
+      ];
+    },
+  );
+  expect(themeVariables).toEqual(["56px", "328px", "rgba(95,227,255,1)"]);
+
+  await sportsPage.getByRole("button", { name: "切换至生态荧光" }).click();
+  await expect.poll(async () => sportsPage.locator(".regional-digital-twin").evaluate(
+    (element) => element.ownerDocument.defaultView!
+      .getComputedStyle(element)
+      .getPropertyValue("--charts--2-100")
+      .replace(/\s/g, ""),
+  )).toBe("rgba(4,232,108,1)");
+
+  const jieyangLabel = sportsPage.locator(".map-region-label", { hasText: "揭阳市" });
+  const labelCenter = await jieyangLabel.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+  });
+  const canvas = sportsPage.locator(".regional-map-canvas");
+  await canvas.dispatchEvent("pointerdown", {
+    button: 0,
+    buttons: 1,
+    clientX: labelCenter.x,
+    clientY: labelCenter.y,
+    pointerType: "mouse",
+  });
+  await canvas.dispatchEvent("click", {
+    button: 0,
+    clientX: labelCenter.x,
+    clientY: labelCenter.y,
+  });
+
+  const activeScopeHeading = sportsPage.getByLabel("智慧体育范围概览").locator("h2");
+  await expect(activeScopeHeading).not.toHaveText("广东省", { timeout: 20_000 });
+  const selectedCityName = (await activeScopeHeading.textContent())?.trim();
+  expect(selectedCityName).toBeTruthy();
+  await expect(sportsPage.locator(".map-context-label")).toHaveCount(20);
+  await expect(sportsPage.locator(".map-region-label")).toHaveCount(1);
+  await expect(sportsPage.locator(".map-stage")).toHaveAttribute(
+    "aria-busy",
+    "false",
+    { timeout: 20_000 },
+  );
+  expect(mapRequestCount).toBe(1);
+
+  const districtLabel = sportsPage.locator(".map-region-label");
+  await expect(districtLabel).toHaveCount(1);
+  const districtCenter = await districtLabel.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+  });
+  await canvas.dispatchEvent("pointerdown", {
+    button: 0,
+    buttons: 1,
+    clientX: districtCenter.x,
+    clientY: districtCenter.y + 16,
+    pointerType: "mouse",
+  });
+  await canvas.dispatchEvent("click", {
+    button: 0,
+    clientX: districtCenter.x,
+    clientY: districtCenter.y + 16,
+  });
+  // Switch the OS preference while the old city presentation is still
+  // fading. Reduced-motion must settle the new layer and synchronously remove
+  // the exiting layer instead of leaving duplicate labels or invisible draws.
+  await sportsPage.emulateMedia({ reducedMotion: "reduce" });
+  await expect(activeScopeHeading).toHaveText("榕城区", { timeout: 20_000 });
+  const scopeBreadcrumb = sportsPage.getByRole("navigation", { name: "地图下钻路径" });
+  await expect(scopeBreadcrumb).toContainText("广东省");
+  await expect(scopeBreadcrumb).toContainText(selectedCityName!);
+  await expect(scopeBreadcrumb).toContainText("榕城区");
+  await expect(sportsPage.getByText("区县同级边界 · 当前区县聚焦。公开地图原型数据。"))
+    .toBeVisible();
+  await expect(sportsPage.locator(".map-context-label")).toHaveCount(20);
+  await expect(sportsPage.locator(".map-region-label")).toHaveCount(1);
+  await expect(sportsPage.locator(".map-stage")).toHaveAttribute(
+    "aria-busy",
+    "false",
+    { timeout: 20_000 },
+  );
+  expect(mapRequestCount).toBe(1);
+  const scopeMeasures = await sportsPage.evaluate(() => performance
+    .getEntriesByType("measure")
+    .filter((entry) => entry.name.startsWith("map-scope:"))
+    .map((entry) => ({ name: entry.name, duration: entry.duration })));
+  const durationFor = (name: string) => {
+    const durations = scopeMeasures
+      .filter((entry) => entry.name === `map-scope:${name}`)
+      .map((entry) => entry.duration);
+    return durations.length > 0 ? Math.max(...durations) : Number.POSITIVE_INFINITY;
+  };
+  expect(durationFor("context")).toBeLessThan(80);
+  expect(durationFor("region")).toBeLessThan(40);
+  expect(durationFor("effects")).toBeLessThan(40);
+  expect(durationFor("activation")).toBeLessThan(16);
+  const renderBudget = await canvas.evaluate((element) => {
+    const dataset = (element as unknown as {
+      dataset: Record<string, string | undefined>;
+    }).dataset;
+    return {
+      calls: Number(dataset.renderCalls),
+      triangles: Number(dataset.renderTriangles),
+      geometries: Number(dataset.renderGeometries),
+      textures: Number(dataset.renderTextures),
+    };
+  });
+  expect(renderBudget.calls).toBeGreaterThan(0);
+  expect(renderBudget.calls).toBeLessThan(1_200);
+  expect(renderBudget.triangles).toBeGreaterThan(0);
+  expect(renderBudget.triangles).toBeLessThan(1_000_000);
+  expect(renderBudget.geometries).toBeGreaterThan(0);
+  expect(renderBudget.geometries).toBeLessThan(1_000);
+  expect(renderBudget.textures).toBeLessThan(100);
+  await sportsPage.emulateMedia({ reducedMotion: "no-preference" });
+
+  const canvasBounds = (await canvas.boundingBox())!;
+  const externalPoint = {
+    x: canvasBounds.x + canvasBounds.width * 0.39,
+    y: canvasBounds.y + canvasBounds.height * 0.27,
+  };
+  for (const expectedScope of [selectedCityName!, "广东省"]) {
+    await canvas.dispatchEvent("pointerdown", {
+      button: 0,
+      buttons: 1,
+      clientX: externalPoint.x,
+      clientY: externalPoint.y,
+      pointerType: "mouse",
+    });
+    await canvas.dispatchEvent("click", {
+      button: 0,
+      clientX: externalPoint.x,
+      clientY: externalPoint.y,
+    });
+    await expect(activeScopeHeading).toHaveText(expectedScope, { timeout: 20_000 });
+    await expect(sportsPage.locator(".map-stage")).toHaveAttribute(
+      "aria-busy",
+      "false",
+      { timeout: 20_000 },
+    );
+  }
+
+  await canvas.focus();
+  await sportsPage.keyboard.press("Home");
+  await expect(canvas).toHaveAttribute("aria-label", /当前选择.+按回车进入/);
+  await sportsPage.keyboard.press("Enter");
+  await expect(activeScopeHeading).not.toHaveText("广东省", { timeout: 20_000 });
+  await expect(sportsPage.locator(".map-stage")).toHaveAttribute(
+    "aria-busy",
+    "false",
+    { timeout: 20_000 },
+  );
+  await sportsPage.keyboard.press("Escape");
+  await expect(activeScopeHeading).toHaveText("广东省", { timeout: 20_000 });
+});
+
+test("区域教育总览从教育局菜单打开独立数字孪生首页", async ({ page }) => {
+  test.setTimeout(150_000);
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /学校 体育东路小学海明学校/ }).click();
+  await page.getByRole("menuitem", { name: "揭阳市榕城区教育局", exact: true }).click();
 
   await page
     .getByRole("navigation")
@@ -73,12 +351,39 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   await overviewPage.waitForLoadState("domcontentloaded");
 
   await expect(overviewPage).toHaveURL(
-    /\/bureau\/visualization\/regional-education-overview\?tenantId=bureau-001$/,
+    /\/bureau\/visualization\/regional-education-overview\?tenantId=bureau-74b5bcaf-69af-4cf2-8c63-11f9270d4676$/,
   );
   await expect(
     overviewPage.getByRole("heading", { name: "榕城区", exact: true }),
   ).toBeVisible({ timeout: 20_000 });
-  await expect(overviewPage.getByText("体验区智慧教育生态服务平台")).toBeVisible();
+  await expect(overviewPage.getByText("揭阳市榕城区智慧教育生态服务平台")).toBeVisible();
+  const scopeHeading = overviewPage.getByLabel("区域教育数据汇总").locator("h2");
+  const navigationCanvas = overviewPage.locator(".regional-map-canvas");
+  await navigationCanvas.focus();
+  await overviewPage.keyboard.press("Home");
+  await overviewPage.keyboard.press("Enter");
+  await expect(scopeHeading).not.toHaveText("榕城区", { timeout: 20_000 });
+  await expect(overviewPage.locator(".map-stage")).toHaveAttribute("aria-busy", "false");
+
+  const scopeBackStartedAt = Date.now();
+  await overviewPage.keyboard.press("Escape");
+  await expect(scopeHeading).toHaveText("榕城区");
+  expect(Date.now() - scopeBackStartedAt).toBeLessThan(1_000);
+  await expect(overviewPage.locator(".map-stage")).toHaveAttribute("aria-busy", "false");
+
+  await navigationCanvas.focus();
+  await overviewPage.keyboard.press("Home");
+  await overviewPage.keyboard.press("Enter");
+  await expect(scopeHeading).not.toHaveText("榕城区", { timeout: 20_000 });
+  await expect(overviewPage.locator(".map-stage")).toHaveAttribute("aria-busy", "false");
+  const breadcrumbStartedAt = Date.now();
+  await overviewPage
+    .getByRole("navigation", { name: "地图下钻路径" })
+    .getByRole("button", { name: "榕城区" })
+    .click();
+  await expect(scopeHeading).toHaveText("榕城区");
+  expect(Date.now() - breadcrumbStartedAt).toBeLessThan(1_000);
+  await expect(overviewPage.locator(".map-stage")).toHaveAttribute("aria-busy", "false");
   await expect(overviewPage.locator(".page-topbar .user-item")).toContainText("罗吴航");
   await expect(overviewPage.locator(".page-topbar .user-item img")).toHaveCount(2);
   await overviewPage.getByRole("button", { name: "用户 罗吴航" }).click();
@@ -101,10 +406,10 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   await expect(aiAssistantEntry).toBeVisible();
   await expect(aiAssistantEntry).toHaveAttribute("target", "_blank");
   await expect(aiAssistantEntry).toHaveAttribute("aria-disabled", "true");
-  await expect(aiAssistantEntry).toHaveCSS("left", "40px");
+  await expect(aiAssistantEntry).toHaveCSS("right", "24px");
   await expect(aiAssistantEntry).toHaveCSS("bottom", "148px");
   await overviewPage.setViewportSize({ width: 1100, height: 720 });
-  await expect(aiAssistantEntry).toHaveCSS("left", "24px");
+  await expect(aiAssistantEntry).toHaveCSS("right", "24px");
   await overviewPage.setViewportSize({ width: 1280, height: 720 });
   const entryBorderBeforeHover = await aiAssistantEntry.evaluate(
     (element) => element.ownerDocument.defaultView!.getComputedStyle(element).borderColor,
@@ -267,6 +572,16 @@ test("区域教育总览从教育局菜单打开独立数字孪生首页", async
   await expect(overviewPage.getByLabel("多量顶色")).toBeVisible();
   await overviewPage.getByRole("button", { name: "地图材质" }).click();
   await expect(overviewPage.locator(".map-camera-control > span")).toHaveCount(0);
+  const schoolSearch = overviewPage.getByRole("combobox", { name: "搜索学校" });
+  await expect(schoolSearch).toBeVisible();
+  await overviewPage.locator(".map-school-search .el-select__wrapper").click();
+  await schoolSearch.fill("凤岐华侨学校");
+  await overviewPage.getByRole("option", { name: /凤岐华侨学校/ }).click();
+  await expect(
+    overviewPage.getByRole("heading", { name: "凤岐华侨学校" }),
+  ).toBeVisible();
+  await expect(overviewPage.locator(".map-stage"))
+    .not.toHaveAttribute("aria-label", "榕城区教育机构三维地图");
   await overviewPage.getByRole("button", { name: "切换至凤岐华侨学校" }).click();
   await expect(
     overviewPage.getByRole("heading", { name: "凤岐华侨学校" }),

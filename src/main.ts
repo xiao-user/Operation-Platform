@@ -2,6 +2,8 @@ import { createApp, watch } from "vue";
 import { createPinia } from "pinia";
 import "element-plus/es/components/message/style/css";
 import "element-plus/es/components/message-box/style/css";
+import "element-plus/es/components/option/style/css";
+import "element-plus/es/components/select/style/css";
 import App from "./App.vue";
 import router from "./router";
 import { resolveDocumentTitle } from "@/router/document-title";
@@ -22,7 +24,9 @@ watch(
   () => {
     const route = router.currentRoute.value;
     const routeTitle = typeof route.meta.title === "string" ? route.meta.title : "";
-    const navigationTitle = route.name === "workbench"
+    const navigationTitle = route.meta.pageSurface === "standalone"
+      ? ""
+      : route.name === "workbench"
       ? navigationStore.workbenchConfig.label
       : navigationStore.currentPath === route.path
         ? navigationStore.activeMenuNode?.name

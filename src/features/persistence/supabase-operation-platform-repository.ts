@@ -4,7 +4,15 @@ import type { TenantConfiguration } from "@/features/tenant-config/types";
 import { isValidTenantConfiguration } from "@/features/tenant-config/tenant-configuration-validation";
 import type { TenantMemberRecord } from "@/features/tenant-members/types";
 import type { UserWorkbenchLayout, WorkbenchProfile } from "@/features/workbench/types";
-import type { TenantInfo, TenantType } from "@/types/user";
+import {
+  defaultAdministrativeRegionForTenant,
+  normalizeTenantAdministrativeRegion,
+} from "@/features/tenant/administrative-region";
+import type {
+  AdministrativeRegionScope,
+  TenantInfo,
+  TenantType,
+} from "@/types/user";
 
 interface ProfileRow {
   id: string;
@@ -19,6 +27,10 @@ interface TenantRow {
   short_name: string;
   type: TenantType;
   enabled: boolean;
+  administrative_region_code: string | null;
+  administrative_region_name: string | null;
+  administrative_region_scope: AdministrativeRegionScope | null;
+  administrative_region_path: unknown;
 }
 
 interface ConfigurationRow {
@@ -100,18 +112,37 @@ const memberColumns = [
   "updated_at",
 ].join(",");
 
+const tenantColumns = [
+  "id",
+  "name",
+  "short_name",
+  "type",
+  "enabled",
+  "administrative_region_code",
+  "administrative_region_name",
+  "administrative_region_scope",
+  "administrative_region_path",
+].join(",");
+
 function assertNoError(error: { message: string } | null, fallback: string) {
   if (error) throw new Error(error.message || fallback);
 }
 
 function toTenant(row: TenantRow): TenantInfo {
-  return {
+  const tenant: TenantInfo = {
     id: row.id,
     name: row.name,
     shortName: row.short_name,
     type: row.type,
     enabled: row.enabled,
   };
+  tenant.administrativeRegion = normalizeTenantAdministrativeRegion({
+    code: row.administrative_region_code,
+    name: row.administrative_region_name,
+    scope: row.administrative_region_scope,
+    path: row.administrative_region_path,
+  }) ?? defaultAdministrativeRegionForTenant(tenant);
+  return tenant;
 }
 
 function toMember(row: MemberRow): TenantMemberRecord {
@@ -163,7 +194,7 @@ export class SupabaseOperationPlatformRepository {
       preferredStateRows,
     ] = await Promise.all([
       client.from("profiles").select("id,display_name,initials,platform_admin").eq("id", user.id).single(),
-      client.from("tenants").select("id,name,short_name,type,enabled").order("type").order("name"),
+      client.from("tenants").select(tenantColumns).order("type").order("name"),
       client.from("tenant_members").select(memberColumns).eq("auth_user_id", user.id),
       client.from("user_tenant_preferences").select("tenant_id,active_role_id,visualization_theme_id").eq("auth_user_id", user.id),
       client.from("workbench_layouts").select("tenant_id,profile,layout").eq("auth_user_id", user.id),
@@ -176,7 +207,7 @@ export class SupabaseOperationPlatformRepository {
     assertNoError(layoutsResult.error, "工作台布局读取失败");
 
     const profile = profileResult.data as ProfileRow;
-    const tenants = (tenantsResult.data as TenantRow[]).map(toTenant);
+    const tenants = (tenantsResult.data as unknown as TenantRow[]).map(toTenant);
     const members = new Map<string, TenantMemberRecord[]>();
     for (const row of membersResult.data as unknown as MemberRow[]) {
       const records = members.get(row.tenant_id) ?? [];
@@ -292,6 +323,10 @@ export class SupabaseOperationPlatformRepository {
       p_short_name: tenant.shortName,
       p_type: tenant.type,
       p_enabled: tenant.enabled,
+      p_administrative_region_code: tenant.administrativeRegion?.code ?? null,
+      p_administrative_region_name: tenant.administrativeRegion?.name ?? null,
+      p_administrative_region_scope: tenant.administrativeRegion?.scope ?? null,
+      p_administrative_region_path: tenant.administrativeRegion?.path ?? null,
       p_configuration: configuration,
       p_member_id: member.id,
       p_member_name: member.name,
@@ -300,7 +335,7 @@ export class SupabaseOperationPlatformRepository {
       p_member_title: member.title,
     });
     assertNoError(error, "组织创建失败");
-    return toTenant(data as TenantRow);
+    return toTenant(data as unknown as TenantRow);
   }
 
   async updateTenant(tenant: TenantInfo) {
@@ -310,12 +345,16 @@ export class SupabaseOperationPlatformRepository {
         name: tenant.name,
         short_name: tenant.shortName,
         enabled: tenant.type === "platform" ? true : tenant.enabled,
+        administrative_region_code: tenant.administrativeRegion?.code ?? null,
+        administrative_region_name: tenant.administrativeRegion?.name ?? null,
+        administrative_region_scope: tenant.administrativeRegion?.scope ?? null,
+        administrative_region_path: tenant.administrativeRegion?.path ?? null,
       })
       .eq("id", tenant.id)
-      .select("id,name,short_name,type,enabled")
+      .select(tenantColumns)
       .single();
     assertNoError(error, "组织保存失败");
-    return toTenant(data as TenantRow);
+    return toTenant(data as unknown as TenantRow);
   }
 
   async deleteTenant(tenantId: string) {

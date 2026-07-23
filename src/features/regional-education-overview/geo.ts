@@ -18,6 +18,7 @@ export interface GeoFeature {
 export interface GeoFeatureCollection {
   type: "FeatureCollection";
   features: GeoFeature[];
+  coordinateSystem?: "GCJ-02";
 }
 
 const boundaryTolerance = 1e-10;

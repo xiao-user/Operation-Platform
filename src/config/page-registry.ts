@@ -204,9 +204,23 @@ export const pageRegistry: PageRegistryItem[] = [
     "区域教育总览",
     "/bureau/visualization/regional-education-overview",
     bureau,
-    () => import("@/views/bureau/visualization/RegionalEducationOverviewView.vue"),
+    () => import("@/views/bureau/visualization/RegionalEducationOverviewRouteView.vue"),
     {
-      description: "榕城区教育数字孪生首页，支持三维镇街下钻、教育机构点位与多主题态势切换。",
+      description: "按当前组织行政区加载的教育数字孪生首页，支持三维下钻、教育机构点位与多主题态势切换。",
+      surface: "standalone",
+      openMode: "new-tab",
+    },
+  ),
+
+  // 教育局 · AI精准教学 · 智慧体育
+  page(
+    "bureau-smart-sports-cockpit",
+    "智慧体育数据驾驶舱",
+    "/bureau/ai-precision-teaching/smart-sports/cockpit",
+    bureau,
+    () => import("@/views/bureau/visualization/SmartSportsCockpitView.vue"),
+    {
+      description: "按当前组织行政区加载的独立智慧体育数字孪生驾驶舱，完整复用区域教育总览。",
       surface: "standalone",
       openMode: "new-tab",
     },
