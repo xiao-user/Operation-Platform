@@ -117,6 +117,11 @@ function handleMotionPreferenceChange() {
   startSchoolRotation();
 }
 
+function handlePageVisibilityChange() {
+  if (document.hidden) pauseSchoolRotation("page-hidden");
+  else resumeSchoolRotation("page-hidden");
+}
+
 function selectSchool(school: EducationLocation) {
   emit("locationSelect", school);
   emit("schoolNavigate", school);
@@ -225,10 +230,11 @@ watch(activeProfileTab, stopAccordionAnimations, { flush: "sync" });
 onMounted(() => {
   motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
   motionQuery?.addEventListener("change", handleMotionPreferenceChange);
+  document.addEventListener("visibilitychange", handlePageVisibilityChange);
   if (profileRoot.value) {
     profileAnimationContext = gsap.context(() => undefined, profileRoot.value);
   }
-  startSchoolRotation();
+  handlePageVisibilityChange();
 });
 
 onBeforeUnmount(() => {
@@ -236,6 +242,7 @@ onBeforeUnmount(() => {
   stopAccordionAnimations();
   profileAnimationContext?.revert();
   motionQuery?.removeEventListener("change", handleMotionPreferenceChange);
+  document.removeEventListener("visibilitychange", handlePageVisibilityChange);
 });
 </script>
 

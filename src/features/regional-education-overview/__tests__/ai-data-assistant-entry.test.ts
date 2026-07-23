@@ -50,6 +50,29 @@ describe("AiDataAssistantEntry", () => {
     wrapper.unmount();
   });
 
+  it("pauses the orb state cycle while the page is hidden", async () => {
+    vi.useFakeTimers();
+    const hidden = vi.spyOn(document, "hidden", "get");
+    hidden.mockReturnValue(false);
+    const wrapper = shallowMount(AiDataAssistantEntry);
+    const orb = wrapper.getComponent({ name: "CloudOrb" });
+
+    hidden.mockReturnValue(true);
+    document.dispatchEvent(new Event("visibilitychange"));
+    vi.advanceTimersByTime(8_000);
+    await wrapper.vm.$nextTick();
+    expect(orb.props("state")).toBe("listening");
+
+    hidden.mockReturnValue(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+    vi.advanceTimersByTime(4_000);
+    await wrapper.vm.$nextTick();
+    expect(orb.props("state")).toBe("speaking");
+    wrapper.unmount();
+    hidden.mockRestore();
+    vi.useRealTimers();
+  });
+
   it("opens a configured destination in a new tab", () => {
     const wrapper = shallowMount(AiDataAssistantEntry, {
       props: { href: "/bureau/visualization/ai-data-assistant" },

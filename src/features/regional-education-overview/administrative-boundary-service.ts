@@ -4,7 +4,31 @@ import type { AdministrativeRegionScope } from "@/types/user";
 
 const mapEndpoint = "https://geo.datav.aliyun.com/areas_v3/bound";
 const mapRequestTimeoutMs = 8_000;
+const maximumCachedCollections = 16;
+const pinnedCollectionCodes = new Set(["440000"]);
 const collectionCache = new Map<string, GeoFeatureCollection>();
+
+function readCachedCollection(code: string) {
+  const collection = collectionCache.get(code);
+  if (!collection) return undefined;
+  if (!pinnedCollectionCodes.has(code)) {
+    collectionCache.delete(code);
+    collectionCache.set(code, collection);
+  }
+  return collection;
+}
+
+function cacheCollection(code: string, collection: GeoFeatureCollection) {
+  collectionCache.delete(code);
+  collectionCache.set(code, collection);
+  while (collectionCache.size > maximumCachedCollections) {
+    const oldestEvictableCode = Array.from(collectionCache.keys()).find(
+      (cachedCode) => !pinnedCollectionCodes.has(cachedCode),
+    );
+    if (!oldestEvictableCode) break;
+    collectionCache.delete(oldestEvictableCode);
+  }
+}
 
 export class AdministrativeBoundaryUnavailableError extends Error {
   constructor(code: string) {
@@ -73,7 +97,7 @@ export async function loadAdministrativeChildren(
   if (externalSignal?.aborted) {
     throw externalSignal.reason ?? new DOMException("行政区地图加载已取消", "AbortError");
   }
-  const cached = collectionCache.get(code);
+  const cached = readCachedCollection(code);
   if (cached) return cached;
   const requestController = new AbortController();
   let timedOut = false;
@@ -90,7 +114,7 @@ export async function loadAdministrativeChildren(
     if (response.status === 404) throw new AdministrativeBoundaryUnavailableError(code);
     if (!response.ok) throw new Error(`行政区地图加载失败：${response.status}`);
     const collection = normalizeAdministrativeCollection(await response.json());
-    collectionCache.set(code, collection);
+    cacheCollection(code, collection);
     return collection;
   } catch (error) {
     if (timedOut) throw new Error("行政区地图加载超时，请稍后重试");

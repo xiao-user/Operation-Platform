@@ -133,4 +133,45 @@ describe("LocationProfilePanel school locator", () => {
 
     wrapper.unmount();
   });
+
+  it("pauses automatic school scrolling while the page is hidden", async () => {
+    vi.useFakeTimers();
+    const hidden = vi.spyOn(document, "hidden", "get");
+    hidden.mockReturnValue(false);
+    const wrapper = mount(LocationProfilePanel, {
+      props: {
+        location: locations[0],
+        locations,
+        scopeName: "榕城区",
+        formattedDate: "2026-07-15",
+      },
+    });
+    const scroller = wrapper.get(".school-list");
+    Object.defineProperties(scroller.element, {
+      clientHeight: { configurable: true, value: 240 },
+      scrollHeight: { configurable: true, value: 480 },
+      scrollTop: { configurable: true, value: 0, writable: true },
+    });
+    const rows = wrapper.findAll<HTMLElement>(".school-list-item");
+    rows.forEach((row, index) => {
+      Object.defineProperty(row.element, "offsetTop", {
+        configurable: true,
+        value: index * 48,
+      });
+    });
+    const scrollTo = vi.fn();
+    Object.defineProperty(scroller.element, "scrollTo", { configurable: true, value: scrollTo });
+
+    hidden.mockReturnValue(true);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(8_000);
+    expect(scrollTo).not.toHaveBeenCalled();
+
+    hidden.mockReturnValue(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(scrollTo).toHaveBeenCalledOnce();
+    wrapper.unmount();
+    hidden.mockRestore();
+  });
 });

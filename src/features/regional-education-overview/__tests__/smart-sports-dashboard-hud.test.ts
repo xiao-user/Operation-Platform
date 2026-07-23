@@ -11,6 +11,7 @@ const props = {
   ],
   palette: getDigitalTwinMapTheme("cyan").chartPalette,
   coverageLabel: "区县同级边界 · 当前区县聚焦",
+  dateRange: ["2026-07-01", "2026-07-23"] as const,
 };
 
 describe("SmartSportsDashboardHud", () => {
@@ -44,6 +45,19 @@ describe("SmartSportsDashboardHud", () => {
     expect(wrapper.text()).toContain("省级阳光长跑目标达成");
     expect(wrapper.get('[aria-label="全省趋势指标"]').text()).toContain("参与人数");
     expect(wrapper.find(".sports-trend-card h2").exists()).toBe(false);
+  });
+
+  it("renders the floating date control and emits the selected global range", async () => {
+    const wrapper = mount(SmartSportsDashboardHud, { props, global: { stubs: { EChartCanvas: true } } });
+    const capsule = wrapper.get('[aria-label="智慧体育统计时间"]');
+    expect(capsule.text()).toContain("统计时间");
+    const datePicker = wrapper.findComponent({ name: "ElDatePicker" });
+    expect(datePicker.props("modelValue")).toEqual(["2026-07-01", "2026-07-23"]);
+    expect(datePicker.props("popperClass")).toBe("smart-sports-date-picker-popper");
+    datePicker.vm.$emit("update:modelValue", ["2026-06-01", "2026-06-30"]);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.emitted("dateRangeChange")?.[0])
+      .toEqual([["2026-06-01", "2026-06-30"]]);
   });
 });
 

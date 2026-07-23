@@ -4,6 +4,7 @@ import "element-plus/es/components/message/style/css";
 import "element-plus/es/components/message-box/style/css";
 import "element-plus/es/components/option/style/css";
 import "element-plus/es/components/select/style/css";
+import "element-plus/es/components/date-picker/style/css";
 import App from "./App.vue";
 import router from "./router";
 import { resolveDocumentTitle } from "@/router/document-title";

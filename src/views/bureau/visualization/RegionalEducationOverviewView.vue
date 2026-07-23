@@ -38,6 +38,7 @@ import type {
 import {
   cloneMapVisualTuning,
   defaultMapVisualTuning,
+  smartSportsMapFramingOffsetY,
 } from "@/features/regional-education-overview/rendering/map-visual-tuning";
 import { useUserStore } from "@/stores/user";
 import { useNavigationStore } from "@/stores/navigation";
@@ -80,8 +81,24 @@ const activeScopePath = computed(() => activeMapState.value.navigationPath ?? [{
   scope: activeMapState.value.scope,
 }]);
 const dataLayerMode = ref<MapDataLayerMode>("energy-towers");
-const mapVisualTuning = ref(cloneMapVisualTuning(defaultMapVisualTuning));
+const initialMapVisualTuning = cloneMapVisualTuning(defaultMapVisualTuning);
+if (props.dashboardVariant === "smart-sports") {
+  initialMapVisualTuning.offsetY = smartSportsMapFramingOffsetY;
+}
+const mapVisualTuning = ref(initialMapVisualTuning);
 const now = ref(new Date());
+
+function calendarDate(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+const sportsDateRange = ref<[string, string]>([
+  calendarDate(new Date(now.value.getFullYear(), now.value.getMonth(), 1)),
+  calendarDate(now.value),
+]);
 const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
   year: "numeric",
   month: "2-digit",
@@ -142,6 +159,20 @@ function stopSchoolSelectionCycle() {
   schoolSelectionTimer = undefined;
 }
 
+function stopClock() {
+  if (clockTimer !== undefined) window.clearInterval(clockTimer);
+  clockTimer = undefined;
+}
+
+function startClock() {
+  stopClock();
+  now.value = new Date();
+  if (document.hidden) return;
+  clockTimer = window.setInterval(() => {
+    now.value = new Date();
+  }, 1000);
+}
+
 function cycleSelectedSchool() {
   if (
     document.hidden
@@ -160,6 +191,7 @@ function restartSchoolSelectionCycle() {
   stopSchoolSelectionCycle();
   if (
     !pageMounted
+    || document.hidden
     || activeDashboardSection.value !== "regional-overview"
     || dataLayerMode.value !== "institutions"
   ) return;
@@ -204,6 +236,13 @@ function handleUserActivity() {
 
 function handlePageVisibilityChange() {
   autoFocusTour.handleVisibilityChange();
+  if (document.hidden) {
+    stopClock();
+    stopSchoolSelectionCycle();
+    return;
+  }
+  startClock();
+  restartSchoolSelectionCycle();
 }
 
 function currentDashboardSectionElement() {
@@ -381,9 +420,7 @@ onMounted(() => {
   window.addEventListener("wheel", handleUserActivity, { capture: true, passive: true });
   window.addEventListener("keydown", handleUserActivity, true);
   document.addEventListener("visibilitychange", handlePageVisibilityChange);
-  clockTimer = window.setInterval(() => {
-    now.value = new Date();
-  }, 1000);
+  startClock();
   if (!pageRoot.value || typeof window.matchMedia !== "function") return;
   entranceMedia = gsap.matchMedia();
   entranceMedia.add(
@@ -439,7 +476,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("wheel", handleUserActivity, true);
   window.removeEventListener("keydown", handleUserActivity, true);
   document.removeEventListener("visibilitychange", handlePageVisibilityChange);
-  if (clockTimer !== undefined) window.clearInterval(clockTimer);
+  stopClock();
   dashboardTransition?.kill();
   dashboardTransition = undefined;
   entranceMedia?.revert();
@@ -491,8 +528,10 @@ onBeforeUnmount(() => {
               :scope-path="activeScopePath"
               :palette="activeTheme.chartPalette"
               :coverage-label="coverageLabel"
+              :date-range="sportsDateRange"
               @scope-back="returnToParentScope"
               @scope-navigate="navigateToScope"
+              @date-range-change="sportsDateRange = $event"
             />
 
             <RegionalOverviewPanel

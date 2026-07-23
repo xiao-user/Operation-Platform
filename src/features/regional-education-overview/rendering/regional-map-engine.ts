@@ -1490,9 +1490,11 @@ export class RegionalMapEngine {
 
   private onVisibilityChange = () => {
     if (document.hidden) {
+      this.cameraTransition.pause();
       window.cancelAnimationFrame(this.frameId);
       this.frameId = 0;
     } else {
+      this.cameraTransition.resume();
       this.previousFrameTime = 0;
       this.requestRender();
       this.startLoop();

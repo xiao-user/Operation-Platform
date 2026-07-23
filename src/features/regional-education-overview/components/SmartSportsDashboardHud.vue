@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, type CSSProperties } from "vue";
 import type { EChartsCoreOption } from "echarts/core";
+import { ElDatePicker } from "element-plus";
 import rankingFrameUrl from "@/assets/figma/smart-sports/rank-frame.svg";
 import AnimatedNumber from "./AnimatedNumber.vue";
 import EChartCanvas from "./dashboard/EChartCanvas.vue";
@@ -20,11 +21,13 @@ const props = defineProps<{
   scopePath: readonly MapNavigationNode[];
   palette: DigitalTwinChartPalette;
   coverageLabel: string;
+  dateRange: readonly [string, string];
 }>();
 
 const emit = defineEmits<{
   scopeBack: [];
   scopeNavigate: [code: string];
+  dateRangeChange: [range: [string, string]];
 }>();
 
 const activeDashboard = ref<SmartSportsDashboardTabId>("overview");
@@ -184,6 +187,14 @@ function metricLevel(ratio: number) {
   return "is-success";
 }
 
+function updateDateRange(value: unknown) {
+  if (!Array.isArray(value) || value.length !== 2) return;
+  const [start, end] = value;
+  if (typeof start === "string" && typeof end === "string") {
+    emit("dateRangeChange", [start, end]);
+  }
+}
+
 watch(dashboard, (nextDashboard) => {
   activeTrendId.value = nextDashboard.trend.tabs[0]!.id;
 });
@@ -194,6 +205,25 @@ watch(dashboard, (nextDashboard) => {
     class="smart-sports-hud"
     aria-label="智慧体育数据概览"
   >
+    <div class="sports-date-range" role="group" aria-label="智慧体育统计时间">
+      <span>统计时间</span>
+      <ElDatePicker
+        :model-value="[...dateRange]"
+        type="daterange"
+        value-format="YYYY-MM-DD"
+        format="YYYY-MM-DD"
+        range-separator="至"
+        start-placeholder="开始时间"
+        end-placeholder="结束时间"
+        :clearable="false"
+        :editable="false"
+        :teleported="true"
+        popper-class="smart-sports-date-picker-popper"
+        aria-label="智慧体育开始时间和结束时间"
+        @update:model-value="updateDateRange"
+      />
+    </div>
+
     <aside class="sports-summary" aria-label="智慧体育范围概览">
       <nav v-if="scopePath.length > 1" class="scope-breadcrumb" aria-label="地图下钻路径">
         <template v-for="(node, index) in scopePath" :key="`${node.scope}-${node.code}`">
@@ -332,7 +362,13 @@ watch(dashboard, (nextDashboard) => {
 
 <style scoped>
 .smart-sports-hud { --sports-number-font: "D-DIN", "DIN Alternate", "Arial Narrow", var(--dt-font-family); --sports-rank-first: #ffd166; --sports-rank-second: #66d9ff; --sports-rank-third: #ff9b6a; --sports-rank-default: var(--normal--white--100); position: absolute; inset: 0; pointer-events: none !important; color: var(--dt-color-text); font-size: var(--dt-font-size-sm); font-weight: var(--dt-font-weight-light); }
-.sports-summary, .sports-ranking, .sports-goals { pointer-events: auto; }
+.sports-summary, .sports-ranking, .sports-goals, .sports-date-range { pointer-events: auto; }
+.sports-date-range { position: absolute; z-index: 1; top: calc(var(--dt-right-panel-top) - var(--dt-topbar-height)); right: var(--dt-ai-entry-right); display: flex; box-sizing: border-box; width: 280px; height: 40px; color: var(--dt-color-text-muted); align-items: center; gap: var(--dt-space-2); white-space: nowrap; }
+.sports-date-range > span { flex: 0 0 auto; font-size: var(--dt-font-size-xs); }
+.sports-date-range :deep(.el-date-editor) { --el-input-bg-color: var(--normal--white--5); --el-input-border-color: var(--dt-color-line); --el-input-hover-border-color: var(--dt-color-accent); --el-input-focus-border-color: var(--dt-color-accent); --el-input-text-color: var(--dt-color-text-secondary); --el-text-color-regular: var(--dt-color-text-secondary); --el-text-color-placeholder: var(--dt-color-text-muted); width: 100%; height: 32px; border-radius: var(--dt-radius-xs); padding: 0 var(--dt-space-2); box-shadow: 0 0 0 var(--dt-border-width) var(--dt-color-line) inset; background: var(--normal--white--5); }
+.sports-date-range :deep(.el-range-input), .sports-date-range :deep(.el-range-separator) { color: var(--dt-color-text-secondary); font-family: var(--sports-number-font); font-size: var(--dt-font-size-xs); font-variant-numeric: tabular-nums; }
+.sports-date-range :deep(.el-range__icon) { color: var(--dt-color-accent); }
+.sports-date-range :deep(.el-range__close-icon) { display: none; }
 .sports-summary { position: absolute; top: calc(var(--dt-left-panel-top) - var(--dt-topbar-height)); left: var(--dt-left-panel-left); width: var(--dt-left-panel-width); }
 .sports-summary h2, .ranking-panel h2, .sports-goal-card h2, .sports-trend-card h2 { margin: 0; color: var(--dt-color-text); font-size: var(--dt-font-size-md); font-weight: var(--dt-font-weight-light); line-height: var(--dt-line-height-md); }
 .scope-breadcrumb { display: flex; max-width: 340px; align-items: center; gap: var(--dt-space-2); white-space: nowrap; }

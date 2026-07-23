@@ -45,7 +45,10 @@ import {
   RegionalContextLayer,
   regionalContextSurfaceZ,
 } from "../rendering/regional-context-layer";
-import { defaultMapVisualTuning } from "../rendering/map-visual-tuning";
+import {
+  defaultMapVisualTuning,
+  smartSportsMapFramingOffsetY,
+} from "../rendering/map-visual-tuning";
 import {
   anchorDynamicOverlay,
   mapScreenFraming,
@@ -309,6 +312,14 @@ describe("regional map render budget", () => {
 
     expect(pivot?.distanceTo(expected)).toBeLessThan(0.000_001);
     expect(pivot?.x).not.toBe(defaultMapVisualTuning.cameraTargetX);
+  });
+
+  it("keeps the Smart Sports screen lift separate from regional education", () => {
+    expect(mapScreenFraming({ scope: "city" }, defaultMapVisualTuning).y).toBe(-30);
+    expect(mapScreenFraming({ scope: "city" }, {
+      ...defaultMapVisualTuning,
+      offsetY: smartSportsMapFramingOffsetY,
+    }).y).toBe(40);
   });
 
   it("keeps return constraints stable and only resets camera Z on parent drilldown", () => {
@@ -1184,6 +1195,56 @@ describe("regional map render budget", () => {
     regions.setHovered();
     regions.settle();
     expect(interactionMeshes.every((mesh) => !mesh.visible)).toBe(true);
+    regions.dispose();
+  });
+
+  it("batches every MultiPolygon fragment of one administrative region", () => {
+    const feature: GeoFeature = {
+      type: "Feature",
+      properties: { code: "multi-region", name: "多岛行政区" },
+      geometry: {
+        type: "MultiPolygon",
+        coordinates: [
+          [[
+            [0, 0], [4, 0], [4, 4], [0, 4], [0, 0],
+          ]],
+          [[
+            [8, 0], [12, 0], [12, 4], [8, 4], [8, 0],
+          ]],
+        ],
+      },
+    };
+    const geoData = {
+      type: "FeatureCollection" as const,
+      coordinateSystem: "GCJ-02" as const,
+      features: [feature],
+    };
+    const multiProjection = createMapProjection(geoData, 860, 520, 30);
+    const regions = new RegionLayer(
+      { ...initialMapState, geoData },
+      multiProjection,
+      theme,
+      defaultMapVisualTuning,
+    );
+    const groups = regions.root.children.filter(
+      (object): object is THREE.Group => object instanceof THREE.Group,
+    );
+    expect(groups).toHaveLength(1);
+    const terrainMeshes = groups[0]!.children.filter(
+      (object) => object instanceof THREE.Mesh
+        && object.material instanceof THREE.MeshStandardMaterial,
+    );
+    const sideMeshes = groups[0]!.children.filter(
+      (object) => object instanceof THREE.Mesh
+        && object.material instanceof THREE.ShaderMaterial,
+    );
+    const boundaries = groups[0]!.children.filter(
+      (object) => object instanceof THREE.LineSegments,
+    );
+    expect(terrainMeshes).toHaveLength(1);
+    expect(sideMeshes).toHaveLength(1);
+    expect(boundaries).toHaveLength(2);
+    expect(regions.featureHit("multi-region")?.group).toBe(groups[0]);
     regions.dispose();
   });
 

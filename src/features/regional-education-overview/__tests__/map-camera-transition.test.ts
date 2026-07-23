@@ -74,4 +74,14 @@ describe("MapCameraTransition", () => {
     context.transition.cancel();
     await expect(second).resolves.toBe("interrupted");
   });
+
+  it("pauses an active transition in the background and resumes at high frame rate", async () => {
+    const context = createTransition();
+    const completion = context.transition.animate(targetView, { x: -108, y: -30 }, true);
+    context.transition.pause();
+    context.transition.resume();
+    expect(context.requestHighFrameRate).toHaveBeenCalledTimes(2);
+    context.transition.cancel();
+    await expect(completion).resolves.toBe("interrupted");
+  });
 });

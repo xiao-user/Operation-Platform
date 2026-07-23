@@ -23,6 +23,24 @@ let suppressNextClick = false;
 let dragTranslateX = 0;
 let dragTranslateY = 0;
 
+function stopOrbStateCycle() {
+  if (orbStateTimer !== undefined) window.clearInterval(orbStateTimer);
+  orbStateTimer = undefined;
+}
+
+function startOrbStateCycle() {
+  stopOrbStateCycle();
+  if (document.hidden) return;
+  orbStateTimer = window.setInterval(() => {
+    orbState.value = orbState.value === "listening" ? "speaking" : "listening";
+  }, ORB_STATE_DURATION_MS);
+}
+
+function handleVisibilityChange() {
+  if (document.hidden) stopOrbStateCycle();
+  else startOrbStateCycle();
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -117,14 +135,14 @@ function finishDragging(event?: PointerEvent) {
 }
 
 onMounted(() => {
-  orbStateTimer = window.setInterval(() => {
-    orbState.value = orbState.value === "listening" ? "speaking" : "listening";
-  }, ORB_STATE_DURATION_MS);
+  startOrbStateCycle();
+  document.addEventListener("visibilitychange", handleVisibilityChange);
   window.addEventListener("resize", constrainToViewport);
 });
 
 onBeforeUnmount(() => {
-  if (orbStateTimer !== undefined) window.clearInterval(orbStateTimer);
+  stopOrbStateCycle();
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
   window.removeEventListener("resize", constrainToViewport);
 });
 </script>

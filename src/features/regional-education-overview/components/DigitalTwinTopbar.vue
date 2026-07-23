@@ -198,11 +198,6 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(360px, 1fr) auto;
 }
 
-.page-topbar--smart-sports .brand-lockup strong {
-  color: var(--dt-color-text-secondary);
-  font-weight: var(--dt-font-weight-light);
-}
-
 .brand-lockup {
   display: flex;
   min-width: 0;
@@ -221,7 +216,7 @@ onBeforeUnmount(() => {
   color: var(--dt-color-text);
   font-size: var(--dt-font-size-md);
   line-height: var(--dt-line-height-md);
-  font-weight: var(--dt-font-weight-regular);
+  font-weight: var(--dt-font-weight-bold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

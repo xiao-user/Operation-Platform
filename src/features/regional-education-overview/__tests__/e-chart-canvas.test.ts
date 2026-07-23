@@ -7,6 +7,8 @@ const chartMocks = vi.hoisted(() => ({
   setOption: vi.fn(),
   resize: vi.fn(),
   dispose: vi.fn(),
+  animationStart: vi.fn(),
+  animationStop: vi.fn(),
   init: vi.fn(),
   use: vi.fn(),
 }));
@@ -47,6 +49,12 @@ describe("EChartCanvas", () => {
       setOption: chartMocks.setOption,
       resize: chartMocks.resize,
       dispose: chartMocks.dispose,
+      getZr: () => ({
+        animation: {
+          start: chartMocks.animationStart,
+          stop: chartMocks.animationStop,
+        },
+      }),
     });
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
   });
@@ -93,5 +101,27 @@ describe("EChartCanvas", () => {
     wrapper.unmount();
     expect(observer.disconnect).toHaveBeenCalledTimes(1);
     expect(chartMocks.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops chart animation while the document is hidden and refreshes on return", async () => {
+    const hidden = vi.spyOn(document, "hidden", "get");
+    hidden.mockReturnValue(false);
+    const wrapper = mount(EChartCanvas, {
+      props: {
+        option: { series: [{ type: "bar", data: [1] }] },
+        ariaLabelText: "后台休眠测试",
+      },
+    });
+    hidden.mockReturnValue(true);
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(chartMocks.animationStop).toHaveBeenCalledOnce();
+
+    hidden.mockReturnValue(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await nextTick();
+    expect(chartMocks.animationStart).toHaveBeenCalledOnce();
+    expect(chartMocks.setOption).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+    hidden.mockRestore();
   });
 });

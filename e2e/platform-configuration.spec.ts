@@ -16,7 +16,7 @@ test("新增组织后刷新页面仍然保留", async ({ page }) => {
 
   await page.reload();
   await expect(page.getByRole("row", { name: new RegExp(organizationName) })).toBeVisible();
-  await expect(page.getByText("共 7 个组织", { exact: true })).toBeVisible();
+  await expect(page.getByText("共 8 个组织", { exact: true })).toBeVisible();
 });
 
 test("新增一级模块后刷新页面仍然保留", async ({ page }) => {

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { GeoFeature, Position } from "../geo";
 import type { MapState } from "../map-state";
 import type { DigitalTwinMapTheme } from "../map-themes";
@@ -167,18 +168,26 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
     this.applyTheme(theme);
   }
 
-  private createBoundary(ring: Position[], z: number, material: THREE.Material) {
-    const points = ring.map((coordinate) => this.projection.projectPoint(coordinate, z));
-    const first = points[0];
-    const last = points[points.length - 1];
-    if (first && last && !first.equals(last)) points.push(first.clone());
-    return new THREE.Line(
-      this.owner.geometry(new THREE.BufferGeometry().setFromPoints(points)),
-      material,
-    );
+  private createBoundaryGeometry(rings: readonly Position[][], z: number) {
+    const vertices: number[] = [];
+    for (const ring of rings) {
+      const points = ring.map((coordinate) => this.projection.projectPoint(coordinate, z));
+      const first = points[0];
+      const last = points[points.length - 1];
+      if (first && last && !first.equals(last)) points.push(first.clone());
+      for (let index = 0; index < points.length - 1; index += 1) {
+        const start = points[index];
+        const end = points[index + 1];
+        if (!start || !end) continue;
+        vertices.push(start.x, start.y, start.z, end.x, end.y, end.z);
+      }
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    return this.owner.geometry(geometry);
   }
 
-  private createSideWalls(ring: Position[]) {
+  private createSideWallGeometry(ring: Position[]) {
     const vertices: number[] = [];
     for (let index = 0; index < ring.length - 1; index += 1) {
       const start = ring[index];
@@ -195,13 +204,18 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
         startPoint.x, startPoint.y, topZ,
       );
     }
-    const geometry = this.owner.geometry(new THREE.BufferGeometry());
+    const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
     geometry.computeVertexNormals();
-    return [
-      new THREE.Mesh(geometry, this.sideDepthMaterial),
-      new THREE.Mesh(geometry, this.sideMaterial),
-    ] as const;
+    return geometry;
+  }
+
+  private mergeOwnedGeometries(geometries: THREE.BufferGeometry[]) {
+    if (geometries.length === 1) return this.owner.geometry(geometries[0]!);
+    const merged = mergeGeometries(geometries, false);
+    for (const geometry of geometries) geometry.dispose();
+    if (!merged) throw new Error("行政区碎片几何无法合并");
+    return this.owner.geometry(merged);
   }
 
   private build(mapState: MapState) {
@@ -213,87 +227,93 @@ export class RegionLayer implements TuningAwareMapSceneLayer {
       const terrainToneIndex = Number.isFinite(numericSuffix)
         ? numericSuffix % 2
         : featureIndex % 2;
+      const capGeometries: THREE.BufferGeometry[] = [];
+      const sideWallGeometries: THREE.BufferGeometry[] = [];
+      const internalRings: Position[][] = [];
+      const outerRings: Position[][] = [];
       for (const polygon of polygonsOf(feature)) {
         const outerRing = polygon[0];
         const shape = this.projection.makeShape(polygon);
         if (!outerRing || !shape) continue;
-        const regionGroup = new THREE.Group();
-        regionGroup.userData.feature = feature;
-        regionGroup.userData.targetBaseZ = 0;
-        regionGroup.userData.targetScaleZ = 1;
-        this.regionGroups.add(regionGroup);
-        if (typeof featureCode === "string") {
-          const groups = this.regionGroupsByCode.get(featureCode) ?? [];
-          groups.push(regionGroup);
-          this.regionGroupsByCode.set(featureCode, groups);
-        }
-        // All coplanar caps use identical triangulation. Sharing the geometry
-        // removes three ShapeGeometry allocations per polygon and keeps GPU
-        // buffers stable during province/city transitions.
-        const capGeometry = this.owner.geometry(new THREE.ShapeGeometry(shape));
-
-        const base = new THREE.Mesh(
-          capGeometry,
-          this.baseMaterial,
-        );
-        base.position.z = bottomZ;
-        regionGroup.add(base, ...this.createSideWalls(outerRing));
-
-        const terrain = new THREE.Mesh(
-          capGeometry,
-          this.terrainMaterials[terrainToneIndex],
-        );
-        terrain.position.z = topZ;
-        terrain.userData.regionGroup = regionGroup;
-        terrain.userData.feature = feature;
-        regionGroup.add(terrain);
-        this.interactiveMeshes.push(terrain);
-
-        const highlightMaterial = this.owner.material(new THREE.MeshBasicMaterial({
-          transparent: true,
-          opacity: 0,
-          blending: THREE.AdditiveBlending,
-          side: THREE.DoubleSide,
-          depthTest: true,
-          depthWrite: false,
-        }));
-        highlightMaterial.userData.targetOpacity = 0;
-        const highlight = new THREE.Mesh(
-          capGeometry,
-          highlightMaterial,
-        );
-        highlight.position.z = topZ + 2;
-        highlight.visible = false;
-        regionGroup.add(highlight);
-        this.highlightMaterials.set(regionGroup, highlightMaterial);
-        this.highlightMeshes.set(regionGroup, highlight);
-
-        const inactiveOverlayMaterial = this.owner.material(new THREE.MeshBasicMaterial({
-          transparent: true,
-          opacity: 0,
-          side: THREE.DoubleSide,
-          depthTest: true,
-          depthWrite: false,
-        }));
-        inactiveOverlayMaterial.userData.targetOpacity = 0;
-        const inactiveOverlay = new THREE.Mesh(
-          capGeometry,
-          inactiveOverlayMaterial,
-        );
-        inactiveOverlay.position.z = topZ + 2.5;
-        inactiveOverlay.visible = false;
-        regionGroup.add(inactiveOverlay);
-        this.inactiveOverlayMaterials.set(regionGroup, inactiveOverlayMaterial);
-        this.inactiveOverlayMeshes.set(regionGroup, inactiveOverlay);
-
-        for (const ring of polygon) {
-          regionGroup.add(this.createBoundary(ring, topZ + 0.6, this.internalBoundaryMaterial));
-        }
-        regionGroup.add(
-          this.createBoundary(outerRing, topZ + 1, this.topContourMaterial),
-        );
-        this.root.add(regionGroup);
+        capGeometries.push(new THREE.ShapeGeometry(shape));
+        sideWallGeometries.push(this.createSideWallGeometry(outerRing));
+        internalRings.push(...polygon);
+        outerRings.push(outerRing);
       }
+      if (capGeometries.length === 0) continue;
+
+      const regionGroup = new THREE.Group();
+      regionGroup.userData.feature = feature;
+      regionGroup.userData.targetBaseZ = 0;
+      regionGroup.userData.targetScaleZ = 1;
+      this.regionGroups.add(regionGroup);
+      if (typeof featureCode === "string") {
+        this.regionGroupsByCode.set(featureCode, [regionGroup]);
+      }
+
+      // All fragments of one administrative feature share a single GPU batch.
+      // This keeps MultiPolygon islands interactive as one region while avoiding
+      // a complete material stack and draw call set for every individual island.
+      const capGeometry = this.mergeOwnedGeometries(capGeometries);
+      const sideWallGeometry = this.mergeOwnedGeometries(sideWallGeometries);
+
+      const base = new THREE.Mesh(capGeometry, this.baseMaterial);
+      base.position.z = bottomZ;
+      regionGroup.add(
+        base,
+        new THREE.Mesh(sideWallGeometry, this.sideDepthMaterial),
+        new THREE.Mesh(sideWallGeometry, this.sideMaterial),
+      );
+
+      const terrain = new THREE.Mesh(capGeometry, this.terrainMaterials[terrainToneIndex]);
+      terrain.position.z = topZ;
+      terrain.userData.regionGroup = regionGroup;
+      terrain.userData.feature = feature;
+      regionGroup.add(terrain);
+      this.interactiveMeshes.push(terrain);
+
+      const highlightMaterial = this.owner.material(new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        depthTest: true,
+        depthWrite: false,
+      }));
+      highlightMaterial.userData.targetOpacity = 0;
+      const highlight = new THREE.Mesh(capGeometry, highlightMaterial);
+      highlight.position.z = topZ + 2;
+      highlight.visible = false;
+      regionGroup.add(highlight);
+      this.highlightMaterials.set(regionGroup, highlightMaterial);
+      this.highlightMeshes.set(regionGroup, highlight);
+
+      const inactiveOverlayMaterial = this.owner.material(new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        depthTest: true,
+        depthWrite: false,
+      }));
+      inactiveOverlayMaterial.userData.targetOpacity = 0;
+      const inactiveOverlay = new THREE.Mesh(capGeometry, inactiveOverlayMaterial);
+      inactiveOverlay.position.z = topZ + 2.5;
+      inactiveOverlay.visible = false;
+      regionGroup.add(inactiveOverlay);
+      this.inactiveOverlayMaterials.set(regionGroup, inactiveOverlayMaterial);
+      this.inactiveOverlayMeshes.set(regionGroup, inactiveOverlay);
+
+      regionGroup.add(
+        new THREE.LineSegments(
+          this.createBoundaryGeometry(internalRings, topZ + 0.6),
+          this.internalBoundaryMaterial,
+        ),
+        new THREE.LineSegments(
+          this.createBoundaryGeometry(outerRings, topZ + 1),
+          this.topContourMaterial,
+        ),
+      );
+      this.root.add(regionGroup);
     }
   }
 

@@ -284,6 +284,11 @@ export const defaultMapVisualTuning: Readonly<MapVisualTuning> = Object.freeze({
   }),
 });
 
+// Smart Sports reserves a 160px dashboard band at the bottom of the viewport.
+// A positive view offset selects a lower camera sub-frame, which presents the
+// geographic scene higher on screen without changing its orbit pivot.
+export const smartSportsMapFramingOffsetY = 40;
+
 export function cloneMapVisualTuning(
   tuning: Readonly<MapVisualTuning> = defaultMapVisualTuning,
 ): MapVisualTuning {

@@ -126,6 +126,16 @@ export class MapCameraTransition {
     this.tween = undefined;
   }
 
+  pause() {
+    this.tween?.pause();
+  }
+
+  resume() {
+    if (!this.tween?.paused()) return;
+    this.options.requestHighFrameRate();
+    this.tween.resume();
+  }
+
   private applyValues(values: CameraTweenValues) {
     const { camera, controls, applyFraming, requestRender } = this.options;
     camera.position.set(values.cameraX, values.cameraY, values.cameraZ);

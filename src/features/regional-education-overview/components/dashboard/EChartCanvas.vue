@@ -37,10 +37,22 @@ let resizeObserver: ResizeObserver | null = null;
 let resizeFrame: number | undefined;
 
 function renderChart(option = props.option) {
+  if (document.hidden) return;
   chart.value?.setOption(option, {
     notMerge: true,
     lazyUpdate: true,
   });
+}
+
+function handleVisibilityChange() {
+  const animation = chart.value?.getZr().animation;
+  if (document.hidden) {
+    animation?.stop();
+    return;
+  }
+  animation?.start();
+  renderChart();
+  scheduleResize();
 }
 
 function scheduleResize() {
@@ -64,6 +76,7 @@ onMounted(() => {
   renderChart();
   resizeObserver = new ResizeObserver(scheduleResize);
   resizeObserver.observe(chartElement.value);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
 });
 
 watch(() => props.option, renderChart, { flush: "post" });
@@ -71,6 +84,7 @@ watch(() => props.option, renderChart, { flush: "post" });
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   resizeObserver = null;
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
   if (resizeFrame !== undefined) window.cancelAnimationFrame(resizeFrame);
   resizeFrame = undefined;
   chart.value?.dispose();

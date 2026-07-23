@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearAdministrativeBoundaryCacheForTests } from "../administrative-boundary-service";
+import {
+  clearAdministrativeBoundaryCacheForTests,
+  loadAdministrativeChildren,
+} from "../administrative-boundary-service";
 import {
   createTenantMapDataSource,
   rongchengEducationTenantId,
@@ -49,6 +52,23 @@ beforeEach(() => clearAdministrativeBoundaryCacheForTests());
 afterEach(() => vi.unstubAllGlobals());
 
 describe("tenant administrative map data source", () => {
+  it("bounds the public boundary cache while retaining the built-in Guangdong collection", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ type: "FeatureCollection", features: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const codes = Array.from({ length: 16 }, (_, index) => String(510100 + index * 100));
+
+    for (const code of codes) await loadAdministrativeChildren(code);
+    expect(fetchMock).toHaveBeenCalledTimes(16);
+    await loadAdministrativeChildren(codes[0]!);
+    expect(fetchMock).toHaveBeenCalledTimes(17);
+    await loadAdministrativeChildren("440000");
+    expect(fetchMock).toHaveBeenCalledTimes(17);
+  });
+
   it("uses a configured city as the immutable navigation root", async () => {
     const district = squareFeature("440106", "天河区", "district");
     const fetchMock = vi.fn().mockResolvedValue({
