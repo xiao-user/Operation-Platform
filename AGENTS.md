@@ -69,6 +69,7 @@ npm audit --offline
 
 - 提交前至少运行 `npm run check`。
 - 修改路由、菜单、权限或 repository 时补充单元测试；修改可见交互时运行相关 Playwright 用例。
+- 浏览器自动化优先使用 Playwright Test；临时脚本必须在 `finally` 中关闭 page、context、browser 和自启服务，结束后按本任务记录的 PID 与端口核查，不得遗留 daemon、无头浏览器或 Vite 进程。
 - 不把单元测试描述为端到端验证，不把局部检查描述为完整门禁。
 - 提交按单一职责拆分，不混入无关格式化；合并主分支前保持工作区干净。
 - 架构边界、命令、入口或存储约定变化时同步更新 `README.md`；协作约束变化时更新本文件。
