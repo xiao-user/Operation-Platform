@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { ArrowRight, InfoFilled } from "@element-plus/icons-vue";
+import { InfoFilled } from "@element-plus/icons-vue";
 import { schoolRecords } from "../mock-data";
 import type { SchoolGrowthRecord } from "../types";
 
 const selectedSchool = ref<SchoolGrowthRecord | null>(null);
 const drawerVisible = ref(false);
 const currentPage = ref(1);
-const pageSize = ref(8);
+const pageSize = ref(10);
 
 const pagedRecords = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value;
@@ -31,6 +31,10 @@ function openSchool(record: SchoolGrowthRecord) {
   selectedSchool.value = record;
   drawerVisible.value = true;
 }
+
+function handleSizeChange() {
+  currentPage.value = 1;
+}
 </script>
 
 <template>
@@ -48,70 +52,152 @@ function openSchool(record: SchoolGrowthRecord) {
       </div>
     </header>
 
-    <div class="school-comparison__table">
-      <ElTable
-        :data="pagedRecords"
-        height="540"
-        stripe
-        highlight-current-row
-        row-key="id"
-        @row-click="openSchool"
-      >
-        <ElTableColumn type="index" width="54" label="#" />
-        <ElTableColumn prop="name" label="学校" min-width="190" fixed show-overflow-tooltip>
-          <template #default="{ row }">
-            <button class="school-comparison__school-button" type="button" @click.stop="openSchool(row)">
-              {{ row.name }}
-            </button>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="students" label="学生规模" width="110" sortable>
-          <template #default="{ row }">{{ row.students.toLocaleString() }}</template>
-        </ElTableColumn>
-        <ElTableColumn prop="fiveEducation" min-width="132" sortable>
-          <template #header>
-            <span>五育均衡 <ElTooltip content="评价量表标准化后支持区域比较"><ElIcon><InfoFilled /></ElIcon></ElTooltip></span>
-          </template>
-          <template #default="{ row }">
-            <strong>{{ row.fiveEducation }}</strong>
-            <ElTag :type="scoreType(row.fiveEducation)" size="small" effect="light">{{ row.fiveEducation >= 80 ? "优秀" : row.fiveEducation >= 70 ? "良好" : "需关注" }}</ElTag>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="academicProgress" label="学业进步" min-width="120" sortable />
-        <ElTableColumn prop="physicalHealth" label="体质健康" min-width="120" sortable>
-          <template #default="{ row }">{{ row.physicalHealth }}%</template>
-        </ElTableColumn>
-        <ElTableColumn prop="activityParticipation" label="活动参与" min-width="120" sortable>
-          <template #default="{ row }">{{ row.activityParticipation }}%</template>
-        </ElTableColumn>
-        <ElTableColumn prop="completeness" label="数据完整度" min-width="130" sortable>
-          <template #default="{ row }">
-            <ElProgress :percentage="row.completeness" :stroke-width="6" :show-text="false" />
-            <span class="school-comparison__progress-value">{{ row.completeness }}%</span>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="trend" label="趋势" width="96">
-          <template #default="{ row }">
-            <ElTag :type="trendType(row.trend)" size="small" effect="light">{{ row.trend }}</ElTag>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn label="" width="64" fixed="right">
-          <template #default="{ row }">
-            <ElButton link type="primary" :icon="ArrowRight" aria-label="查看学校画像" @click.stop="openSchool(row)" />
-          </template>
-        </ElTableColumn>
-      </ElTable>
-      <footer class="school-comparison__pagination">
-        <span>共 {{ schoolRecords.length }} 所示例学校，区域总计 48 所</span>
+    <div class="school-comparison__body">
+      <div class="school-comparison__table-wrapper">
+        <ElTable
+          :data="pagedRecords"
+          height="100%"
+          stripe
+          border
+          highlight-current-row
+          row-key="id"
+          @row-click="openSchool"
+        >
+          <ElTableColumn
+            column-key="index"
+            label="序号"
+            width="60"
+            align="center"
+            fixed="left"
+          >
+            <template #default="{ $index }">
+              {{
+                String((currentPage - 1) * pageSize + $index + 1).padStart(2, "0")
+              }}
+            </template>
+          </ElTableColumn>
+          <ElTableColumn
+            prop="name"
+            column-key="name"
+            label="学校"
+            min-width="190"
+            fixed="left"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">
+              <button
+                class="school-comparison__school-button"
+                type="button"
+                @click.stop="openSchool(row)"
+              >
+                {{ row.name }}
+              </button>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn
+            prop="students"
+            column-key="students"
+            label="学生规模"
+            width="110"
+            sortable
+          >
+            <template #default="{ row }">{{ row.students.toLocaleString() }}</template>
+          </ElTableColumn>
+          <ElTableColumn
+            prop="fiveEducation"
+            column-key="fiveEducation"
+            min-width="132"
+            sortable
+          >
+            <template #header>
+              <span>
+                五育均衡
+                <ElTooltip content="评价量表标准化后支持区域比较">
+                  <ElIcon><InfoFilled /></ElIcon>
+                </ElTooltip>
+              </span>
+            </template>
+            <template #default="{ row }">
+              <strong>{{ row.fiveEducation }}</strong>
+              <ElTag :type="scoreType(row.fiveEducation)" size="small" effect="light">
+                {{
+                  row.fiveEducation >= 80
+                    ? "优秀"
+                    : row.fiveEducation >= 70
+                      ? "良好"
+                      : "需关注"
+                }}
+              </ElTag>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn
+            prop="academicProgress"
+            column-key="academicProgress"
+            label="学业进步"
+            min-width="120"
+            sortable
+          />
+          <ElTableColumn
+            prop="physicalHealth"
+            column-key="physicalHealth"
+            label="体质健康"
+            min-width="120"
+            sortable
+          >
+            <template #default="{ row }">{{ row.physicalHealth }}%</template>
+          </ElTableColumn>
+          <ElTableColumn
+            prop="activityParticipation"
+            column-key="activityParticipation"
+            label="活动参与"
+            min-width="120"
+            sortable
+          >
+            <template #default="{ row }">{{ row.activityParticipation }}%</template>
+          </ElTableColumn>
+          <ElTableColumn
+            prop="completeness"
+            column-key="completeness"
+            label="数据完整度"
+            min-width="130"
+            sortable
+          >
+            <template #default="{ row }">
+              <ElProgress :percentage="row.completeness" :stroke-width="6" :show-text="false" />
+              <span class="school-comparison__progress-value">{{ row.completeness }}%</span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="trend" column-key="trend" label="趋势" width="96">
+            <template #default="{ row }">
+              <ElTag :type="trendType(row.trend)" size="small" effect="light">
+                {{ row.trend }}
+              </ElTag>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn column-key="actions" label="操作" width="96" fixed="right">
+            <template #default="{ row }">
+              <button
+                class="school-comparison__action-link"
+                type="button"
+                @click.stop="openSchool(row)"
+              >
+                查看详情
+              </button>
+            </template>
+          </ElTableColumn>
+        </ElTable>
+      </div>
+      <div class="school-comparison__pagination">
         <ElPagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
-          background
-          layout="prev, pager, next, sizes"
-          :page-sizes="[8, 10, 12]"
           :total="schoolRecords.length"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          background
+          @size-change="handleSizeChange"
         />
-      </footer>
+      </div>
     </div>
   </section>
 
@@ -188,10 +274,19 @@ function openSchool(record: SchoolGrowthRecord) {
   font-size: var(--font-size-xs);
 }
 
-.school-comparison__table {
-  overflow: hidden;
-  border-radius: var(--radius-md);
+.school-comparison__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-16);
+  min-width: 0;
+  padding: var(--spacing-24);
   background: var(--color-white);
+}
+
+.school-comparison__table-wrapper {
+  height: 540px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .school-comparison__school-button {
@@ -205,6 +300,28 @@ function openSchool(record: SchoolGrowthRecord) {
   text-align: left;
 }
 
+.school-comparison__school-button:hover,
+.school-comparison__action-link:hover {
+  color: var(--color-primary-hover);
+}
+
+.school-comparison__school-button:focus-visible,
+.school-comparison__action-link:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: 2px solid var(--color-primary-line-light);
+  outline-offset: 2px;
+}
+
+.school-comparison__action-link {
+  padding: 0;
+  color: var(--color-primary);
+  font: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .school-comparison__progress-value {
   display: block;
   margin-top: var(--spacing-4);
@@ -214,12 +331,8 @@ function openSchool(record: SchoolGrowthRecord) {
 
 .school-comparison__pagination {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-14) var(--spacing-16);
-  border-top: 1px solid var(--color-border);
-  color: var(--color-secondary);
-  font-size: var(--font-size-sm);
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .school-drawer__meta {
@@ -270,29 +383,26 @@ function openSchool(record: SchoolGrowthRecord) {
   margin-top: var(--spacing-24);
 }
 
-:deep(.el-table__cell) {
-  height: 54px;
-}
-
-:deep(.el-table__header .el-table__cell) {
-  color: var(--color-body);
-  background: var(--color-bg-subtle);
-  font-weight: var(--font-weight-medium);
-}
-
 :deep(.el-table__row) {
   cursor: pointer;
 }
 
 @media (max-width: 900px) {
-  .school-comparison__header,
-  .school-comparison__pagination {
+  .school-comparison__header {
     align-items: flex-start;
     flex-direction: column;
   }
 
   .school-comparison__benchmark {
     flex-wrap: wrap;
+  }
+
+  .school-comparison__body {
+    padding: var(--spacing-16);
+  }
+
+  .school-comparison__pagination {
+    overflow-x: auto;
   }
 }
 </style>

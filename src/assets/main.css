@@ -306,6 +306,15 @@ body,
   background-color: var(--color-primary);
 }
 
+.el-segmented {
+  --el-segmented-bg-color: var(--color-bg-soft);
+  --el-segmented-item-selected-color: var(--color-primary);
+  --el-segmented-item-selected-bg-color: var(--color-white);
+  --el-segmented-item-selected-disabled-bg-color: var(--color-bg-muted);
+  --el-segmented-item-hover-color: var(--color-primary);
+  --el-segmented-item-hover-bg-color: var(--color-primary-light);
+}
+
 /* Table Styles */
 .el-table .el-table__header-wrapper th,
 .el-table .el-table-fixed-column--right th,

@@ -23,6 +23,9 @@ const academicYear = ref("2025-2026学年");
 const semester = ref("第二学期");
 const stage = ref("全部学段");
 const schoolScope = ref("区域内全部学校");
+const grade = ref("全部年级");
+const town = ref("全部镇街");
+const dataStatus = ref("全部数据");
 const loading = ref(false);
 const dataDrawerVisible = ref(false);
 const allTopics = [...primaryTopics, ...moreTopics];
@@ -47,7 +50,15 @@ function queryData() {
   loading.value = true;
   window.setTimeout(() => {
     loading.value = false;
-    ElMessage.success(`已更新：${academicYear.value} ${semester.value} · ${stage.value}`);
+    const filterSummary = [
+      `${academicYear.value} ${semester.value}`,
+      stage.value,
+      grade.value,
+      town.value,
+      schoolScope.value,
+      dataStatus.value,
+    ].join(" · ");
+    ElMessage.success(`已更新：${filterSummary}`);
   }, 320);
 }
 </script>
@@ -59,6 +70,9 @@ function queryData() {
       v-model:semester="semester"
       v-model:stage="stage"
       v-model:school-scope="schoolScope"
+      v-model:grade="grade"
+      v-model:town="town"
+      v-model:data-status="dataStatus"
       @query="queryData"
       @open-data="dataDrawerVisible = true"
     />
@@ -146,8 +160,18 @@ function queryData() {
 }
 
 .student-growth-portrait__topics {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   min-width: 0;
-  overflow: hidden;
+  min-height: calc(
+    100vh - var(--header-height) - var(--content-padding) - var(--content-padding)
+  );
+  max-height: calc(
+    100vh - var(--header-height) - var(--content-padding) - var(--content-padding)
+  );
+  overflow-x: hidden;
+  overflow-y: auto;
   border-radius: var(--radius-md);
   background: var(--color-white);
 }
@@ -155,6 +179,8 @@ function queryData() {
 .student-growth-portrait__content {
   display: grid;
   min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
   gap: var(--spacing-16);
 }
 

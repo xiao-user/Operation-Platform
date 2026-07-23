@@ -43,9 +43,15 @@ const requiredData = [
           <ElIcon><Connection /></ElIcon>
           <div><h3>数据接入要求</h3><p>独立权限、审计和脱敏边界</p></div>
         </header>
-        <ElTable :data="requiredData" size="small">
-          <ElTableColumn prop="name" label="数据项" min-width="220" />
-          <ElTableColumn prop="status" label="状态" width="96">
+        <ElTable :data="requiredData" row-key="name" stripe border>
+          <ElTableColumn
+            prop="name"
+            column-key="name"
+            label="数据项"
+            min-width="220"
+            show-overflow-tooltip
+          />
+          <ElTableColumn prop="status" column-key="status" label="状态" width="96">
             <template #default="{ row }"><ElTag type="info" effect="plain" size="small">{{ row.status }}</ElTag></template>
           </ElTableColumn>
         </ElTable>

@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { createTopicChartOption } from "../chart-options";
 import type { StudentGrowthTopicDefinition, TopicDetailRow } from "../types";
+import ChartExplanationTooltip from "./ChartExplanationTooltip.vue";
 import StudentGrowthChart from "./StudentGrowthChart.vue";
 
 const props = defineProps<{
@@ -9,6 +10,11 @@ const props = defineProps<{
 }>();
 
 const chartOption = computed(() => createTopicChartOption(props.topic.chart));
+const chartExplanation = computed(() => [
+  props.topic.description,
+  ...props.topic.insights,
+  "页面指标均可追溯到模拟原始记录；真实后端接入后保留相同口径。",
+].join("；"));
 
 function statusType(status: TopicDetailRow["status"]): "success" | "primary" | "info" | "warning" {
   if (status === "优秀") return "success";
@@ -20,13 +26,6 @@ function statusType(status: TopicDetailRow["status"]): "success" | "primary" | "
 
 <template>
   <section class="topic-analysis" :aria-label="`${topic.label}专题分析`">
-    <header class="topic-analysis__header">
-      <div>
-        <h2>{{ topic.label }}</h2>
-        <p>{{ topic.description }}</p>
-      </div>
-    </header>
-
     <dl class="topic-analysis__metrics">
       <div v-for="metric in topic.metrics" :key="metric.label" :class="`is-${metric.tone ?? 'neutral'}`">
         <dt>{{ metric.label }}</dt>
@@ -35,37 +34,51 @@ function statusType(status: TopicDetailRow["status"]): "success" | "primary" | "
       </div>
     </dl>
 
-    <div class="topic-analysis__main">
-      <section class="topic-analysis__chart-panel">
+    <section class="topic-analysis__chart-panel">
+      <header class="topic-analysis__chart-header">
         <h3>{{ topic.chart.title }}</h3>
-        <div class="topic-analysis__chart">
-          <StudentGrowthChart :option="chartOption" :ariaLabelText="`${topic.label}${topic.chart.title}图表`" />
-        </div>
-      </section>
-      <aside class="topic-analysis__insights">
-        <h3>区域解读</h3>
-        <ul>
-          <li v-for="insight in topic.insights" :key="insight">{{ insight }}</li>
-        </ul>
-        <ElAlert
-          title="页面指标均可追溯到模拟原始记录；真实后端接入后保留相同口径。"
-          type="info"
-          :closable="false"
+        <ChartExplanationTooltip
+          :label="`查看${topic.chart.title}说明`"
+          :content="chartExplanation"
         />
-      </aside>
-    </div>
+      </header>
+      <div class="topic-analysis__chart">
+        <StudentGrowthChart
+          :option="chartOption"
+          :ariaLabelText="`${topic.label}${topic.chart.title}图表`"
+        />
+      </div>
+    </section>
 
     <section class="topic-analysis__details">
       <header>
         <h3>指标详情</h3>
         <span>{{ topic.comparableScope }}</span>
       </header>
-      <ElTable :data="topic.details">
-        <ElTableColumn prop="name" label="指标" min-width="180" />
-        <ElTableColumn prop="scope" label="统计范围" min-width="140" />
-        <ElTableColumn prop="value" label="当前结果" min-width="140" />
-        <ElTableColumn prop="change" label="较上期" width="110" />
-        <ElTableColumn prop="status" label="状态" width="110">
+      <ElTable :data="topic.details" row-key="name" stripe border>
+        <ElTableColumn
+          prop="name"
+          column-key="name"
+          label="指标"
+          min-width="180"
+          show-overflow-tooltip
+        />
+        <ElTableColumn
+          prop="scope"
+          column-key="scope"
+          label="统计范围"
+          min-width="140"
+          show-overflow-tooltip
+        />
+        <ElTableColumn
+          prop="value"
+          column-key="value"
+          label="当前结果"
+          min-width="140"
+          show-overflow-tooltip
+        />
+        <ElTableColumn prop="change" column-key="change" label="较上期" width="110" />
+        <ElTableColumn prop="status" column-key="status" label="状态" width="110">
           <template #default="{ row }"><ElTag :type="statusType(row.status)" effect="light">{{ row.status }}</ElTag></template>
         </ElTableColumn>
       </ElTable>
@@ -80,22 +93,11 @@ function statusType(status: TopicDetailRow["status"]): "success" | "primary" | "
   gap: var(--spacing-16);
 }
 
-.topic-analysis__header,
 .topic-analysis__details > header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--spacing-16);
-}
-
-.topic-analysis__header h2 {
-  font-size: 20px;
-  line-height: 30px;
-}
-
-.topic-analysis__header p {
-  margin-top: var(--spacing-4);
-  color: var(--color-secondary);
 }
 
 .topic-analysis__metrics {
@@ -139,15 +141,7 @@ function statusType(status: TopicDetailRow["status"]): "success" | "primary" | "
   color: var(--color-success-dark-text);
 }
 
-.topic-analysis__main {
-  display: grid;
-  min-height: 390px;
-  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 0.8fr);
-  gap: var(--spacing-16);
-}
-
 .topic-analysis__chart-panel,
-.topic-analysis__insights,
 .topic-analysis__details {
   min-width: 0;
   padding: var(--spacing-20);
@@ -160,22 +154,15 @@ function statusType(status: TopicDetailRow["status"]): "success" | "primary" | "
   line-height: var(--line-height-lg);
 }
 
+.topic-analysis__chart-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-6);
+}
+
 .topic-analysis__chart {
   height: 330px;
   margin-top: var(--spacing-8);
-}
-
-.topic-analysis__insights ul {
-  display: grid;
-  gap: var(--spacing-16);
-  margin: var(--spacing-20) 0;
-  padding-left: var(--spacing-20);
-  color: var(--color-body);
-}
-
-.topic-analysis__insights li {
-  padding-left: var(--spacing-4);
-  line-height: var(--line-height-lg);
 }
 
 .topic-analysis__details > header {
@@ -192,10 +179,6 @@ function statusType(status: TopicDetailRow["status"]): "success" | "primary" | "
   font-size: var(--font-size-xs);
 }
 
-:deep(.topic-analysis__details .el-table__header .el-table__cell) {
-  background: var(--color-bg-subtle);
-}
-
 @media (max-width: 1180px) {
   .topic-analysis__metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -207,9 +190,6 @@ function statusType(status: TopicDetailRow["status"]): "success" | "primary" | "
     border-left: 0;
   }
 
-  .topic-analysis__main {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 760px) {
