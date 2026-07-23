@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import ElementPlus from "element-plus";
 import AdministrativeRegionSelector from "@/views/system/organization/AdministrativeRegionSelector.vue";
-import type { GeoFeature } from "@/features/regional-education-overview/geo";
+import type { GeoFeature } from "@/features/digital-twin/geo";
 
 const loadAdministrativeChildren = vi.hoisted(() => vi.fn());
 
-vi.mock("@/features/regional-education-overview/administrative-boundary-service", () => ({
+vi.mock("@/features/digital-twin/administrative-boundary-service", () => ({
   loadAdministrativeChildren,
   administrativeScopeForFeature: (feature: GeoFeature) => feature.properties.level,
 }));

@@ -23,6 +23,7 @@ import type { TenantInfo } from "@/types/user";
 
 export const useMenuConfigStore = defineStore("menu-config", () => {
   const selectedTenant = ref<TenantInfo | null>(null);
+  const loading = ref(false);
   const records = ref<MenuConfigRecord[]>([]);
   const roles = ref<RoleRecord[]>([]);
   const shellConfig = ref<TenantShellConfig>(defaultTenantShellConfig());
@@ -39,16 +40,37 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
       })),
   );
 
-  function load(tenant: TenantInfo) {
-    const result = operationPlatformPersistence.loadConfiguration(tenant) ?? {
-      configuration: createDefaultTenantConfiguration(tenant),
-      recoveryNotice: null,
-    };
+  let loadRequestId = 0;
+
+  function applyLoadedConfiguration(
+    tenant: TenantInfo,
+    result: Awaited<ReturnType<typeof operationPlatformPersistence.loadTenantState>>["configuration"],
+  ) {
     selectedTenant.value = { ...tenant };
     records.value = result.configuration.menuRecords;
     roles.value = result.configuration.roles;
     shellConfig.value = result.configuration.shellConfig;
     recoveryNotice.value = result.recoveryNotice;
+  }
+
+  function load(tenant: TenantInfo) {
+    const requestId = ++loadRequestId;
+    const cached = operationPlatformPersistence.peekTenantState(tenant);
+    if (cached) {
+      loading.value = false;
+      applyLoadedConfiguration(tenant, cached.configuration);
+      return;
+    }
+
+    loading.value = true;
+    return operationPlatformPersistence.loadTenantState(tenant)
+      .then((state) => {
+        if (requestId !== loadRequestId) return;
+        applyLoadedConfiguration(tenant, state.configuration);
+      })
+      .finally(() => {
+        if (requestId === loadRequestId) loading.value = false;
+      });
   }
 
   function requireTenant() {
@@ -400,6 +422,7 @@ export const useMenuConfigStore = defineStore("menu-config", () => {
 
   return {
     selectedTenant,
+    loading,
     records,
     roles,
     roleOptions,

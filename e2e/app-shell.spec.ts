@@ -69,7 +69,7 @@ test("二次确认弹窗保持居中卡片布局", async ({ page }) => {
   await expect(messageBox).toBeHidden();
 });
 
-test("智慧体育数据驾驶舱从 AI精准教学菜单打开并完整复用区域大屏", async ({
+test("智慧体育数据驾驶舱使用独立业务壳并复用共享地图基础", async ({
   context,
   page,
 }) => {

@@ -1,6 +1,6 @@
 <template>
   <el-drawer v-model="visible" :title="drawerTitle" size="920px" destroy-on-close>
-    <div class="member-drawer">
+    <div v-loading="loading" class="member-drawer">
       <el-alert
         v-if="recoveryNotice"
         :title="recoveryNotice"
@@ -138,7 +138,13 @@ const emit = defineEmits<{
 const router = useRouter();
 const navigationStore = useNavigationStore();
 const memberStore = useTenantMemberStore();
-const { members, roleOptions, recoveryNotice, memberAccountKind } = storeToRefs(memberStore);
+const {
+  loading,
+  members,
+  roleOptions,
+  recoveryNotice,
+  memberAccountKind,
+} = storeToRefs(memberStore);
 
 const keyword = ref("");
 const statusFilter = ref<"" | "enabled" | "disabled">("");
@@ -191,8 +197,13 @@ const filteredMembers = computed(() =>
 
 watch(
   () => [props.modelValue, props.tenant?.id] as const,
-  ([open]) => {
-    if (open && props.tenant) memberStore.load(props.tenant);
+  async ([open]) => {
+    if (!open || !props.tenant) return;
+    try {
+      await memberStore.load(props.tenant);
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : "组织成员加载失败");
+    }
   },
   { immediate: true },
 );

@@ -1,11 +1,10 @@
 <template>
-  <RegionalEducationOverviewView
+  <component
+    :is="dashboardComponent"
     v-if="mapDataSource"
     :key="dashboardKey"
     :map-data-source="mapDataSource"
     :locations="locations"
-    :show-dashboard-sections="mode === 'regional-education'"
-    :dashboard-variant="mode"
   />
   <main v-else class="dashboard-loader" aria-live="polite">
     <div class="dashboard-loader__card">
@@ -18,15 +17,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
-import RegionalEducationOverviewView from "./RegionalEducationOverviewView.vue";
-import { rongchengEducationLocations } from "@/features/regional-education-overview/education-locations";
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from "vue";
+import { rongchengEducationLocations } from "@/features/digital-twin/education-locations";
 import {
-  createTenantMapDataSource,
+  createRegionalEducationMapDataSource,
   hasTenantLocalEducationMap,
 } from "@/features/regional-education-overview/tenant-map-data-source";
-import type { TenantMapMode } from "@/features/regional-education-overview/tenant-map-data-source";
-import type { MapDataSource } from "@/features/regional-education-overview/map-data-source";
+import type { MapDataSource } from "@/features/digital-twin/map-data-source";
+import {
+  createSmartSportsMapDataSource,
+  hasTenantLocalSportsMap,
+} from "@/features/smart-sports-dashboard/tenant-map-data-source";
 import {
   defaultAdministrativeRegionForTenant,
   normalizeTenantAdministrativeRegion,
@@ -34,8 +35,15 @@ import {
 import { useUserStore } from "@/stores/user";
 
 const props = defineProps<{
-  mode: TenantMapMode;
+  mode: "regional-education" | "smart-sports";
 }>();
+
+const RegionalEducationDashboard = defineAsyncComponent(() => (
+  import("./RegionalEducationOverviewView.vue")
+));
+const SmartSportsDashboard = defineAsyncComponent(() => (
+  import("./SmartSportsDashboardView.vue")
+));
 
 const userStore = useUserStore();
 const mapDataSource = ref<MapDataSource>();
@@ -51,12 +59,21 @@ const regionName = computed(() => region.value?.name ?? "当前机构");
 const dashboardKey = computed(() => (
   `${userStore.currentTenant.id}:${props.mode}:${region.value?.code ?? "unconfigured"}`
 ));
+const dashboardComponent = computed(() => (
+  props.mode === "smart-sports" ? SmartSportsDashboard : RegionalEducationDashboard
+));
 const locations = computed(() => (
-  region.value && hasTenantLocalEducationMap({
-    tenantId: userStore.currentTenant.id,
-    region: region.value,
-    mode: props.mode,
-  })
+  region.value && (
+    props.mode === "smart-sports"
+      ? hasTenantLocalSportsMap({
+          tenantId: userStore.currentTenant.id,
+          region: region.value,
+        })
+      : hasTenantLocalEducationMap({
+          tenantId: userStore.currentTenant.id,
+          region: region.value,
+        })
+  )
     ? rongchengEducationLocations
     : []
 ));
@@ -74,10 +91,12 @@ async function loadMapDataSource() {
   const controller = new AbortController();
   loadController = controller;
   try {
-    const source = await createTenantMapDataSource({
+    const createMapDataSource = props.mode === "smart-sports"
+      ? createSmartSportsMapDataSource
+      : createRegionalEducationMapDataSource;
+    const source = await createMapDataSource({
       tenantId: userStore.currentTenant.id,
       region: selectedRegion,
-      mode: props.mode,
       signal: controller.signal,
     });
     if (generation === loadGeneration && !controller.signal.aborted) {

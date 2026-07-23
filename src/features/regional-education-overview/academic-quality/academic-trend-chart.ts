@@ -1,6 +1,6 @@
 import type { EChartsCoreOption } from "echarts/core";
-import type { DigitalTwinChartPalette } from "../map-themes";
-import { createDigitalTwinChartCanvasTheme } from "../digital-twin-chart-theme";
+import type { DigitalTwinChartPalette } from "@/features/digital-twin/map-themes";
+import { createDigitalTwinChartCanvasTheme } from "@/features/digital-twin/digital-twin-chart-theme";
 
 export interface AcademicTrendDatum {
   label: string;

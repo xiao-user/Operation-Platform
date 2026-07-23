@@ -48,7 +48,6 @@ function handleSizeChange() {
         <span>区域基准</span>
         <span><strong>48</strong><small>所学校</small></span>
         <span><strong>28,643</strong><small>名学生</small></span>
-        <span><strong>93.2%</strong><small>平均完整度</small></span>
       </div>
     </header>
 
@@ -155,18 +154,6 @@ function handleSizeChange() {
           >
             <template #default="{ row }">{{ row.activityParticipation }}%</template>
           </ElTableColumn>
-          <ElTableColumn
-            prop="completeness"
-            column-key="completeness"
-            label="数据完整度"
-            min-width="130"
-            sortable
-          >
-            <template #default="{ row }">
-              <ElProgress :percentage="row.completeness" :stroke-width="6" :show-text="false" />
-              <span class="school-comparison__progress-value">{{ row.completeness }}%</span>
-            </template>
-          </ElTableColumn>
           <ElTableColumn prop="trend" column-key="trend" label="趋势" width="96">
             <template #default="{ row }">
               <ElTag :type="trendType(row.trend)" size="small" effect="light">
@@ -214,13 +201,11 @@ function handleSizeChange() {
         <div><dt>学业进步指数</dt><dd>{{ selectedSchool.academicProgress }}</dd></div>
         <div><dt>体质健康优良率</dt><dd>{{ selectedSchool.physicalHealth }}%</dd></div>
         <div><dt>活动参与率</dt><dd>{{ selectedSchool.activityParticipation }}%</dd></div>
-        <div><dt>数据完整度</dt><dd>{{ selectedSchool.completeness }}%</dd></div>
       </dl>
       <section class="school-drawer__attention">
         <h3>发展提示</h3>
         <p>{{ selectedSchool.attention }}</p>
       </section>
-      <ElButton type="primary" class="school-drawer__action">查看完整学校画像</ElButton>
     </template>
   </ElDrawer>
 </template>
@@ -322,13 +307,6 @@ function handleSizeChange() {
   white-space: nowrap;
 }
 
-.school-comparison__progress-value {
-  display: block;
-  margin-top: var(--spacing-4);
-  color: var(--color-secondary);
-  font-size: var(--font-size-xs);
-}
-
 .school-comparison__pagination {
   display: flex;
   justify-content: flex-end;
@@ -376,11 +354,6 @@ function handleSizeChange() {
   margin-top: var(--spacing-8);
   color: var(--color-body);
   line-height: var(--line-height-lg);
-}
-
-.school-drawer__action {
-  width: 100%;
-  margin-top: var(--spacing-24);
 }
 
 :deep(.el-table__row) {

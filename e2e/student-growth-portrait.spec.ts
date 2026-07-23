@@ -44,8 +44,12 @@ test("学生成长画像表格统一样式并按业务决定分页", async ({ pa
   await expect(page.getByRole("button", { name: "重置" })).toBeVisible();
   await expect(page.getByRole("button", { name: "数据说明" })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "年级" })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "镇街" })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "数据状态" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "学段" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "教育阶段" })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "镇街" })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "数据状态" })).toHaveCount(0);
+  await expect(page.getByText("综合发展指数", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("进步质量指数", { exact: true })).toHaveCount(0);
 
   const overviewSegmented = page.locator(".student-growth-portrait__view-switch .el-segmented");
   await expect(overviewSegmented).toHaveCSS("border-radius", "4px");
@@ -54,6 +58,7 @@ test("学生成长画像表格统一样式并按业务决定分页", async ({ pa
   const schoolComparison = page.getByLabel("学校发展差异比较");
   await expectStandardTable(schoolComparison.locator(".el-table"));
   const schoolPagination = schoolComparison.locator(".el-pagination");
+  await expect(schoolComparison.getByText("数据完整度", { exact: true })).toHaveCount(0);
   await expect(schoolPagination).toBeVisible();
   await expect(schoolPagination).toContainText("共 12 条");
   await expect(schoolPagination.locator(".el-pagination__sizes")).toBeVisible();
@@ -63,6 +68,7 @@ test("学生成长画像表格统一样式并按业务决定分页", async ({ pa
   const followUp = page.getByLabel("区域发展趋势与跟进");
   await expectStandardTable(followUp.locator(".el-table"));
   await expect(followUp.locator(".el-pagination")).toHaveCount(0);
+  await expect(followUp.getByText("建议动作", { exact: true })).toHaveCount(0);
   const trendExplanation = followUp.getByRole("button", { name: "查看区域发展趋势说明" });
   await trendExplanation.hover();
   await expect(page.getByRole("tooltip")).toContainText("五育均衡指数 79.6");

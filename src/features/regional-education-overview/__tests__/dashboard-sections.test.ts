@@ -2,12 +2,12 @@ import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import { ElButton, ElOption, ElSelect } from "element-plus";
 import AcademicQualityDashboard from "../components/AcademicQualityDashboard.vue";
-import DashboardPanel from "../components/dashboard/DashboardPanel.vue";
-import DashboardPanelSelect from "../components/dashboard/DashboardPanelSelect.vue";
-import DashboardPanelTabs from "../components/dashboard/DashboardPanelTabs.vue";
+import DashboardPanel from "@/features/digital-twin/components/dashboard/DashboardPanel.vue";
+import DashboardPanelSelect from "@/features/digital-twin/components/dashboard/DashboardPanelSelect.vue";
+import DashboardPanelTabs from "@/features/digital-twin/components/dashboard/DashboardPanelTabs.vue";
 import DashboardSectionTabs from "../components/dashboard/DashboardSectionTabs.vue";
 import DigitalTwinStatusBar from "../components/DigitalTwinStatusBar.vue";
-import { getDigitalTwinMapTheme } from "../map-themes";
+import { getDigitalTwinMapTheme } from "@/features/digital-twin/map-themes";
 import {
   isRegionalDashboardSectionEnabled,
   regionalDashboardSections,

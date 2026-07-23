@@ -54,8 +54,9 @@ export const useUserStore = defineStore("user", () => {
         ? []
         : legacyRoleIdsForTenant(tenantId);
     }
-    const configuration = operationPlatformPersistence.loadConfiguration(tenant)?.configuration;
-    const members = operationPlatformPersistence.loadMembers(tenant).members;
+    const tenantState = operationPlatformPersistence.peekTenantState(tenant);
+    const configuration = tenantState?.configuration.configuration;
+    const members = tenantState?.members.members ?? [];
     const member = members.find((item) => item.userId === userInfo.value.id && item.enabled);
     if (!member) return [];
     if (!configuration) return [...member.roleIds];
@@ -159,7 +160,7 @@ export const useUserStore = defineStore("user", () => {
         if (requestId === persistenceRequestId) {
           applyPersistenceState(state);
           if (currentTenant.value.id) {
-            await operationPlatformPersistence.ensureTenantLoaded(currentTenant.value);
+            await operationPlatformPersistence.loadTenantState(currentTenant.value);
             saveActiveTenantToSession(userInfo.value.id, currentTenant.value.id);
           }
           refreshMemberRoles();
@@ -194,7 +195,7 @@ export const useUserStore = defineStore("user", () => {
   async function switchTenant(tenantId: string, options: { remember?: boolean } = {}) {
     const found = tenantList.value.find((tenant) => tenant.id === tenantId && canAccessTenant(tenant));
     if (!found) return false;
-    await operationPlatformPersistence.ensureTenantLoaded(found);
+    await operationPlatformPersistence.loadTenantState(found);
     if (options.remember !== false) {
       saveActiveTenantToSession(userInfo.value.id, tenantId);
     }

@@ -62,7 +62,6 @@ export interface SchoolGrowthRecord {
   academicProgress: number;
   physicalHealth: number;
   activityParticipation: number;
-  completeness: number;
   trend: "上升" | "平稳" | "下降";
   attention: string;
 }

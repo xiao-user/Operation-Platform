@@ -10,7 +10,7 @@ import {
   initialMapState,
   loadMapLevel,
 } from "./rongcheng-map-fixture";
-import { smartSportsMapDataSource } from "../smart-sports-map-data-source";
+import { smartSportsMapDataSource } from "@/features/smart-sports-dashboard/smart-sports-map-data-source";
 
 describe("energy tower data", () => {
   it("formats coverage population with stable thousand and ten-thousand units", () => {

@@ -40,18 +40,18 @@ export const regionalTrend = {
 };
 
 export const schoolRecords: SchoolGrowthRecord[] = [
-  { id: "school-01", name: "体育东路小学海明学校", stage: "小学", students: 2501, fiveEducation: 78.6, academicProgress: 75.4, physicalHealth: 86.1, activityParticipation: 82.3, completeness: 96.6, trend: "上升", attention: "保持优势，关注低年级学业基础" },
-  { id: "school-02", name: "滨江第一小学", stage: "小学", students: 2183, fiveEducation: 76.9, academicProgress: 73.2, physicalHealth: 84.3, activityParticipation: 80.1, completeness: 95.2, trend: "上升", attention: "艺术活动参与仍有提升空间" },
-  { id: "school-03", name: "东湖路小学", stage: "小学", students: 2046, fiveEducation: 71.2, academicProgress: 69.3, physicalHealth: 79.6, activityParticipation: 74.8, completeness: 91.8, trend: "平稳", attention: "五育结构均衡度低于区域均值" },
-  { id: "school-04", name: "南苑小学", stage: "小学", students: 1876, fiveEducation: 68.5, academicProgress: 66.1, physicalHealth: 76.4, activityParticipation: 71.5, completeness: 89.6, trend: "下降", attention: "学业进步与活动参与需联合研判" },
-  { id: "school-05", name: "新城实验小学", stage: "小学", students: 2322, fiveEducation: 81.3, academicProgress: 78.6, physicalHealth: 88.7, activityParticipation: 84.9, completeness: 97.4, trend: "上升", attention: "综合表现稳定，可沉淀经验" },
-  { id: "school-06", name: "云山小学", stage: "小学", students: 1654, fiveEducation: 63.8, academicProgress: 60.2, physicalHealth: 70.6, activityParticipation: 66.3, completeness: 86.1, trend: "下降", attention: "多项指标低于区域均值" },
-  { id: "school-07", name: "朝阳小学", stage: "小学", students: 1921, fiveEducation: 75.4, academicProgress: 72, physicalHealth: 82, activityParticipation: 77.5, completeness: 93.5, trend: "上升", attention: "发展态势稳定" },
-  { id: "school-08", name: "启航小学", stage: "小学", students: 1489, fiveEducation: 59.6, academicProgress: 55.7, physicalHealth: 68.1, activityParticipation: 63.2, completeness: 83.9, trend: "平稳", attention: "数据完整度与发展水平需同步提升" },
-  { id: "school-09", name: "榕城实验中学", stage: "初中", students: 2832, fiveEducation: 79.2, academicProgress: 82.1, physicalHealth: 78.9, activityParticipation: 76.8, completeness: 95.8, trend: "上升", attention: "学业进步明显，体育参与需关注" },
-  { id: "school-10", name: "中关村中学知春分校", stage: "初中", students: 2210, fiveEducation: 72.4, academicProgress: 70.8, physicalHealth: 73.2, activityParticipation: 69.9, completeness: 92.4, trend: "平稳", attention: "美育与劳育发展存在差异" },
-  { id: "school-11", name: "榕城第一高中", stage: "高中", students: 3150, fiveEducation: 77.8, academicProgress: 80.3, physicalHealth: 71.6, activityParticipation: 68.2, completeness: 94.1, trend: "上升", attention: "高年级体质健康变化较弱" },
-  { id: "school-12", name: "榕城第二高中", stage: "高中", students: 2960, fiveEducation: 69.7, academicProgress: 67.2, physicalHealth: 69.4, activityParticipation: 64.7, completeness: 90.3, trend: "下降", attention: "需关注发展增值与活动参与" },
+  { id: "school-01", name: "体育东路小学海明学校", stage: "小学", students: 2501, fiveEducation: 78.6, academicProgress: 75.4, physicalHealth: 86.1, activityParticipation: 82.3, trend: "上升", attention: "保持优势，关注低年级学业基础" },
+  { id: "school-02", name: "滨江第一小学", stage: "小学", students: 2183, fiveEducation: 76.9, academicProgress: 73.2, physicalHealth: 84.3, activityParticipation: 80.1, trend: "上升", attention: "艺术活动参与仍有提升空间" },
+  { id: "school-03", name: "东湖路小学", stage: "小学", students: 2046, fiveEducation: 71.2, academicProgress: 69.3, physicalHealth: 79.6, activityParticipation: 74.8, trend: "平稳", attention: "五育结构均衡度低于区域均值" },
+  { id: "school-04", name: "南苑小学", stage: "小学", students: 1876, fiveEducation: 68.5, academicProgress: 66.1, physicalHealth: 76.4, activityParticipation: 71.5, trend: "下降", attention: "学业进步与活动参与需联合研判" },
+  { id: "school-05", name: "新城实验小学", stage: "小学", students: 2322, fiveEducation: 81.3, academicProgress: 78.6, physicalHealth: 88.7, activityParticipation: 84.9, trend: "上升", attention: "综合表现稳定，可沉淀经验" },
+  { id: "school-06", name: "云山小学", stage: "小学", students: 1654, fiveEducation: 63.8, academicProgress: 60.2, physicalHealth: 70.6, activityParticipation: 66.3, trend: "下降", attention: "多项指标低于区域均值" },
+  { id: "school-07", name: "朝阳小学", stage: "小学", students: 1921, fiveEducation: 75.4, academicProgress: 72, physicalHealth: 82, activityParticipation: 77.5, trend: "上升", attention: "发展态势稳定" },
+  { id: "school-08", name: "启航小学", stage: "小学", students: 1489, fiveEducation: 59.6, academicProgress: 55.7, physicalHealth: 68.1, activityParticipation: 63.2, trend: "平稳", attention: "五育均衡与学业进步需同步提升" },
+  { id: "school-09", name: "榕城实验中学", stage: "初中", students: 2832, fiveEducation: 79.2, academicProgress: 82.1, physicalHealth: 78.9, activityParticipation: 76.8, trend: "上升", attention: "学业进步明显，体育参与需关注" },
+  { id: "school-10", name: "中关村中学知春分校", stage: "初中", students: 2210, fiveEducation: 72.4, academicProgress: 70.8, physicalHealth: 73.2, activityParticipation: 69.9, trend: "平稳", attention: "美育与劳育发展存在差异" },
+  { id: "school-11", name: "榕城第一高中", stage: "高中", students: 3150, fiveEducation: 77.8, academicProgress: 80.3, physicalHealth: 71.6, activityParticipation: 68.2, trend: "上升", attention: "高年级体质健康变化较弱" },
+  { id: "school-12", name: "榕城第二高中", stage: "高中", students: 2960, fiveEducation: 69.7, academicProgress: 67.2, physicalHealth: 69.4, activityParticipation: 64.7, trend: "下降", attention: "需关注发展增值与活动参与" },
 ];
 
 export const followUpRecords: FollowUpRecord[] = [

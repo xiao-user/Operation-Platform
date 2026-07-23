@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { ArrowRight, Warning } from "@element-plus/icons-vue";
 import type { EChartsCoreOption } from "echarts/core";
 import { createFiveEducationOption, createRegionalTrendOption } from "../chart-options";
-import { schoolRecords } from "../mock-data";
+import { followUpRecords, mockDataMeta, schoolRecords } from "../mock-data";
 import StudentGrowthChart from "./StudentGrowthChart.vue";
 
 const emit = defineEmits<{
@@ -19,6 +19,7 @@ const chartOption = computed<EChartsCoreOption>(() => (
 const attentionSchools = schoolRecords
   .filter((school) => school.trend === "下降" || school.fiveEducation < 70)
   .slice(0, 4);
+const activeFollowUpCount = followUpRecords.filter((record) => record.status !== "已改善").length;
 
 function statusType(score: number) {
   if (score < 65) return "danger";
@@ -32,24 +33,24 @@ function statusType(score: number) {
     <div class="regional-overview__summary">
       <div class="regional-overview__reading">
         <span class="regional-overview__eyebrow">区域总体判读</span>
-        <h2>总体良好，综合发展指数 86.7 分，较上学期提升 2.6 分</h2>
-        <p>五育发展整体均衡，运动健康表现突出；需关注进步不足学校，推动劳育与实践活动协同提升。</p>
+        <h2>本学期已覆盖 {{ mockDataMeta.schoolCount }} 所学校，{{ activeFollowUpCount }} 项事项待研判或跟进</h2>
+        <p>五育与运动健康整体改善，学校差异仍需结合学段、学生规模和统一统计口径进一步研判。</p>
       </div>
       <dl class="regional-overview__metrics">
         <div>
-          <dt>综合发展指数</dt>
-          <dd>86.7<small>/100</small></dd>
-          <span>较上学期 <strong>↑2.6</strong></span>
+          <dt>覆盖学校</dt>
+          <dd>{{ mockDataMeta.schoolCount }}<small>所</small></dd>
+          <span>本区域学校范围</span>
         </div>
         <div>
-          <dt>进步质量指数</dt>
-          <dd>71.9<small>/100</small></dd>
-          <span>较上学期 <strong>↑4.8</strong></span>
+          <dt>覆盖学生</dt>
+          <dd>{{ mockDataMeta.studentCount.toLocaleString() }}<small>人</small></dd>
+          <span>仅展示匿名聚合结果</span>
         </div>
         <div>
-          <dt>重点关注学校</dt>
-          <dd>12<small>所</small></dd>
-          <span>占区域学校 11.1%</span>
+          <dt>待跟进事项</dt>
+          <dd>{{ activeFollowUpCount }}<small>项</small></dd>
+          <span>待研判或跟进中</span>
         </div>
       </dl>
       <ElButton type="primary" :icon="ArrowRight" @click="emit('changeView', 'schools')">
@@ -83,10 +84,10 @@ function statusType(score: number) {
       <aside class="portrait-panel regional-overview__attention">
         <header class="portrait-panel__header">
           <div>
-            <h3>学校重点关注清单</h3>
-            <p>仅展示学校聚合数据</p>
+            <h3>学校关注提示</h3>
+            <p>依据当前规则筛选，仅展示学校聚合数据</p>
           </div>
-          <ElButton link type="primary" @click="emit('changeView', 'follow-up')">全部 12 项</ElButton>
+          <ElButton link type="primary" @click="emit('changeView', 'follow-up')">查看跟进事项</ElButton>
         </header>
         <ul>
           <li v-for="school in attentionSchools" :key="school.id">
@@ -97,7 +98,7 @@ function statusType(score: number) {
               </ElTag>
             </div>
             <p>{{ school.attention }}</p>
-            <span>{{ school.stage }} · 数据完整度 {{ school.completeness }}%</span>
+            <span>{{ school.stage }} · {{ school.students.toLocaleString() }} 名学生</span>
           </li>
         </ul>
         <ElButton class="regional-overview__attention-action" :icon="Warning" @click="emit('changeView', 'follow-up')">

@@ -1,5 +1,5 @@
 <template>
-  <div class="platform-admin-page">
+  <div v-loading="loading" class="platform-admin-page">
     <section class="filter-card">
       <div class="filter-item">
         <span>管理组织</span>
@@ -134,7 +134,7 @@ import { useUserStore } from "@/stores/user";
 const userStore = useUserStore();
 const accessControlStore = useAccessControlStore();
 const { tenantList, currentTenant } = storeToRefs(userStore);
-const { selectedTenant, roles, recoveryNotice, leafMenuIds } = storeToRefs(accessControlStore);
+const { selectedTenant, loading, roles, recoveryNotice, leafMenuIds } = storeToRefs(accessControlStore);
 
 const selectedTenantId = ref(currentTenant.value.id);
 const dialogVisible = ref(false);
@@ -153,9 +153,14 @@ const editingRole = computed(() =>
 
 watch(
   selectedTenantId,
-  (tenantId) => {
+  async (tenantId) => {
     const tenant = tenantList.value.find((item) => item.id === tenantId);
-    if (tenant) accessControlStore.load(tenant);
+    if (!tenant) return;
+    try {
+      await accessControlStore.load(tenant);
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : "组织角色配置加载失败");
+    }
   },
   { immediate: true },
 );

@@ -3,9 +3,9 @@ import { gsap } from "gsap";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import chevronBottomIcon from "@/assets/figma/regional-education-overview/chevron-bottom.svg";
 import entityEmblemDecoration from "@/assets/figma/regional-education-overview/entity-emblem-decoration.svg";
-import { educationLocationTypeMeta } from "../education-locations";
-import type { EducationLocation } from "../types";
-import AnimatedNumber from "./AnimatedNumber.vue";
+import { educationLocationTypeMeta } from "@/features/digital-twin/education-locations";
+import type { EducationLocation } from "@/features/digital-twin/types";
+import AnimatedNumber from "@/features/digital-twin/components/AnimatedNumber.vue";
 
 const props = defineProps<{
   location?: EducationLocation;

@@ -26,6 +26,11 @@ export interface OperationPlatformPersistenceCapabilities {
   memberAccountKind: "identifier" | "email";
 }
 
+export interface OperationPlatformTenantState {
+  configuration: TenantConfigurationLoadResult;
+  members: TenantMemberLoadResult;
+}
+
 export interface OperationPlatformPersistence {
   readonly capabilities: OperationPlatformPersistenceCapabilities;
 
@@ -43,14 +48,13 @@ export interface OperationPlatformPersistence {
   updateTenant(tenant: TenantInfo): Promise<TenantInfo>;
   deleteTenant(tenantId: string): Promise<void>;
 
-  ensureTenantLoaded(tenant: TenantInfo): Promise<void>;
-  loadConfiguration(tenant: TenantInfo): TenantConfigurationLoadResult | null;
+  peekTenantState(tenant: TenantInfo): OperationPlatformTenantState | null;
+  loadTenantState(tenant: TenantInfo): Promise<OperationPlatformTenantState>;
   saveConfiguration(
     tenant: TenantInfo,
     configuration: TenantConfiguration,
   ): Promise<TenantConfiguration>;
 
-  loadMembers(tenant: TenantInfo): TenantMemberLoadResult;
   replaceMembers(
     tenant: TenantInfo,
     members: TenantMemberRecord[],

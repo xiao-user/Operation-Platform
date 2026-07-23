@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GeoFeature } from "../geo";
-import type { MapState } from "../map-state";
+import type { GeoFeature } from "@/features/digital-twin/geo";
+import type { MapState } from "@/features/digital-twin/map-state";
 import {
   clearSmartSportsMapCacheForTests,
   smartSportsMapDataSource,
 } from "../smart-sports-map-data-source";
-import type { EducationLocation } from "../types";
+import type { EducationLocation } from "@/features/digital-twin/types";
 
 function squareFeature(code: string, name: string, level: string): GeoFeature {
   return {

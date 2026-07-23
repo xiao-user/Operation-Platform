@@ -172,7 +172,7 @@ export const useNavigationStore = defineStore("navigation", () => {
   });
 
   function loadTenant(tenant: TenantInfo) {
-    const result = operationPlatformPersistence.loadConfiguration(tenant) ?? {
+    const result = operationPlatformPersistence.peekTenantState(tenant)?.configuration ?? {
       configuration: createUnavailableConfiguration(),
       recoveryNotice: null,
     };

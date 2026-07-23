@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { ADMIN_ROLE_ID, STAFF_ROLE_ID } from "@/features/access-control/types";
 import { activeRoleStorageKey } from "@/features/access-control/local-storage-active-role-repository";
@@ -13,6 +13,7 @@ import {
 import { useAccessControlStore } from "@/stores/access-control";
 import { useTenantMemberStore } from "@/stores/tenant-members";
 import { useUserStore } from "@/stores/user";
+import { operationPlatformPersistence } from "@/features/persistence/runtime-operation-platform-persistence";
 import type { TenantInfo } from "@/types/user";
 
 const school: TenantInfo = {
@@ -27,6 +28,37 @@ describe("tenant member store", () => {
   beforeEach(() => {
     localStorage.clear();
     setActivePinia(createPinia());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("loads an uncached tenant before exposing member roles", async () => {
+    const configuration = createDefaultTenantConfiguration(school);
+    vi.spyOn(operationPlatformPersistence, "peekTenantState").mockReturnValue(null);
+    const loadTenantState = vi
+      .spyOn(operationPlatformPersistence, "loadTenantState")
+      .mockResolvedValue({
+        configuration: {
+          configuration,
+          recoveryNotice: null,
+        },
+        members: {
+          members: [],
+          recoveryNotice: null,
+        },
+      });
+    const store = useTenantMemberStore();
+
+    const loading = store.load(school);
+
+    expect(store.loading).toBe(true);
+    await loading;
+    expect(loadTenantState).toHaveBeenCalledWith(school);
+    expect(store.loading).toBe(false);
+    expect(store.selectedTenant?.id).toBe(school.id);
+    expect(store.roles).toEqual(configuration.roles);
   });
 
   it("creates members with multiple roles and updates the current user role source", async () => {
@@ -117,6 +149,37 @@ describe("role references from members", () => {
   beforeEach(() => {
     localStorage.clear();
     setActivePinia(createPinia());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("loads an uncached tenant before exposing role configuration", async () => {
+    const configuration = createDefaultTenantConfiguration(school);
+    vi.spyOn(operationPlatformPersistence, "peekTenantState").mockReturnValue(null);
+    const loadTenantState = vi
+      .spyOn(operationPlatformPersistence, "loadTenantState")
+      .mockResolvedValue({
+        configuration: {
+          configuration,
+          recoveryNotice: null,
+        },
+        members: {
+          members: [],
+          recoveryNotice: null,
+        },
+      });
+    const store = useAccessControlStore();
+
+    const loading = store.load(school);
+
+    expect(store.loading).toBe(true);
+    await loading;
+    expect(loadTenantState).toHaveBeenCalledWith(school);
+    expect(store.loading).toBe(false);
+    expect(store.selectedTenant?.id).toBe(school.id);
+    expect(store.roles).toEqual(configuration.roles);
   });
 
   it("blocks disabling or deleting a role used by enabled members", async () => {

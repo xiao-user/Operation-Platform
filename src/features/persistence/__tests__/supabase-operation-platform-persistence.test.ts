@@ -61,13 +61,12 @@ describe("Supabase operation platform persistence", () => {
     const pending = deferred<Awaited<ReturnType<typeof supabaseOperationPlatformRepository.loadTenantState>>>();
     vi.spyOn(supabaseOperationPlatformRepository, "loadTenantState").mockReturnValue(pending.promise);
 
-    const loading = persistence.ensureTenantLoaded(tenant);
+    const loading = persistence.loadTenantState(tenant);
     persistence.reset();
     pending.resolve({ configuration: null, members: [] });
-    await loading;
+    await expect(loading).rejects.toThrow("数据尚未加载");
 
-    expect(persistence.loadConfiguration(tenant)).toBeNull();
-    expect(persistence.loadMembers(tenant).members).toEqual([]);
+    expect(persistence.peekTenantState(tenant)).toBeNull();
   });
 
   it("skips a remote configuration write when the content did not change", async () => {
@@ -116,7 +115,7 @@ describe("Supabase operation platform persistence", () => {
     await expect(firstResult).resolves.toEqual(first);
     await expect(secondResult).resolves.toEqual(latest);
     await expect(latestResult).resolves.toEqual(latest);
-    expect(persistence.loadConfiguration(tenant)?.configuration).toEqual(latest);
+    expect(persistence.peekTenantState(tenant)?.configuration.configuration).toEqual(latest);
   });
 
   it("rejects queued configuration writes after a failed write instead of retrying", async () => {
@@ -144,7 +143,7 @@ describe("Supabase operation platform persistence", () => {
       expect.objectContaining({ status: "rejected", reason: expect.objectContaining({ message: "PGRST003" }) }),
     ]);
     expect(save).toHaveBeenCalledTimes(1);
-    expect(persistence.loadConfiguration(tenant)?.configuration).toEqual(initial);
+    expect(persistence.peekTenantState(tenant)?.configuration.configuration).toEqual(initial);
   });
 });
 

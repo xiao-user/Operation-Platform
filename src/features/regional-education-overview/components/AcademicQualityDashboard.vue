@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import type { DigitalTwinChartPalette } from "../map-themes";
+import type { DigitalTwinChartPalette } from "@/features/digital-twin/map-themes";
 import AcademicTrendChart from "../academic-quality/AcademicTrendChart.vue";
-import DashboardFilterBar from "./dashboard/DashboardFilterBar.vue";
-import DashboardPanel from "./dashboard/DashboardPanel.vue";
-import DashboardPanelActionButton from "./dashboard/DashboardPanelActionButton.vue";
-import DashboardPanelSelect from "./dashboard/DashboardPanelSelect.vue";
-import DashboardPanelTabs from "./dashboard/DashboardPanelTabs.vue";
+import DashboardFilterBar from "@/features/digital-twin/components/dashboard/DashboardFilterBar.vue";
+import DashboardPanel from "@/features/digital-twin/components/dashboard/DashboardPanel.vue";
+import DashboardPanelActionButton from "@/features/digital-twin/components/dashboard/DashboardPanelActionButton.vue";
+import DashboardPanelSelect from "@/features/digital-twin/components/dashboard/DashboardPanelSelect.vue";
+import DashboardPanelTabs from "@/features/digital-twin/components/dashboard/DashboardPanelTabs.vue";
 
 defineProps<{ chartPalette: DigitalTwinChartPalette }>();
 

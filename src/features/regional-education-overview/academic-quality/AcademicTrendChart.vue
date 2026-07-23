@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { DigitalTwinChartPalette } from "../map-themes";
-import EChartCanvas from "../components/dashboard/EChartCanvas.vue";
+import type { DigitalTwinChartPalette } from "@/features/digital-twin/map-themes";
+import EChartCanvas from "@/features/digital-twin/components/dashboard/EChartCanvas.vue";
 import {
   academicTrendData,
   createAcademicTrendChartOption,

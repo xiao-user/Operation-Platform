@@ -60,7 +60,7 @@ import { onMounted, ref, watch } from "vue";
 import {
   administrativeScopeForFeature,
   loadAdministrativeChildren,
-} from "@/features/regional-education-overview/administrative-boundary-service";
+} from "@/features/digital-twin/administrative-boundary-service";
 import type {
   AdministrativeRegionNode,
   AdministrativeRegionScope,

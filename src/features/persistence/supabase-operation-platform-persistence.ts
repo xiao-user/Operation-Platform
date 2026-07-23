@@ -200,7 +200,7 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
     }
   }
 
-  async ensureTenantLoaded(tenant: TenantInfo) {
+  private async ensureTenantLoaded(tenant: TenantInfo) {
     if (this.loadedTenants.has(tenant.id)) return;
     const pending = this.tenantLoadRequests.get(tenant.id);
     if (pending) return pending;
@@ -223,14 +223,44 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
     });
   }
 
-  loadConfiguration(tenant: TenantInfo) {
+  peekTenantState(tenant: TenantInfo) {
+    if (!this.loadedTenants.has(tenant.id)) return null;
     const configuration = this.configurations.get(tenant.id);
-    return configuration
-      ? { configuration: cloneJson(configuration), recoveryNotice: null }
-      : null;
+    if (!configuration) {
+      throw new Error(`组织「${tenant.name}」缺少远端配置`);
+    }
+    return {
+      configuration: {
+        configuration: cloneJson(configuration),
+        recoveryNotice: null,
+      },
+      members: {
+        members: (this.members.get(tenant.id) ?? []).map(cloneTenantMember),
+        recoveryNotice: null,
+      },
+    };
+  }
+
+  async loadTenantState(tenant: TenantInfo) {
+    await this.ensureTenantLoaded(tenant);
+    const state = this.peekTenantState(tenant);
+    if (!state) throw new Error(`组织「${tenant.name}」的数据尚未加载`);
+    return state;
   }
 
   saveConfiguration(tenant: TenantInfo, configuration: TenantConfiguration) {
+    if (this.peekTenantState(tenant)) {
+      return this.enqueueConfigurationSave(tenant, configuration);
+    }
+    return this.loadTenantState(tenant).then(() =>
+      this.enqueueConfigurationSave(tenant, configuration),
+    );
+  }
+
+  private enqueueConfigurationSave(
+    tenant: TenantInfo,
+    configuration: TenantConfiguration,
+  ) {
     const requested = cloneJson(configuration);
     const existingState = this.configurationSaveStates.get(tenant.id);
     if (!existingState && sameConfiguration(this.configurations.get(tenant.id), requested)) {
@@ -319,14 +349,8 @@ export class SupabaseOperationPlatformPersistence implements OperationPlatformPe
     for (const waiter of pending.waiters) waiter.reject(error);
   }
 
-  loadMembers(tenant: TenantInfo) {
-    return {
-      members: (this.members.get(tenant.id) ?? []).map(cloneTenantMember),
-      recoveryNotice: null,
-    };
-  }
-
   async replaceMembers(tenant: TenantInfo, members: TenantMemberRecord[]) {
+    await this.loadTenantState(tenant);
     const saved = await supabaseOperationPlatformRepository.replaceMembers(tenant.id, members);
     this.members.set(tenant.id, saved);
     return saved.map(cloneTenantMember);

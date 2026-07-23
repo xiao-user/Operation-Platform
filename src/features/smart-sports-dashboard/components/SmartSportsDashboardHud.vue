@@ -3,10 +3,10 @@ import { computed, ref, watch, type CSSProperties } from "vue";
 import type { EChartsCoreOption } from "echarts/core";
 import { ElDatePicker } from "element-plus";
 import rankingFrameUrl from "@/assets/figma/smart-sports/rank-frame.svg";
-import AnimatedNumber from "./AnimatedNumber.vue";
-import EChartCanvas from "./dashboard/EChartCanvas.vue";
-import type { MapNavigationNode } from "../map-state";
-import type { DigitalTwinChartPalette } from "../map-themes";
+import AnimatedNumber from "@/features/digital-twin/components/AnimatedNumber.vue";
+import EChartCanvas from "@/features/digital-twin/components/dashboard/EChartCanvas.vue";
+import type { MapNavigationNode } from "@/features/digital-twin/map-state";
+import type { DigitalTwinChartPalette } from "@/features/digital-twin/map-themes";
 import {
   findDashboardTab,
   findRankingMetric,

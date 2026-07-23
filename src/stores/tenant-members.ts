@@ -39,6 +39,7 @@ function memberUsesRole(member: TenantMemberRecord, roleId: string) {
 
 export const useTenantMemberStore = defineStore("tenant-members", () => {
   const selectedTenant = ref<TenantInfo | null>(null);
+  const loading = ref(false);
   const members = ref<TenantMemberRecord[]>([]);
   const roles = ref<RoleRecord[]>([]);
   const recoveryNotice = ref<string | null>(null);
@@ -59,10 +60,14 @@ export const useTenantMemberStore = defineStore("tenant-members", () => {
     return selectedTenant.value;
   }
 
-  function load(tenant: TenantInfo) {
-    const configurationResult = operationPlatformPersistence.loadConfiguration(tenant);
-    if (!configurationResult) throw new Error("组织配置尚未加载");
-    const memberResult = operationPlatformPersistence.loadMembers(tenant);
+  let loadRequestId = 0;
+
+  function applyLoadedTenant(
+    tenant: TenantInfo,
+    state: Awaited<ReturnType<typeof operationPlatformPersistence.loadTenantState>>,
+  ) {
+    const configurationResult = state.configuration;
+    const memberResult = state.members;
     selectedTenant.value = { ...tenant };
     roles.value = configurationResult.configuration.roles;
     members.value = memberResult.members;
@@ -70,6 +75,26 @@ export const useTenantMemberStore = defineStore("tenant-members", () => {
       configurationResult.recoveryNotice,
       memberResult.recoveryNotice,
     ].filter(Boolean).join("；") || null;
+  }
+
+  function load(tenant: TenantInfo) {
+    const requestId = ++loadRequestId;
+    const cached = operationPlatformPersistence.peekTenantState(tenant);
+    if (cached) {
+      loading.value = false;
+      applyLoadedTenant(tenant, cached);
+      return;
+    }
+
+    loading.value = true;
+    return operationPlatformPersistence.loadTenantState(tenant)
+      .then((state) => {
+        if (requestId !== loadRequestId) return;
+        applyLoadedTenant(tenant, state);
+      })
+      .finally(() => {
+        if (requestId === loadRequestId) loading.value = false;
+      });
   }
 
   function refreshRuntimeIfCurrent(tenant: TenantInfo) {
@@ -213,6 +238,7 @@ export const useTenantMemberStore = defineStore("tenant-members", () => {
 
   return {
     selectedTenant,
+    loading,
     members,
     roles,
     roleOptions,

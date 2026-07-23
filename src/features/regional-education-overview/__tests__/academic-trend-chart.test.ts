@@ -3,7 +3,7 @@ import {
   academicTrendData,
   createAcademicTrendChartOption,
 } from "../academic-quality/academic-trend-chart";
-import { getDigitalTwinMapTheme } from "../map-themes";
+import { getDigitalTwinMapTheme } from "@/features/digital-twin/map-themes";
 
 describe("academic trend chart", () => {
   it("builds the Figma-aligned dual-axis bar and line chart", () => {

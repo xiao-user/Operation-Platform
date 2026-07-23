@@ -88,20 +88,19 @@ export class LocalStorageOperationPlatformPersistence implements OperationPlatfo
     }
   }
 
-  async ensureTenantLoaded() {
-    return;
+  peekTenantState(tenant: TenantInfo) {
+    return {
+      configuration: tenantConfigurationRepository.list(tenant),
+      members: tenantMemberRepository.list(tenant),
+    };
   }
 
-  loadConfiguration(tenant: TenantInfo) {
-    return tenantConfigurationRepository.list(tenant);
+  async loadTenantState(tenant: TenantInfo) {
+    return this.peekTenantState(tenant);
   }
 
   async saveConfiguration(tenant: TenantInfo, configuration: TenantConfiguration) {
     return tenantConfigurationRepository.replace(tenant, configuration);
-  }
-
-  loadMembers(tenant: TenantInfo) {
-    return tenantMemberRepository.list(tenant);
   }
 
   async replaceMembers(tenant: TenantInfo, members: TenantMemberRecord[]) {

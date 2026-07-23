@@ -6,8 +6,6 @@ import thermostatIcon from "@/assets/figma/regional-education-overview/thermosta
 import userOutlineIcon from "@/assets/figma/regional-education-overview/user-outline.svg";
 import weatherCloudIcon from "@/assets/figma/regional-education-overview/weather-cloud.svg";
 import type { DigitalTwinMapTheme } from "../map-themes";
-import type { RegionalDashboardSectionId } from "../dashboard-sections";
-import DashboardSectionTabs from "./dashboard/DashboardSectionTabs.vue";
 import MapThemeSwitcher from "./MapThemeSwitcher.vue";
 
 interface UserRoleOption {
@@ -24,12 +22,11 @@ const props = withDefaults(defineProps<{
   formattedTime: string;
   themes: readonly DigitalTwinMapTheme[];
   activeThemeId: DigitalTwinMapTheme["id"];
-  activeSection: RegionalDashboardSectionId;
-  showSectionNavigation?: boolean;
+  hasNavigation?: boolean;
   variant?: "regional-education" | "smart-sports";
   productTitle?: string;
 }>(), {
-  showSectionNavigation: true,
+  hasNavigation: false,
   variant: "regional-education",
   productTitle: "",
 });
@@ -40,7 +37,6 @@ const emit = defineEmits<{
   changePassword: [];
   signOut: [];
   exit: [];
-  sectionSelect: [sectionId: RegionalDashboardSectionId];
 }>();
 
 const userMenuRoot = ref<HTMLElement>();
@@ -95,7 +91,7 @@ onBeforeUnmount(() => {
   <header
     class="page-topbar"
     :class="{
-      'page-topbar--without-sections': !showSectionNavigation,
+      'page-topbar--without-sections': !hasNavigation,
       'page-topbar--smart-sports': variant === 'smart-sports',
     }"
   >
@@ -104,14 +100,7 @@ onBeforeUnmount(() => {
       <strong>{{ productName }}</strong>
     </div>
 
-    <DashboardSectionTabs
-      v-if="showSectionNavigation"
-      class="primary-navigation"
-      variant="primary"
-      label="驾驶舱主导航"
-      :active-section="activeSection"
-      @select="emit('sectionSelect', $event)"
-    />
+    <slot v-if="hasNavigation" name="navigation" />
 
     <div class="system-context">
       <MapThemeSwitcher

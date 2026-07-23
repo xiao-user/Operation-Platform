@@ -1,15 +1,15 @@
 import {
   createAdministrativeBoundaryProviderChain,
   createAdministrativeMapDataSource,
-} from "./administrative-map-data-source";
+} from "@/features/digital-twin/administrative-map-data-source";
 import {
   clearAdministrativeBoundaryCacheForTests,
   normalizeAdministrativeCollection,
-} from "./administrative-boundary-service";
-import { createCoveragePopulationMapDataSource } from "./coverage-population-map-data-source";
-import type { MapState } from "./map-state";
-import { institutionNetworkScopes } from "./map-presentation-policy";
-import { createPublicAdministrativeBoundaryProvider } from "./public-administrative-boundary-provider";
+} from "@/features/digital-twin/administrative-boundary-service";
+import { createCoveragePopulationMapDataSource } from "@/features/digital-twin/coverage-population-map-data-source";
+import type { MapState } from "@/features/digital-twin/map-state";
+import { institutionNetworkScopes } from "@/features/digital-twin/map-presentation-policy";
+import { createPublicAdministrativeBoundaryProvider } from "@/features/digital-twin/public-administrative-boundary-provider";
 import guangdongCities from "@/assets/maps/guangdong-cities.json";
 
 const guangdongSmartSportsCoveragePopulation = 20_000_000;

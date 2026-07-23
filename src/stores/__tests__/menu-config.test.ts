@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import {
   DEVELOPING_PAGE_KEY,
@@ -11,6 +11,8 @@ import { MenuValidationError } from "@/features/menu-config/menu-validation";
 import { useMenuConfigStore } from "@/stores/menu-config";
 import { useNavigationStore } from "@/stores/navigation";
 import { useUserStore } from "@/stores/user";
+import { operationPlatformPersistence } from "@/features/persistence/runtime-operation-platform-persistence";
+import { createDefaultTenantConfiguration } from "@/features/tenant-config/default-tenant-configuration";
 import type { MenuRecordInput } from "@/features/menu-config/types";
 import type { TenantInfo } from "@/types/user";
 
@@ -45,6 +47,37 @@ describe("menu configuration store", () => {
   beforeEach(() => {
     localStorage.clear();
     setActivePinia(createPinia());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("loads an uncached tenant before exposing its menu configuration", async () => {
+    const configuration = createDefaultTenantConfiguration(schoolB);
+    vi.spyOn(operationPlatformPersistence, "peekTenantState").mockReturnValue(null);
+    const loadTenantState = vi
+      .spyOn(operationPlatformPersistence, "loadTenantState")
+      .mockResolvedValue({
+        configuration: {
+          configuration,
+          recoveryNotice: null,
+        },
+        members: {
+          members: [],
+          recoveryNotice: null,
+        },
+      });
+    const store = useMenuConfigStore();
+
+    const loading = store.load(schoolB);
+
+    expect(store.loading).toBe(true);
+    await loading;
+    expect(loadTenantState).toHaveBeenCalledWith(schoolB);
+    expect(store.loading).toBe(false);
+    expect(store.selectedTenant?.id).toBe(schoolB.id);
+    expect(store.records).toEqual(configuration.menuRecords);
   });
 
   it("loads an arbitrary tenant without switching the signed-in tenant", () => {

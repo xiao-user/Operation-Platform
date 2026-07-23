@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearAdministrativeBoundaryCacheForTests,
   loadAdministrativeChildren,
-} from "../administrative-boundary-service";
+} from "@/features/digital-twin/administrative-boundary-service";
 import {
-  createTenantMapDataSource,
+  createRegionalEducationMapDataSource,
   rongchengEducationTenantId,
-} from "../tenant-map-data-source";
-import type { GeoFeature } from "../geo";
+} from "@/features/regional-education-overview/tenant-map-data-source";
+import { createSmartSportsMapDataSource } from "@/features/smart-sports-dashboard/tenant-map-data-source";
+import type { GeoFeature } from "@/features/digital-twin/geo";
 import type { TenantAdministrativeRegion } from "@/types/user";
 
 function squareFeature(code: string, name: string, level: string): GeoFeature {
@@ -77,10 +78,9 @@ describe("tenant administrative map data source", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const source = await createTenantMapDataSource({
+    const source = await createSmartSportsMapDataSource({
       tenantId: "bureau-guangzhou",
       region: guangzhouRegion,
-      mode: "smart-sports",
     });
 
     expect(source.initialState).toMatchObject({
@@ -111,10 +111,9 @@ describe("tenant administrative map data source", () => {
   it("surfaces initial child-boundary failures instead of treating the root as terminal", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
-    await expect(createTenantMapDataSource({
+    await expect(createRegionalEducationMapDataSource({
       tenantId: "bureau-guangzhou",
       region: guangzhouRegion,
-      mode: "regional-education",
     })).rejects.toThrow("行政区地图加载失败：500");
   });
 
@@ -137,10 +136,9 @@ describe("tenant administrative map data source", () => {
       path: [...guangzhouRegion.path, { code: "440106", name: "天河区", scope: "district" }],
     };
 
-    const source = await createTenantMapDataSource({
+    const source = await createRegionalEducationMapDataSource({
       tenantId: "bureau-tianhe",
       region: districtRegion,
-      mode: "regional-education",
     });
 
     expect(source.initialState).toMatchObject({
@@ -157,10 +155,9 @@ describe("tenant administrative map data source", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const source = await createTenantMapDataSource({
+    const source = await createRegionalEducationMapDataSource({
       tenantId: rongchengEducationTenantId,
       region: rongchengRegion,
-      mode: "regional-education",
     });
 
     expect(source.initialState).toMatchObject({
@@ -181,10 +178,9 @@ describe("tenant administrative map data source", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const source = await createTenantMapDataSource({
+    const source = await createSmartSportsMapDataSource({
       tenantId: rongchengEducationTenantId,
       region: rongchengRegion,
-      mode: "smart-sports",
     });
 
     expect(source.initialState).toMatchObject({

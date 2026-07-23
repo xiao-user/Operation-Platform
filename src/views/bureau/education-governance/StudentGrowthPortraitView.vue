@@ -24,8 +24,6 @@ const semester = ref("第二学期");
 const stage = ref("全部学段");
 const schoolScope = ref("区域内全部学校");
 const grade = ref("全部年级");
-const town = ref("全部镇街");
-const dataStatus = ref("全部数据");
 const loading = ref(false);
 const dataDrawerVisible = ref(false);
 const allTopics = [...primaryTopics, ...moreTopics];
@@ -54,9 +52,7 @@ function queryData() {
       `${academicYear.value} ${semester.value}`,
       stage.value,
       grade.value,
-      town.value,
       schoolScope.value,
-      dataStatus.value,
     ].join(" · ");
     ElMessage.success(`已更新：${filterSummary}`);
   }, 320);
@@ -71,8 +67,6 @@ function queryData() {
       v-model:stage="stage"
       v-model:school-scope="schoolScope"
       v-model:grade="grade"
-      v-model:town="town"
-      v-model:data-status="dataStatus"
       @query="queryData"
       @open-data="dataDrawerVisible = true"
     />

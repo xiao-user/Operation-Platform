@@ -33,6 +33,7 @@ export interface PermissionTreeNode extends MenuTreeNode {
 
 export const useAccessControlStore = defineStore("access-control", () => {
   const selectedTenant = ref<TenantInfo | null>(null);
+  const loading = ref(false);
   const records = ref<MenuConfigRecord[]>([]);
   const roles = ref<RoleRecord[]>([]);
   const members = ref<TenantMemberRecord[]>([]);
@@ -81,7 +82,7 @@ export const useAccessControlStore = defineStore("access-control", () => {
     });
     roles.value = cloneJson(configuration.roles);
     recoveryNotice.value = null;
-    members.value = operationPlatformPersistence.loadMembers(tenant).members;
+    members.value = operationPlatformPersistence.peekTenantState(tenant)?.members.members ?? [];
     useUserStore().refreshMemberRoles();
     refreshRuntimeIfCurrent(tenant);
     return roles.value;
@@ -94,18 +95,42 @@ export const useAccessControlStore = defineStore("access-control", () => {
     }
   }
 
-  function load(tenant: TenantInfo) {
-    const result = operationPlatformPersistence.loadConfiguration(tenant);
-    if (!result) throw new Error("组织配置尚未加载");
+  let loadRequestId = 0;
+
+  function applyLoadedState(
+    tenant: TenantInfo,
+    state: Awaited<ReturnType<typeof operationPlatformPersistence.loadTenantState>>,
+  ) {
+    const result = state.configuration;
     selectedTenant.value = { ...tenant };
     records.value = result.configuration.menuRecords;
     roles.value = result.configuration.roles;
     shellConfig.value = result.configuration.shellConfig;
-    const memberResult = operationPlatformPersistence.loadMembers(tenant);
+    const memberResult = state.members;
     members.value = memberResult.members;
     recoveryNotice.value = [result.recoveryNotice, memberResult.recoveryNotice]
       .filter(Boolean)
       .join("；") || null;
+  }
+
+  function load(tenant: TenantInfo) {
+    const requestId = ++loadRequestId;
+    const cached = operationPlatformPersistence.peekTenantState(tenant);
+    if (cached) {
+      loading.value = false;
+      applyLoadedState(tenant, cached);
+      return;
+    }
+
+    loading.value = true;
+    return operationPlatformPersistence.loadTenantState(tenant)
+      .then((state) => {
+        if (requestId !== loadRequestId) return;
+        applyLoadedState(tenant, state);
+      })
+      .finally(() => {
+        if (requestId === loadRequestId) loading.value = false;
+      });
   }
 
   function enabledMemberCountForRole(roleId: string) {
@@ -223,6 +248,7 @@ export const useAccessControlStore = defineStore("access-control", () => {
 
   return {
     selectedTenant,
+    loading,
     records,
     roles,
     members,

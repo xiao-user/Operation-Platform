@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import RegionalOverviewPanel from "../components/RegionalOverviewPanel.vue";
-import { rongchengEducationLocations } from "../education-locations";
+import { rongchengEducationLocations } from "@/features/digital-twin/education-locations";
 
 describe("RegionalOverviewPanel", () => {
   it("uses the current district as the summary heading", () => {

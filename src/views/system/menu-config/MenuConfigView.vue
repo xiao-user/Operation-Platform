@@ -1,5 +1,5 @@
 <template>
-  <div class="menu-config-page">
+  <div v-loading="loading" class="menu-config-page">
     <section class="filter-card">
       <div class="filter-item">
         <span>租户类型</span>
@@ -126,7 +126,15 @@ const menuConfigStore = useMenuConfigStore();
 const userStore = useUserStore();
 const navigationStore = useNavigationStore();
 const router = useRouter();
-const { selectedTenant, records, tree, shellConfig, recoveryNotice, roleOptions } = storeToRefs(menuConfigStore);
+const {
+  selectedTenant,
+  loading,
+  records,
+  tree,
+  shellConfig,
+  recoveryNotice,
+  roleOptions,
+} = storeToRefs(menuConfigStore);
 const { tenantList, currentTenant } = storeToRefs(userStore);
 
 const tenantType = ref<TenantType | "">("");
@@ -151,11 +159,15 @@ const drawerVisibleRoleIds = computed(() =>
 );
 watch(
   selectedTenantId,
-  (tenantId) => {
+  async (tenantId) => {
     const tenant = tenantList.value.find((item) => item.id === tenantId);
     if (!tenant) return;
-    menuConfigStore.load(tenant);
-    if (recoveryNotice.value) ElMessage.warning(recoveryNotice.value);
+    try {
+      await menuConfigStore.load(tenant);
+      if (recoveryNotice.value) ElMessage.warning(recoveryNotice.value);
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : "组织菜单配置加载失败");
+    }
   },
   { immediate: true },
 );

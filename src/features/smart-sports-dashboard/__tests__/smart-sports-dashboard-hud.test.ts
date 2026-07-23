@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import SmartSportsDashboardHud from "../components/SmartSportsDashboardHud.vue";
-import { getDigitalTwinMapTheme } from "../map-themes";
+import { getDigitalTwinMapTheme } from "@/features/digital-twin/map-themes";
 
 const props = {
   scopeName: "广东省",

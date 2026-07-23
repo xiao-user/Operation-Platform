@@ -6,7 +6,6 @@ import type { FollowUpRecord } from "../types";
 import ChartExplanationTooltip from "./ChartExplanationTooltip.vue";
 import StudentGrowthChart from "./StudentGrowthChart.vue";
 
-const activeStep = ref(1);
 const trendOption = createRegionalTrendOption();
 const statusFilter = ref("all");
 const trendExplanation = [
@@ -66,11 +65,11 @@ function statusType(status: FollowUpRecord["status"]): "warning" | "primary" | "
           <ElOption label="已改善" value="已改善" />
         </ElSelect>
       </header>
-      <ElSteps :active="activeStep" finish-status="success" align-center class="trend-follow-up__steps">
-        <ElStep title="发现" description="基于数据识别关注事项" @click="activeStep = 0" />
-        <ElStep title="研判" description="定位学校与影响范围" @click="activeStep = 1" />
-        <ElStep title="跟进" description="制定并推进改进计划" @click="activeStep = 2" />
-        <ElStep title="改善" description="复盘变化并沉淀经验" @click="activeStep = 3" />
+      <ElSteps :active="1" finish-status="success" align-center class="trend-follow-up__steps">
+        <ElStep title="发现" description="基于数据识别关注事项" />
+        <ElStep title="研判" description="定位学校与影响范围" />
+        <ElStep title="跟进" description="制定并推进改进计划" />
+        <ElStep title="改善" description="复盘变化并沉淀经验" />
       </ElSteps>
       <ElTable
         :data="visibleRecords"
@@ -111,9 +110,6 @@ function statusType(status: FollowUpRecord["status"]): "warning" | "primary" | "
           label="更新时间"
           width="120"
         />
-        <ElTableColumn label="建议动作" width="110" fixed="right">
-          <template #default="{ row }"><ElButton link type="primary">{{ row.status === "待研判" ? "定位学校" : row.status === "跟进中" ? "查看依据" : "查看亮点" }}</ElButton></template>
-        </ElTableColumn>
       </ElTable>
     </section>
   </section>
@@ -183,7 +179,4 @@ function statusType(status: FollowUpRecord["status"]): "warning" | "primary" | "
   max-width: 100%;
 }
 
-:deep(.trend-follow-up__steps .el-step__main) {
-  cursor: pointer;
-}
 </style>

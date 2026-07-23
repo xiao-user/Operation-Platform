@@ -15,7 +15,7 @@ import { defaultMapVisualTuning } from "../rendering/map-visual-tuning";
 import {
   clearSmartSportsMapCacheForTests,
   smartSportsMapDataSource,
-} from "../smart-sports-map-data-source";
+} from "@/features/smart-sports-dashboard/smart-sports-map-data-source";
 import type { MapCameraView } from "../types";
 
 const parentCamera: MapCameraView = {

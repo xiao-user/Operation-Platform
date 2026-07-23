@@ -24,8 +24,6 @@ describe("student growth portrait mock contract", () => {
     expect(schoolRecords.length).toBeGreaterThanOrEqual(10);
     for (const school of schoolRecords) {
       expect(school.students).toBeGreaterThan(0);
-      expect(school.completeness).toBeGreaterThanOrEqual(0);
-      expect(school.completeness).toBeLessThanOrEqual(100);
       expect(school.fiveEducation).toBeGreaterThanOrEqual(0);
       expect(school.fiveEducation).toBeLessThanOrEqual(100);
     }

@@ -4,7 +4,7 @@ import LocationProfilePanel from "../components/LocationProfilePanel.vue";
 import {
   educationLocationTypeMeta,
   rongchengEducationLocations,
-} from "../education-locations";
+} from "@/features/digital-twin/education-locations";
 
 const locations = rongchengEducationLocations.slice(0, 5);
 const lastLocation = locations[locations.length - 1]!;

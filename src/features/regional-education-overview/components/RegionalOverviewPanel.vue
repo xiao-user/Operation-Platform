@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { countLocationsByType } from "../education-locations";
-import type { MapNavigationNode } from "../map-state";
-import type { EducationLocation, EducationLocationType } from "../types";
-import AnimatedNumber from "./AnimatedNumber.vue";
+import { countLocationsByType } from "@/features/digital-twin/education-locations";
+import type { MapNavigationNode } from "@/features/digital-twin/map-state";
+import type { EducationLocation, EducationLocationType } from "@/features/digital-twin/types";
+import AnimatedNumber from "@/features/digital-twin/components/AnimatedNumber.vue";
 
 const props = defineProps<{
   locations: readonly EducationLocation[];
