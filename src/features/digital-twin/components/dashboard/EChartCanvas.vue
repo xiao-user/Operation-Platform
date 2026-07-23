@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
-import { BarChart, GaugeChart, LineChart } from "echarts/charts";
+import { BarChart, GaugeChart, LineChart, PieChart, RadarChart } from "echarts/charts";
 import {
   DataZoomComponent,
   GraphicComponent,
   GridComponent,
   LegendComponent,
+  RadarComponent,
   TooltipComponent,
 } from "echarts/components";
 import { init, use, type ECharts, type EChartsCoreOption } from "echarts/core";
@@ -15,10 +16,13 @@ use([
   BarChart,
   GaugeChart,
   LineChart,
+  PieChart,
+  RadarChart,
   DataZoomComponent,
   GraphicComponent,
   GridComponent,
   LegendComponent,
+  RadarComponent,
   TooltipComponent,
   CanvasRenderer,
 ]);
@@ -30,6 +34,10 @@ const props = withDefaults(defineProps<{
 }>(), {
   maxDevicePixelRatio: 2,
 });
+
+const emit = defineEmits<{
+  legendSelectionChange: [selected: Record<string, boolean>];
+}>();
 
 const chartElement = ref<HTMLElement | null>(null);
 const chart = shallowRef<ECharts | null>(null);
@@ -73,6 +81,10 @@ onMounted(() => {
     renderer: "canvas",
     devicePixelRatio,
   });
+  chart.value.on("legendselectchanged", (...args: unknown[]) => {
+    const event = args[0] as { selected?: Record<string, boolean> };
+    if (event.selected) emit("legendSelectionChange", event.selected);
+  });
   renderChart();
   resizeObserver = new ResizeObserver(scheduleResize);
   resizeObserver.observe(chartElement.value);
@@ -87,6 +99,7 @@ onBeforeUnmount(() => {
   document.removeEventListener("visibilitychange", handleVisibilityChange);
   if (resizeFrame !== undefined) window.cancelAnimationFrame(resizeFrame);
   resizeFrame = undefined;
+  chart.value?.off("legendselectchanged");
   chart.value?.dispose();
   chart.value = null;
 });

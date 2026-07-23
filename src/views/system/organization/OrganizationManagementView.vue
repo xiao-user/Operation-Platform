@@ -1,9 +1,9 @@
 <template>
   <div class="platform-admin-page">
-    <section class="filter-card">
+    <PageFilterBar>
       <div class="filter-item">
-        <span>组织类型</span>
-        <el-select v-model="typeFilter" clearable placeholder="全部类型">
+        <span class="filter-label">组织类型</span>
+        <el-select v-model="typeFilter" clearable placeholder="全部类型" aria-label="组织类型">
           <el-option
             v-for="option in TENANT_TYPE_OPTIONS"
             :key="option.value"
@@ -13,20 +13,11 @@
         </el-select>
       </div>
       <div class="filter-item">
-        <span>组织名称</span>
-        <el-input v-model="keyword" clearable placeholder="搜索组织名称" />
+        <span class="filter-label">组织名称</span>
+        <el-input v-model="keyword" clearable placeholder="搜索组织名称" aria-label="组织名称" />
       </div>
-      <div class="filter-actions">
-        <el-button
-          v-if="operationPlatformPersistenceCapabilities.localDataExport"
-          :icon="Download"
-          @click="handleExportLocalData"
-        >
-          导出本地数据
-        </el-button>
-        <el-button type="primary" :icon="Plus" @click="openCreate">新增组织</el-button>
-      </div>
-    </section>
+      <template #actions></template>
+    </PageFilterBar>
 
     <el-alert
       v-if="recoveryNotice"
@@ -43,54 +34,78 @@
           <strong>组织管理</strong>
           <span class="record-count">共 {{ filteredTenants.length }} 个组织</span>
         </div>
+        <div class="toolbar-actions">
+          <el-button
+            v-if="operationPlatformPersistenceCapabilities.localDataExport"
+            :icon="Download"
+            @click="handleExportLocalData"
+          >
+            导出本地数据
+          </el-button>
+          <el-button type="primary" :icon="Plus" @click="openCreate">新增组织</el-button>
+        </div>
       </div>
 
-      <el-table :data="filteredTenants" row-key="id">
-        <el-table-column label="组织名称" min-width="220">
-          <template #default="{ row }">
-            <div class="primary-cell">
-              <strong>{{ row.name }}</strong>
-              <span>{{ row.shortName }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="类型" width="120">
-          <template #default="{ row }">
-            <el-tag :type="tenantTagType(row.type)" effect="plain">
-              {{ tenantTypeLabel(row.type) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="地图范围" min-width="220">
-          <template #default="{ row }">
-            <span>{{ administrativeRegionLabel(row.administrativeRegion) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="id" label="组织 ID" min-width="220" />
-        <el-table-column label="状态" width="120">
-          <template #default="{ row }">
-            <el-switch
-              :model-value="row.enabled !== false"
-              :disabled="row.type === 'platform'"
-              @change="(value: boolean) => handleEnabledChange(row.id, value)"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="210" align="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openMembers(row)">成员</el-button>
-            <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-            <el-button
-              link
-              type="danger"
-              :disabled="row.type === 'platform'"
-              @click="handleRemove(row)"
-            >
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="table-wrapper">
+        <el-table :data="filteredTenants" row-key="id" stripe border height="100%">
+          <el-table-column
+            column-key="name"
+            label="组织名称"
+            min-width="220"
+            fixed="left"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">
+              <div class="primary-cell">
+                <strong>{{ row.name }}</strong>
+                <span>{{ row.shortName }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column column-key="type" label="类型" width="120">
+            <template #default="{ row }">
+              <el-tag :type="tenantTagType(row.type)" effect="plain">
+                {{ tenantTypeLabel(row.type) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column
+            column-key="administrativeRegion"
+            label="地图范围"
+            min-width="220"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">
+              <span>{{ administrativeRegionLabel(row.administrativeRegion) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="id" label="组织 ID" min-width="220" show-overflow-tooltip />
+          <el-table-column column-key="enabled" label="状态" width="120">
+            <template #default="{ row }">
+              <el-switch
+                :model-value="row.enabled !== false"
+                :disabled="row.type === 'platform'"
+                :aria-label="`${row.name}启用状态`"
+                @change="(value: boolean) => handleEnabledChange(row.id, value)"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="210" align="right" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openMembers(row)">成员</el-button>
+              <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+              <el-button
+                link
+                type="danger"
+                :disabled="row.type === 'platform'"
+                @click="handleRemove(row)"
+              >
+                删除
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </section>
 
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑组织' : '新增组织'" width="680px">
@@ -134,6 +149,7 @@ import { storeToRefs } from "pinia";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { Download, Plus } from "@element-plus/icons-vue";
 import { TENANT_TAG_TYPE, TENANT_TYPE_LABEL, TENANT_TYPE_OPTIONS } from "@/config/tenant";
+import PageFilterBar from "@/components/PageFilterBar.vue";
 import {
   createLocalStorageExportSnapshot,
   downloadLocalStorageExportSnapshot,
@@ -282,42 +298,62 @@ async function handleRemove(tenant: TenantInfo) {
 .platform-admin-page {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-16);
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
-.filter-card,
 .table-card {
-  padding: var(--spacing-16);
   background: var(--color-white);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-}
-
-.filter-card {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--spacing-16);
 }
 
 .filter-item {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--spacing-8);
-  min-width: 180px;
+  width: 280px;
+  min-width: 0;
+}
+
+.filter-label {
+  flex-shrink: 0;
   color: var(--color-secondary);
   font-size: var(--font-size-sm);
 }
 
-.filter-actions {
+.filter-item :deep(.el-select),
+.filter-item :deep(.el-input) {
+  flex: 1;
+  min-width: 0;
+}
+
+.table-card {
   display: flex;
-  gap: var(--spacing-8);
-  margin-left: auto;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--spacing-24);
 }
 
 .table-toolbar {
   display: flex;
+  flex-shrink: 0;
+  align-items: center;
   justify-content: space-between;
+  gap: var(--spacing-16);
   margin-bottom: var(--spacing-16);
+}
+
+.toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-8);
+}
+
+.table-wrapper {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .record-count {
@@ -338,6 +374,22 @@ async function handleRemove(tenant: TenantInfo) {
 }
 
 .page-alert {
-  margin: 0;
+  flex-shrink: 0;
+  margin: var(--spacing-16) var(--spacing-24) 0;
+}
+
+@media (max-width: 767px) {
+  .filter-item {
+    width: 100%;
+  }
+
+  .table-card {
+    padding: var(--spacing-16);
+  }
+
+  .table-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

@@ -4,6 +4,13 @@ export type MapScope = "province" | "city" | "district" | "township";
 export type MapContextPresentation = "peers";
 export type EnergyTowerMetric = "school-count" | "coverage-population";
 
+/** Runtime metric values for an existing energy-tower topology. */
+export interface EnergyTowerValueFrame {
+  readonly values: Readonly<Record<string, number>>;
+  readonly total: number;
+  readonly metricLabel: string;
+}
+
 export interface MapNavigationNode {
   readonly code: string;
   readonly name: string;
@@ -37,4 +44,6 @@ export interface MapState {
   readonly energyTowerValues?: Readonly<Record<string, number>>;
   readonly energyTowerTotal?: number;
   readonly energyTowerMetricSource?: "location-aggregation" | "virtual-prototype";
+  /** Optional display label for coverage-population towers; defaults to 覆盖人数. */
+  readonly energyTowerMetricLabel?: string;
 }

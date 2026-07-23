@@ -1,9 +1,14 @@
 <template>
   <div v-loading="loading" class="platform-admin-page">
-    <section class="filter-card">
+    <PageFilterBar>
       <div class="filter-item">
-        <span>管理组织</span>
-        <el-select v-model="selectedTenantId" filterable placeholder="请选择组织">
+        <span class="filter-label">管理组织</span>
+        <el-select
+          v-model="selectedTenantId"
+          filterable
+          placeholder="请选择组织"
+          aria-label="管理组织"
+        >
           <el-option
             v-for="tenant in tenantList"
             :key="tenant.id"
@@ -12,13 +17,8 @@
           />
         </el-select>
       </div>
-      <el-button type="primary" :icon="Plus" :disabled="!selectedTenant" @click="openCreate">
-        新增角色
-      </el-button>
-      <el-button :icon="RefreshLeft" :disabled="!selectedTenant" @click="handleReset">
-        恢复默认角色
-      </el-button>
-    </section>
+      <template #actions></template>
+    </PageFilterBar>
 
     <el-alert
       v-if="recoveryNotice"
@@ -35,58 +35,75 @@
           <strong>{{ selectedTenant?.name ?? "请选择组织" }}</strong>
           <span class="record-count">共 {{ roles.length }} 个角色</span>
         </div>
+        <div class="toolbar-actions">
+          <el-button :icon="RefreshLeft" :disabled="!selectedTenant" @click="handleReset">
+            恢复默认角色
+          </el-button>
+          <el-button type="primary" :icon="Plus" :disabled="!selectedTenant" @click="openCreate">
+            新增角色
+          </el-button>
+        </div>
       </div>
 
-      <el-table :data="roles" row-key="id">
-        <el-table-column label="角色名称" min-width="180">
-          <template #default="{ row }">
-            <div class="primary-cell">
-              <strong>{{ row.name }}</strong>
-              <span>{{ row.description || "暂无描述" }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="类型" width="120">
-          <template #default="{ row }">
-            <el-tag :type="row.builtIn ? 'primary' : 'info'" effect="plain">
-              {{ row.builtIn ? "内置角色" : "自定义角色" }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="菜单权限" width="120">
-          <template #default="{ row }">
-            {{ row.id === ADMIN_ROLE_ID ? "全部" : `${row.menuIds.length} 项` }}
-          </template>
-        </el-table-column>
-        <el-table-column label="成员数" width="100">
-          <template #default="{ row }">
-            {{ accessControlStore.memberCountForRole(row.id) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="sort" label="排序" width="100" />
-        <el-table-column label="状态" width="120">
-          <template #default="{ row }">
-            <el-switch
-              :model-value="row.enabled"
-              :disabled="row.id === ADMIN_ROLE_ID"
-              @change="(value: boolean) => handleEnabledChange(row.id, value)"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="180" align="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-            <el-button
-              link
-              type="danger"
-              :disabled="row.builtIn"
-              @click="handleRemove(row)"
-            >
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="table-wrapper">
+        <el-table :data="roles" row-key="id" stripe border height="100%">
+          <el-table-column
+            column-key="name"
+            label="角色名称"
+            min-width="180"
+            fixed="left"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">
+              <div class="primary-cell">
+                <strong>{{ row.name }}</strong>
+                <span>{{ row.description || "暂无描述" }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column column-key="builtIn" label="类型" width="120">
+            <template #default="{ row }">
+              <el-tag :type="row.builtIn ? 'primary' : 'info'" effect="plain">
+                {{ row.builtIn ? "内置角色" : "自定义角色" }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column column-key="menuIds" label="菜单权限" width="120">
+            <template #default="{ row }">
+              {{ row.id === ADMIN_ROLE_ID ? "全部" : `${row.menuIds.length} 项` }}
+            </template>
+          </el-table-column>
+          <el-table-column column-key="memberCount" label="成员数" width="100">
+            <template #default="{ row }">
+              {{ accessControlStore.memberCountForRole(row.id) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="sort" label="排序" width="100" />
+          <el-table-column column-key="enabled" label="状态" width="120">
+            <template #default="{ row }">
+              <el-switch
+                :model-value="row.enabled"
+                :disabled="row.id === ADMIN_ROLE_ID"
+                :aria-label="`${row.name}启用状态`"
+                @change="(value: boolean) => handleEnabledChange(row.id, value)"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="160" align="right" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+              <el-button
+                link
+                type="danger"
+                :disabled="row.builtIn"
+                @click="handleRemove(row)"
+              >
+                删除
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </section>
 
     <el-dialog v-model="dialogVisible" :title="editingRole ? '编辑角色' : '新增角色'" width="520px">
@@ -127,6 +144,7 @@ import { computed, reactive, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { Plus, RefreshLeft } from "@element-plus/icons-vue";
+import PageFilterBar from "@/components/PageFilterBar.vue";
 import { ADMIN_ROLE_ID, type RoleInput, type RoleRecord } from "@/features/access-control/types";
 import { useAccessControlStore } from "@/stores/access-control";
 import { useUserStore } from "@/stores/user";
@@ -261,36 +279,61 @@ async function handleReset() {
 .platform-admin-page {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-16);
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
-.filter-card,
 .table-card {
-  padding: var(--spacing-16);
   background: var(--color-white);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-}
-
-.filter-card {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--spacing-16);
 }
 
 .filter-item {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--spacing-8);
-  min-width: 260px;
+  width: 280px;
+  min-width: 0;
+}
+
+.filter-label {
+  flex-shrink: 0;
   color: var(--color-secondary);
   font-size: var(--font-size-sm);
 }
 
+.filter-item :deep(.el-select) {
+  flex: 1;
+  min-width: 0;
+}
+
+.table-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--spacing-24);
+}
+
 .table-toolbar {
   display: flex;
+  flex-shrink: 0;
+  align-items: center;
   justify-content: space-between;
+  gap: var(--spacing-16);
   margin-bottom: var(--spacing-16);
+}
+
+.toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-8);
+}
+
+.table-wrapper {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .record-count {
@@ -311,6 +354,22 @@ async function handleReset() {
 }
 
 .page-alert {
-  margin: 0;
+  flex-shrink: 0;
+  margin: var(--spacing-16) var(--spacing-24) 0;
+}
+
+@media (max-width: 767px) {
+  .filter-item {
+    width: 100%;
+  }
+
+  .table-card {
+    padding: var(--spacing-16);
+  }
+
+  .table-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

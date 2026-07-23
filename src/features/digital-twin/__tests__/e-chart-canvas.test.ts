@@ -11,14 +11,23 @@ const chartMocks = vi.hoisted(() => ({
   animationStop: vi.fn(),
   init: vi.fn(),
   use: vi.fn(),
+  on: vi.fn(),
+  off: vi.fn(),
 }));
 
-vi.mock("echarts/charts", () => ({ BarChart: {}, GaugeChart: {}, LineChart: {} }));
+vi.mock("echarts/charts", () => ({
+  BarChart: {},
+  GaugeChart: {},
+  LineChart: {},
+  PieChart: {},
+  RadarChart: {},
+}));
 vi.mock("echarts/components", () => ({
   DataZoomComponent: {},
   GraphicComponent: {},
   GridComponent: {},
   LegendComponent: {},
+  RadarComponent: {},
   TooltipComponent: {},
 }));
 vi.mock("echarts/renderers", () => ({ CanvasRenderer: {} }));
@@ -49,6 +58,8 @@ describe("EChartCanvas", () => {
       setOption: chartMocks.setOption,
       resize: chartMocks.resize,
       dispose: chartMocks.dispose,
+      on: chartMocks.on,
+      off: chartMocks.off,
       getZr: () => ({
         animation: {
           start: chartMocks.animationStart,
@@ -123,5 +134,24 @@ describe("EChartCanvas", () => {
     expect(chartMocks.setOption).toHaveBeenCalledTimes(2);
     wrapper.unmount();
     hidden.mockRestore();
+  });
+
+  it("forwards ECharts legend selection as a generic chart event", () => {
+    const wrapper = mount(EChartCanvas, {
+      props: {
+        option: { series: [{ type: "radar", data: [] }] },
+        ariaLabelText: "图例交互测试",
+      },
+    });
+    const handler = chartMocks.on.mock.calls.find(
+      ([event]) => event === "legendselectchanged",
+    )?.[1] as ((event: { selected: Record<string, boolean> }) => void) | undefined;
+
+    handler?.({ selected: { 跑步: true, 跳远: false } });
+
+    expect(wrapper.emitted("legendSelectionChange")?.[0])
+      .toEqual([{ 跑步: true, 跳远: false }]);
+    wrapper.unmount();
+    expect(chartMocks.off).toHaveBeenCalledWith("legendselectchanged");
   });
 });

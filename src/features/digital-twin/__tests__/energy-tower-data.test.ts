@@ -40,6 +40,20 @@ describe("energy tower data", () => {
     });
   });
 
+  it("accepts an injected metric label for coverage-population towers", () => {
+    const feature = initialMapState.geoData.features[0]!;
+    const code = String(feature.properties.code);
+    const towers = buildEnergyTowerData({
+      ...initialMapState,
+      energyTowerMetric: "coverage-population",
+      energyTowerValues: { [code]: 8_600 },
+      energyTowerTotal: 8_600,
+      energyTowerMetricLabel: "运动人数",
+    }, []);
+
+    expect(towers[0]?.valueLabel).toBe("运动人数 8.6 千人");
+  });
+
   it("renders Guangdong coverage atoms whose province sum is 20 million", () => {
     const towers = buildEnergyTowerData(smartSportsMapDataSource.initialState, []);
 

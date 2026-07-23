@@ -3,10 +3,13 @@ import { gsap } from "gsap";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { digitalTwinMotion } from "../motion";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   value: number;
   formatter?: (value: number) => string;
-}>();
+  precision?: number;
+}>(), {
+  precision: 0,
+});
 
 const displayedValue = ref(0);
 let reducedMotion = false;
@@ -27,7 +30,9 @@ function animateToValue(value: number) {
     ease: digitalTwinMotion.countEase,
     overwrite: true,
     onUpdate: () => {
-      displayedValue.value = Math.round(state.value);
+      const precision = Math.max(0, Math.min(6, Math.round(props.precision)));
+      const factor = 10 ** precision;
+      displayedValue.value = Math.round(state.value * factor) / factor;
     },
   });
 }
@@ -52,7 +57,7 @@ onMounted(() => {
   );
 });
 
-watch(() => props.value, animateToValue);
+watch([() => props.value, () => props.precision], ([value]) => animateToValue(value));
 
 onBeforeUnmount(() => {
   numberTween?.kill();

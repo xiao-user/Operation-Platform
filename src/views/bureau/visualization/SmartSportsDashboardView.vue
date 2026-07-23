@@ -7,6 +7,8 @@ import SmartSportsDashboardHud from "@/features/smart-sports-dashboard/component
 import type { MapDataSource } from "@/features/digital-twin/map-data-source";
 import { smartSportsMapFramingOffsetY } from "@/features/digital-twin/rendering/map-visual-tuning";
 import type { EducationLocation } from "@/features/digital-twin/types";
+import type { SmartSportsDashboardTabId } from "@/features/smart-sports-dashboard/smart-sports-dashboard-data";
+import { createSmartSportsEnergyTowerValueFrame } from "@/features/smart-sports-dashboard/smart-sports-energy-tower-values";
 
 const props = withDefaults(defineProps<{
   mapDataSource: MapDataSource;
@@ -63,7 +65,13 @@ const sportsDateRange = ref<[string, string]>([
   calendarDate(new Date(now.value.getFullYear(), now.value.getMonth(), 1)),
   calendarDate(now.value),
 ]);
+const activeSportsDashboard = ref<SmartSportsDashboardTabId>("overview");
 const sportsTitle = computed(() => `${props.mapDataSource.initialState.regionName}智慧体育大脑`);
+const energyTowerValueFrame = computed(() => createSmartSportsEnergyTowerValueFrame(
+  activeSportsDashboard.value,
+  activeMapState.value,
+  sportsDateRange.value,
+));
 </script>
 
 <template>
@@ -98,6 +106,7 @@ const sportsTitle = computed(() => `${props.mapDataSource.initialState.regionNam
         :data-layer-mode="dataLayerMode"
         :visual-tuning="mapVisualTuning"
         :data-source="props.mapDataSource"
+        :energy-tower-value-frame="energyTowerValueFrame"
         @select="selectLocation"
         @scope-change="handleScopeChange"
         @network-availability-change="handleNetworkAvailabilityChange"
@@ -107,6 +116,7 @@ const sportsTitle = computed(() => `${props.mapDataSource.initialState.regionNam
         @update:theme="updateActiveTheme"
       >
         <SmartSportsDashboardHud
+          :map-state="activeMapState"
           :scope-name="activeMapState.regionName"
           :scope-path="activeScopePath"
           :palette="activeTheme.chartPalette"
@@ -115,6 +125,7 @@ const sportsTitle = computed(() => `${props.mapDataSource.initialState.regionNam
           @scope-back="returnToParentScope"
           @scope-navigate="navigateToScope"
           @date-range-change="sportsDateRange = $event"
+          @dashboard-change="activeSportsDashboard = $event"
         />
       </DigitalTwinMapWorkspace>
     </section>

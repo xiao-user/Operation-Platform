@@ -47,12 +47,13 @@ export function buildEnergyTowerData(
       if (!coordinate || typeof code !== "string") return [];
       const value = Math.max(0, Math.round(mapState.energyTowerValues?.[code] ?? 0));
       if (value === 0) return [];
+      const metricLabel = mapState.energyTowerMetricLabel ?? "覆盖人数";
       return [{
         id: code,
         name: feature.properties.name ?? "未命名区域",
         coordinate,
         value,
-        valueLabel: `覆盖人数 ${formatCoveragePopulation(value)}`,
+        valueLabel: `${metricLabel} ${formatCoveragePopulation(value)}`,
         feature,
         metric: "coverage-population" as const,
       }];

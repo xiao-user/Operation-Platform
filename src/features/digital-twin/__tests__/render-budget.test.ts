@@ -276,6 +276,46 @@ describe("regional map render budget", () => {
     layer.dispose();
   });
 
+  it("animates metric values on existing tower resources without rebuilding geometry", () => {
+    const codes = initialMapState.geoData.features.flatMap((feature) => {
+      const code = feature.properties.code;
+      return typeof code === "string" ? [code] : [];
+    });
+    const initialValues = Object.fromEntries(
+      codes.map((code, index) => [code, (index + 1) * 10_000]),
+    );
+    const nextValues = Object.fromEntries(
+      codes.map((code, index) => [code, (codes.length - index) * 20_000]),
+    );
+    const layer = new EnergyTowerLayer(
+      {
+        ...initialMapState,
+        energyTowerMetric: "coverage-population",
+        energyTowerValues: initialValues,
+      },
+      [],
+      projection,
+      theme,
+      defaultMapVisualTuning,
+    );
+    layer.settle(true);
+    const firstTower = layer.root.children[0] as THREE.Group;
+    const firstMesh = firstTower.children.find((child) => child instanceof THREE.Mesh) as THREE.Mesh;
+    const geometryId = firstMesh.geometry.uuid;
+    const materialId = (firstMesh.material as THREE.Material).uuid;
+    const initialScaleZ = firstTower.scale.z;
+
+    expect(layer.updateCoverageValues(nextValues, "运动人数")).toBe(true);
+    for (let index = 0; index < 120; index += 1) layer.animate(1 / 60);
+
+    expect(firstMesh.geometry.uuid).toBe(geometryId);
+    expect((firstMesh.material as THREE.Material).uuid).toBe(materialId);
+    expect(firstTower.scale.z).not.toBe(initialScaleZ);
+    expect(firstMesh.userData.energyTowerDatum.valueLabel).toContain("运动人数");
+    expect(layer.root.children).toHaveLength(codes.length);
+    layer.dispose();
+  });
+
   it("classifies tower counts into relative low, medium, and high bands", () => {
     expect(energyTowerValueBand(2, 2, 8)).toBe("low");
     expect(energyTowerValueBand(4.5, 2, 8)).toBe("medium");

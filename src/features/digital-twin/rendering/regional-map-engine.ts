@@ -5,7 +5,7 @@ import {
   CSS2DRenderer,
 } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import type { GeoFeature } from "../geo";
-import type { MapState } from "../map-state";
+import type { EnergyTowerValueFrame, MapState } from "../map-state";
 import {
   entersNestedScopeInSameGeometryBand,
   mapStructureChanged,
@@ -269,6 +269,7 @@ export class RegionalMapEngine {
   private motionEnabled = true;
   private selectedLocationId?: string;
   private selectedEnergyTowerId?: string;
+  private energyTowerValueFrame?: EnergyTowerValueFrame;
   private townshipInstitutionTargetZ?: number;
   private dataLayerMode: MapDataLayerMode;
   private mapState: MapState;
@@ -798,8 +799,17 @@ export class RegionalMapEngine {
   private buildDynamicLayers() {
     if (!this.projection) return;
     if (this.dataLayerMode === "energy-towers") {
+      const energyTowerMapState = this.energyTowerValueFrame
+        && this.mapState.energyTowerMetric === "coverage-population"
+        ? {
+            ...this.mapState,
+            energyTowerValues: this.energyTowerValueFrame.values,
+            energyTowerTotal: this.energyTowerValueFrame.total,
+            energyTowerMetricLabel: this.energyTowerValueFrame.metricLabel,
+          }
+        : this.mapState;
       this.energyTowerLayer = new EnergyTowerLayer(
-        this.mapState,
+        energyTowerMapState,
         this.locations,
         this.projection,
         this.theme,
@@ -1630,6 +1640,19 @@ export class RegionalMapEngine {
     this.disposeDynamicLayers(this.dataLayerMode === "energy-towers");
     this.buildDynamicLayers();
     this.requestRender();
+  }
+
+  setEnergyTowerValueFrame(frame?: EnergyTowerValueFrame) {
+    this.energyTowerValueFrame = frame;
+    if (this.mapState.energyTowerMetric !== "coverage-population") return;
+    const values = frame?.values ?? this.mapState.energyTowerValues ?? {};
+    const metricLabel = frame?.metricLabel ?? this.mapState.energyTowerMetricLabel ?? "覆盖人数";
+    const activeChanged = this.energyTowerLayer?.updateCoverageValues(values, metricLabel) ?? false;
+    const suspendedChanged = this.suspendedDynamicLayers?.energyTowerLayer
+      ?.updateCoverageValues(values, metricLabel) ?? false;
+    if (activeChanged || suspendedChanged) {
+      this.requestHighFrameRate(hoverFrameBoostDuration);
+    }
   }
 
   setSelectedLocation(locationId?: string) {

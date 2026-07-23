@@ -419,6 +419,12 @@ async function handleVisibleChange(row: MenuConfigRecord, value: boolean | strin
 .menu-tree-table {
   width: 100%;
   overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+}
+
+.menu-tree-table:has(.el-empty) {
+  border-bottom: 1px solid var(--color-border);
 }
 
 .menu-tree-header,
@@ -438,10 +444,10 @@ async function handleVisibleChange(row: MenuConfigRecord, value: boolean | strin
 
 .menu-tree-header {
   height: 44px;
-  color: var(--color-secondary);
-  font-size: var(--font-size-sm);
+  color: var(--color-title);
+  font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
-  background: var(--color-bg-soft);
+  background: var(--color-bg-subtle);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -463,7 +469,7 @@ async function handleVisibleChange(row: MenuConfigRecord, value: boolean | strin
 }
 
 :deep(.menu-draggable-tree .el-tree-node__content:hover) {
-  background: var(--color-primary-light);
+  background: var(--color-bg-subtle);
 }
 
 :deep(.menu-draggable-tree .el-tree-node:focus > .el-tree-node__content),
@@ -473,7 +479,7 @@ async function handleVisibleChange(row: MenuConfigRecord, value: boolean | strin
 
 :deep(.menu-draggable-tree .el-tree-node:focus > .el-tree-node__content:hover),
 :deep(.menu-draggable-tree .el-tree-node.is-current > .el-tree-node__content:hover) {
-  background: var(--color-primary-light);
+  background: var(--color-bg-subtle);
 }
 
 :deep(.menu-draggable-tree .el-tree-node__expand-icon) {

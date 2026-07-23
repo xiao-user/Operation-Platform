@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
-import { buildEnergyTowerData } from "../energy-tower-data";
+import { buildEnergyTowerData, formatCoveragePopulation } from "../energy-tower-data";
 import type { EnergyTowerDatum } from "../energy-tower-data";
 import type { MapState } from "../map-state";
 import type { DigitalTwinMapTheme } from "../map-themes";
@@ -174,13 +174,25 @@ interface EnergyTowerGlowResources {
   material: THREE.MeshBasicMaterial;
 }
 
+interface EnergyTowerScaleState {
+  baseHeight: number;
+  maximumValue: number;
+  referenceUnit: number;
+  value: number;
+  currentHeightScale: number;
+  targetHeightScale: number;
+}
+
 export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
   readonly root = new THREE.Group();
   private readonly owner = new ResourceOwner();
   private readonly meshes: THREE.Mesh[] = [];
   private readonly labels = new Map<string, HTMLElement>();
+  private readonly labelValues = new Map<string, HTMLElement>();
   private readonly labelIds: string[] = [];
   private readonly materials = new Map<string, THREE.ShaderMaterial>();
+  private readonly meshesById = new Map<string, THREE.Mesh>();
+  private readonly towerGroupsById = new Map<string, THREE.Group>();
   private readonly towerGroups: THREE.Group[] = [];
   private readonly glowMaterials: THREE.MeshBasicMaterial[] = [];
   private hoveredId?: string;
@@ -191,6 +203,7 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
   private targetReveal = 1;
   private readonly scope: MapState["scope"];
   private readonly usesCoveragePopulation: boolean;
+  private theme: DigitalTwinMapTheme;
 
   constructor(
     mapState: MapState,
@@ -200,6 +213,7 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
     private tuning: Readonly<MapVisualTuning>,
   ) {
     this.scope = mapState.scope;
+    this.theme = theme;
     this.root.renderOrder = energyTowerRenderOrder;
     const dimensions = energyTowerDimensions(mapState.scope, tuning);
     const data = buildEnergyTowerData(
@@ -269,7 +283,9 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
       maximumValue,
       referenceUnit: heightReferenceUnit,
       value: datum.value,
-    };
+      currentHeightScale: 1,
+      targetHeightScale: 1,
+    } satisfies EnergyTowerScaleState;
     group.position.copy(projection.projectPoint(datum.coordinate, regionTopZ + 1.2));
     const profile = Array.from({ length: verticalSegments + 1 }, (_, index) => {
       const progress = index / verticalSegments;
@@ -319,7 +335,9 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
     mesh.userData.energyTowerDatum = datum;
     mesh.renderOrder = 2;
     this.meshes.push(mesh);
+    this.meshesById.set(datum.id, mesh);
     this.towerGroups.push(group);
+    this.towerGroupsById.set(datum.id, group);
     this.materials.set(datum.id, material);
     group.add(mesh);
 
@@ -363,6 +381,7 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
       const value = document.createElement("span");
       value.textContent = datum.valueLabel;
       element.append(value);
+      this.labelValues.set(datum.id, value);
     }
     const label = new CSS2DObject(element);
     label.position.z = height + 8;
@@ -381,21 +400,9 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
     const scale = this.usesCoveragePopulation
       ? energyTowerScopeScale(this.scope, tuning)
       : { height: 1, radius: 1 };
-    const metadata = group.userData.energyTowerScale as {
-      baseHeight: number;
-      maximumValue: number;
-      referenceUnit: number;
-      value: number;
-    } | undefined;
+    const metadata = group.userData.energyTowerScale as EnergyTowerScaleState | undefined;
     const heightContrastScale = this.usesCoveragePopulation && metadata
-      ? energyTowerHeight(
-          metadata.value,
-          metadata.maximumValue,
-          this.scope,
-          tuning,
-          metadata.referenceUnit,
-          tuning.energyTowerCoverageHeightContrast,
-        ) / Math.max(0.001, metadata.baseHeight)
+      ? metadata.currentHeightScale
       : 1;
     group.scale.set(
       scale.radius,
@@ -480,6 +487,26 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
     );
     this.reveal = Math.abs(next - this.targetReveal) < 0.002 ? this.targetReveal : next;
     if (this.reveal !== previousReveal) this.applyReveal();
+    let heightChanged = false;
+    const heightStep = 1 - Math.exp(-7.5 * THREE.MathUtils.clamp(delta, 0, 0.1));
+    for (const group of this.towerGroups) {
+      const metadata = group.userData.energyTowerScale as EnergyTowerScaleState | undefined;
+      if (!metadata || metadata.currentHeightScale === metadata.targetHeightScale) continue;
+      const nextHeightScale = THREE.MathUtils.lerp(
+        metadata.currentHeightScale,
+        metadata.targetHeightScale,
+        heightStep,
+      );
+      metadata.currentHeightScale = Math.abs(nextHeightScale - metadata.targetHeightScale) < 0.002
+        ? metadata.targetHeightScale
+        : nextHeightScale;
+      this.applyTowerScale(
+        group,
+        this.tuning,
+        THREE.MathUtils.smoothstep(this.reveal, 0, 1),
+      );
+      heightChanged = true;
+    }
     let labelChanged = false;
     if (!this.hoveredId && !this.selectedId && this.labelIds.length > 1 && this.targetReveal > 0) {
       const cycleDuration = Math.max(0.1, this.tuning.energyTowerLabelCycleSeconds);
@@ -491,7 +518,60 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
         labelChanged = true;
       }
     }
-    return this.reveal !== this.targetReveal || labelChanged;
+    return this.reveal !== this.targetReveal || heightChanged || labelChanged;
+  }
+
+  updateCoverageValues(
+    values: Readonly<Record<string, number>>,
+    metricLabel: string,
+  ) {
+    if (!this.usesCoveragePopulation || this.labelIds.length === 0) return false;
+    const nextValues = this.labelIds.map((id) => Math.max(0, Math.round(values[id] ?? 0)));
+    const maximumValue = Math.max(1, ...nextValues);
+    const minimumValue = Math.min(maximumValue, ...nextValues);
+    let changed = false;
+
+    for (let index = 0; index < this.labelIds.length; index += 1) {
+      const id = this.labelIds[index]!;
+      const value = nextValues[index]!;
+      const group = this.towerGroupsById.get(id);
+      const mesh = this.meshesById.get(id);
+      const material = this.materials.get(id);
+      const metadata = group?.userData.energyTowerScale as EnergyTowerScaleState | undefined;
+      const previousDatum = mesh?.userData.energyTowerDatum as EnergyTowerDatum | undefined;
+      if (!group || !mesh || !material || !metadata || !previousDatum) continue;
+
+      const targetHeight = energyTowerHeight(
+        value,
+        maximumValue,
+        this.scope,
+        this.tuning,
+        metadata.referenceUnit,
+        this.tuning.energyTowerCoverageHeightContrast,
+      );
+      const targetHeightScale = targetHeight / Math.max(0.001, metadata.baseHeight);
+      const valueLabel = `${metricLabel} ${formatCoveragePopulation(value)}`;
+      changed ||= metadata.value !== value
+        || metadata.maximumValue !== maximumValue
+        || previousDatum.valueLabel !== valueLabel;
+      metadata.value = value;
+      metadata.maximumValue = maximumValue;
+      metadata.targetHeightScale = targetHeightScale;
+      mesh.userData.energyTowerDatum = {
+        ...previousDatum,
+        value,
+        valueLabel,
+      } satisfies EnergyTowerDatum;
+      const labelValue = this.labelValues.get(id);
+      if (labelValue) labelValue.textContent = valueLabel;
+
+      const band = energyTowerValueBand(value, minimumValue, maximumValue);
+      material.userData.energyTowerValueBand = band;
+      const colors = this.resolveColors(this.theme, this.tuning, band);
+      material.uniforms.uBaseColor!.value.set(colors.base);
+      material.uniforms.uTopColor!.value.set(colors.top);
+    }
+    return changed;
   }
 
   startExit() {
@@ -586,6 +666,7 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
     theme: DigitalTwinMapTheme,
     tuning: Readonly<MapVisualTuning> = this.tuning,
   ) {
+    this.theme = theme;
     for (const material of this.materials.values()) {
       const band = material.userData.energyTowerValueBand as EnergyTowerValueBand;
       const colors = this.resolveColors(theme, tuning, band);
@@ -601,6 +682,19 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
 
   applyTuning(theme: DigitalTwinMapTheme, tuning: Readonly<MapVisualTuning>) {
     this.tuning = tuning;
+    for (const group of this.towerGroups) {
+      const metadata = group.userData.energyTowerScale as EnergyTowerScaleState | undefined;
+      if (!metadata || !this.usesCoveragePopulation) continue;
+      metadata.targetHeightScale = energyTowerHeight(
+        metadata.value,
+        metadata.maximumValue,
+        this.scope,
+        tuning,
+        metadata.referenceUnit,
+        tuning.energyTowerCoverageHeightContrast,
+      ) / Math.max(0.001, metadata.baseHeight);
+      metadata.currentHeightScale = metadata.targetHeightScale;
+    }
     this.applyReveal();
     for (const material of this.materials.values()) {
       material.uniforms.uVerticalGridCount!.value = tuning.energyTowerVerticalGridCount;
@@ -631,9 +725,12 @@ export class EnergyTowerLayer implements TuningAwareMapSceneLayer {
     this.root.removeFromParent();
     for (const element of this.labels.values()) element.remove();
     this.labels.clear();
+    this.labelValues.clear();
     this.labelIds.length = 0;
     this.meshes.length = 0;
+    this.meshesById.clear();
     this.towerGroups.length = 0;
+    this.towerGroupsById.clear();
     this.glowMaterials.length = 0;
     this.owner.dispose();
   }

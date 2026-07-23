@@ -102,7 +102,7 @@ function handleSortChange(value: number | undefined) {
   padding: var(--spacing-16) var(--spacing-24);
   background: var(--color-white);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
 }
 
 .system-entry-heading,
@@ -132,11 +132,12 @@ function handleSortChange(value: number | undefined) {
 
 .system-entry-row {
   min-height: 72px;
+  flex-wrap: wrap;
   gap: var(--spacing-24);
   padding: var(--spacing-16);
   background: var(--color-bg-page);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
 }
 
 .entry-name {
@@ -194,5 +195,27 @@ function handleSortChange(value: number | undefined) {
   flex-direction: column;
   gap: var(--spacing-8);
   margin-left: auto;
+}
+
+@media (max-width: 767px) {
+  .system-entry-card {
+    padding: var(--spacing-16);
+  }
+
+  .system-entry-heading {
+    align-items: flex-start;
+  }
+
+  .entry-name,
+  .entry-field,
+  .entry-icon-field,
+  .entry-sort {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .entry-visible {
+    margin-left: 0;
+  }
 }
 </style>

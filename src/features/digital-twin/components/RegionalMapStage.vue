@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import RegionalThreeMap from "./RegionalThreeMap.vue";
 import type { GeoFeature } from "../geo";
-import type { MapState } from "../map-state";
+import type { EnergyTowerValueFrame, MapState } from "../map-state";
 import type { MapDataSource } from "../map-data-source";
 import {
   isContextBandFeature,
@@ -26,6 +26,7 @@ const props = defineProps<{
   dataLayerMode: MapDataLayerMode;
   visualTuning: Readonly<MapVisualTuning>;
   dataSource: MapDataSource;
+  energyTowerValueFrame?: EnergyTowerValueFrame;
 }>();
 
 const emit = defineEmits<{
@@ -305,6 +306,7 @@ defineExpose({
     <RegionalThreeMap
       ref="mapRenderer"
       :map-state="currentState"
+      :energy-tower-value-frame="energyTowerValueFrame"
       :theme="theme"
       :data-layer-mode="dataLayerMode"
       :visual-tuning="visualTuning"

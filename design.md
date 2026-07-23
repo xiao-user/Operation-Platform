@@ -161,6 +161,7 @@ grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
 - 表格容器使用 `flex: 1; overflow: hidden`，表格本身根据需求承担纵向或横向滚动。
 - 需要分页时，分页位于主体右下方，不与表格浮层重叠。
 - 页面级主要操作放在工具栏右侧，最重要操作使用 Primary Button。
+- 从列表进入子页面后再返回，应保留原筛选条件；可用简单缓存、路由状态或 Store 实现。
 
 ### 3.4 分析与画像页
 

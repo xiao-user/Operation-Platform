@@ -58,7 +58,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ElOption, ElSelect } from "element-plus";
 import MapMaterialTuningPanel from "./MapMaterialTuningPanel.vue";
 import { educationLocationTypeMeta } from "../education-locations";
-import type { MapState } from "../map-state";
+import type { EnergyTowerValueFrame, MapState } from "../map-state";
 import type { DigitalTwinMapTheme } from "../map-themes";
 import type { MapVisualTuning } from "../rendering/map-visual-tuning";
 import {
@@ -73,6 +73,7 @@ import type {
 
 const props = withDefaults(defineProps<{
   mapState: MapState;
+  energyTowerValueFrame?: EnergyTowerValueFrame;
   theme: DigitalTwinMapTheme;
   locations: readonly EducationLocation[];
   searchLocations?: readonly EducationLocation[];
@@ -99,6 +100,8 @@ const searchableSchools = computed(() => (props.searchLocations ?? props.locatio
 ));
 let engine: RegionalMapEngine | undefined;
 let renderedMapState = props.mapState;
+let renderedLocations = props.locations;
+let renderedEnergyTowerValueFrame = props.energyTowerValueFrame;
 let visualTuningFrame = 0;
 let pendingVisualTuning: Readonly<MapVisualTuning> | undefined;
 
@@ -139,16 +142,26 @@ onMounted(() => {
       scopeBack: () => emit("scopeBack"),
     },
   );
+  engine.setEnergyTowerValueFrame(props.energyTowerValueFrame);
 });
 
 watch(
-  [() => props.mapState, () => props.locations],
-  ([mapState, locations]) => {
+  [() => props.mapState, () => props.locations, () => props.energyTowerValueFrame],
+  ([mapState, locations, energyTowerValueFrame]) => {
     if (mapState !== renderedMapState) {
       renderedMapState = mapState;
+      renderedLocations = locations;
+      renderedEnergyTowerValueFrame = energyTowerValueFrame;
+      engine?.setEnergyTowerValueFrame();
       engine?.setMapState(mapState, locations);
-    } else {
+      engine?.setEnergyTowerValueFrame(energyTowerValueFrame);
+    } else if (locations !== renderedLocations) {
+      renderedLocations = locations;
       engine?.setLocations(locations);
+    }
+    if (energyTowerValueFrame !== renderedEnergyTowerValueFrame) {
+      renderedEnergyTowerValueFrame = energyTowerValueFrame;
+      engine?.setEnergyTowerValueFrame(energyTowerValueFrame);
     }
   },
   { flush: "post" },

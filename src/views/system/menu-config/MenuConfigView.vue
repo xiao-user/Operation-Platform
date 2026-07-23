@@ -1,9 +1,9 @@
 <template>
   <div v-loading="loading" class="menu-config-page">
-    <section class="filter-card">
+    <PageFilterBar>
       <div class="filter-item">
-        <span>租户类型</span>
-        <el-select v-model="tenantType" clearable placeholder="全部类型">
+        <span class="filter-label">租户类型</span>
+        <el-select v-model="tenantType" clearable placeholder="全部类型" aria-label="租户类型">
           <el-option
             v-for="option in TENANT_TYPE_OPTIONS"
             :key="option.value"
@@ -12,9 +12,14 @@
           />
         </el-select>
       </div>
-      <div class="filter-item tenant-filter">
-        <span>租户名称</span>
-        <el-select v-model="selectedTenantId" filterable placeholder="请选择租户">
+      <div class="filter-item">
+        <span class="filter-label">租户名称</span>
+        <el-select
+          v-model="selectedTenantId"
+          filterable
+          placeholder="请选择租户"
+          aria-label="租户名称"
+        >
           <el-option
             v-for="tenant in filteredTenants"
             :key="tenant.id"
@@ -24,17 +29,29 @@
         </el-select>
       </div>
       <div class="filter-item">
-        <span>菜单名称</span>
-        <el-input v-model="keyword" :prefix-icon="Search" clearable placeholder="请输入关键词" />
+        <span class="filter-label">菜单名称</span>
+        <el-input
+          v-model="keyword"
+          :prefix-icon="Search"
+          clearable
+          placeholder="请输入关键词"
+          aria-label="菜单名称"
+        />
       </div>
-      <div class="filter-item status-filter">
-        <span>显示状态</span>
-        <el-select v-model="visibleFilter" clearable placeholder="全部状态">
+      <div class="filter-item">
+        <span class="filter-label">显示状态</span>
+        <el-select
+          v-model="visibleFilter"
+          clearable
+          placeholder="全部状态"
+          aria-label="显示状态"
+        >
           <el-option label="显示" :value="true" />
           <el-option label="隐藏" :value="false" />
         </el-select>
       </div>
-    </section>
+      <template #actions></template>
+    </PageFilterBar>
 
     <SystemEntryConfigCard
       :workbench="shellConfig.workbench"
@@ -106,6 +123,7 @@ import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { Plus, RefreshLeft, Search } from "@element-plus/icons-vue";
+import PageFilterBar from "@/components/PageFilterBar.vue";
 import { TENANT_TYPE_OPTIONS } from "@/config/tenant";
 import { collectDescendantIds } from "@/features/menu-config/menu-tree";
 import { MenuValidationError } from "@/features/menu-config/menu-validation";
@@ -291,52 +309,51 @@ async function handleReset() {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-16);
-  min-height: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
-.filter-card,
 .table-card {
   background: var(--color-white);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-}
-
-.filter-card {
-  display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: var(--spacing-16);
-  padding: var(--spacing-16) var(--spacing-24);
 }
 
 .filter-item {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--spacing-8);
-  width: 180px;
-  color: var(--color-body);
+  width: 280px;
+  min-width: 0;
+}
+
+.filter-label {
+  flex-shrink: 0;
+  color: var(--color-secondary);
   font-size: var(--font-size-sm);
 }
 
-.tenant-filter {
-  width: 280px;
-}
-
-.status-filter {
-  width: 140px;
+.filter-item :deep(.el-select),
+.filter-item :deep(.el-input) {
+  flex: 1;
+  min-width: 0;
 }
 
 .table-card {
-  min-height: 480px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
   overflow: hidden;
+  padding: var(--spacing-24);
 }
 
 .table-toolbar {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-16) var(--spacing-24);
-  border-bottom: 1px solid var(--color-border);
+  gap: var(--spacing-16);
+  margin-bottom: var(--spacing-16);
 }
 
 .table-toolbar strong {
@@ -357,7 +374,29 @@ async function handleReset() {
 }
 
 .drag-alert {
-  margin: var(--spacing-12) var(--spacing-24) 0;
+  flex-shrink: 0;
+  margin-bottom: var(--spacing-12);
+}
+
+.table-card :deep(.menu-tree-table) {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+@media (max-width: 767px) {
+  .filter-item {
+    width: 100%;
+  }
+
+  .table-card {
+    padding: var(--spacing-16);
+  }
+
+  .table-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 </style>

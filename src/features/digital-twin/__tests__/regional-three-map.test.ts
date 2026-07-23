@@ -13,6 +13,7 @@ const engineMocks = vi.hoisted(() => ({
   setSelectedEnergyTower: vi.fn(),
   setLocations: vi.fn(),
   setMapState: vi.fn(),
+  setEnergyTowerValueFrame: vi.fn(),
   setVisualTuning: vi.fn(),
 }));
 
@@ -32,6 +33,7 @@ vi.mock("../rendering/regional-map-engine", () => ({
     setVisualTuning = engineMocks.setVisualTuning;
     setLocations = engineMocks.setLocations;
     setMapState = engineMocks.setMapState;
+    setEnergyTowerValueFrame = engineMocks.setEnergyTowerValueFrame;
     setSelectedLocation = vi.fn();
     setSelectedEnergyTower = engineMocks.setSelectedEnergyTower;
     setTheme = vi.fn();
@@ -143,6 +145,34 @@ describe("RegionalThreeMap controls", () => {
       replacement,
       rongchengEducationLocations,
     );
+    expect(engineMocks.setLocations).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("updates metric values without replacing the map state or locations", async () => {
+    const valueFrame = {
+      values: { "445202001": 12_000 },
+      total: 12_000,
+      metricLabel: "运动人数",
+    };
+    const wrapper = mount(RegionalThreeMap, {
+      props: {
+        mapState: initialMapState,
+        theme: getDigitalTwinMapTheme("cyan"),
+        locations: rongchengEducationLocations,
+        dataLayerMode: "energy-towers",
+        visualTuning: defaultMapVisualTuning,
+      },
+    });
+    engineMocks.setEnergyTowerValueFrame.mockClear();
+    engineMocks.setMapState.mockClear();
+    engineMocks.setLocations.mockClear();
+
+    await wrapper.setProps({ energyTowerValueFrame: valueFrame });
+
+    expect(engineMocks.setEnergyTowerValueFrame).toHaveBeenCalledOnce();
+    expect(engineMocks.setEnergyTowerValueFrame).toHaveBeenCalledWith(valueFrame);
+    expect(engineMocks.setMapState).not.toHaveBeenCalled();
     expect(engineMocks.setLocations).not.toHaveBeenCalled();
     wrapper.unmount();
   });
